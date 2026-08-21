@@ -1,0 +1,358 @@
+:root {
+  --paper: #f1f3f2;
+  --surface: #fbfcfb;
+  --ink: #171b1d;
+  --muted: #667176;
+  --line: #ccd3d4;
+  --line-strong: #9ca9ad;
+  --signal: #e64f38;
+  --signal-dark: #ba3523;
+  --focus: #145e72;
+  --soft-blue: #dce8eb;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body { min-height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Pretendard", "SUIT", "Noto Sans KR", system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--focus), transparent 25%);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.workspace {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 68px auto minmax(0, 1fr) 32px;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 22px;
+  padding: 0 22px;
+  background: var(--ink);
+  color: white;
+  border-bottom: 1px solid #000;
+}
+
+.brand {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.025em;
+}
+
+.title-field input {
+  width: 100%;
+  max-width: 500px;
+  padding: 8px 2px;
+  color: white;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #596064;
+}
+
+.title-field input::placeholder { color: #a5adaf; }
+
+.session-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ced4d5;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.session-state time {
+  min-width: 46px;
+  color: white;
+  font: 700 13px/1 "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.state-dot {
+  width: 8px;
+  height: 8px;
+  /* deslop-ignore-next-line 19 -- 실제 세션 상태를 표시하는 점 */
+  border-radius: 50%;
+  background: #778084;
+}
+
+.state-recording {
+  background: var(--signal);
+}
+
+.state-connecting { background: #e6b64f; }
+.state-error { background: var(--signal); }
+
+.start-button, .stop-button {
+  min-width: 104px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.start-button { background: white; color: var(--ink); }
+.stop-button { background: var(--signal); color: white; }
+.stop-button:hover { background: var(--signal-dark); }
+
+.error-banner {
+  padding: 10px 22px;
+  color: #7e2014;
+  background: #ffe1dc;
+  border-bottom: 1px solid #e7aaa0;
+  font-size: 13px;
+}
+
+.error-banner:empty {
+  padding: 0;
+  border: 0;
+}
+
+.panes {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(360px, 44%) minmax(0, 56%);
+}
+
+.chat-pane, .transcript-pane {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--surface);
+}
+
+.chat-pane { border-right: 1px solid var(--line-strong); }
+.transcript-pane { grid-template-rows: auto minmax(0, 1fr); background: var(--paper); }
+
+.pane-heading {
+  min-height: 88px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px 17px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pane-heading h1, .pane-heading h2 {
+  margin: 0;
+  font-size: clamp(19px, 2vw, 25px);
+  line-height: 1.15;
+  letter-spacing: -.045em;
+}
+
+.count {
+  color: var(--muted);
+  font: 600 11px/1 ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+.messages, .transcript {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.messages { padding: 24px; }
+
+.empty-chat, .empty-transcript {
+  height: 100%;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.empty-chat p, .empty-transcript p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.empty-chat span, .empty-transcript span { max-width: 380px; font-size: 13px; line-height: 1.65; }
+
+.message { margin: 0 0 24px; }
+.message-user { margin-left: 15%; }
+
+.message-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.message p {
+  margin: 0;
+  padding: 15px 16px;
+  background: #e5e9e9;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.message-user p {
+  background: var(--ink);
+  color: white;
+}
+
+.message .pending { color: var(--muted); }
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.sources span { padding: 5px 0; color: var(--muted); }
+.sources a { padding: 5px 8px; color: var(--focus); background: var(--soft-blue); text-decoration: none; }
+/* deslop-ignore-next-line 09 -- 밑줄은 링크의 상호작용 상태를 표시한다. */
+.sources a:hover { text-decoration: underline; }
+
+.question-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.question-form textarea {
+  min-height: 58px;
+  max-height: 140px;
+  resize: vertical;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid var(--line-strong);
+  line-height: 1.45;
+}
+
+.question-form button {
+  width: 70px;
+  border: 0;
+  background: var(--focus);
+  color: white;
+  font-weight: 750;
+}
+
+.transcript { padding: 0 28px 60px; }
+.empty-transcript { padding-left: clamp(20px, 8vw, 120px); }
+
+.timeline {
+  position: relative;
+  margin: 0;
+  padding: 20px 0 0;
+  list-style: none;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 72px;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+.timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 30px;
+  padding: 14px 0;
+}
+
+.timeline li::before {
+  content: "";
+  position: absolute;
+  top: 21px;
+  left: 68px;
+  width: 9px;
+  height: 9px;
+  /* deslop-ignore-next-line 19 -- 타임라인의 실제 음성 구간 위치 */
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--focus);
+}
+
+.timeline time {
+  padding-top: 1px;
+  color: var(--muted);
+  font: 650 11px/1.5 ui-monospace, monospace;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline p {
+  max-width: 780px;
+  margin: 0;
+  font-size: clamp(15px, 1.35vw, 18px);
+  line-height: 1.8;
+  letter-spacing: -.018em;
+}
+
+.timeline .interim-line::before { border-color: var(--signal); }
+.interim-line p { color: var(--muted); }
+
+.footnote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  color: #8c9699;
+  background: var(--ink);
+  font-size: 10px;
+}
+
+@media (max-width: 840px) {
+  .workspace { grid-template-rows: auto auto auto auto; }
+  .topbar { grid-template-columns: 1fr auto; padding: 14px 16px; gap: 12px; }
+  .title-field { grid-column: 1 / -1; grid-row: 2; }
+  .session-state { grid-column: 1; grid-row: 3; }
+  .topbar > button { grid-column: 2; grid-row: 3; }
+  .panes { grid-template-columns: 1fr; }
+  .chat-pane { min-height: 620px; border-right: 0; border-bottom: 1px solid var(--line-strong); }
+  .transcript-pane { min-height: 620px; }
+  .footnote { min-height: 44px; gap: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; }
+}
