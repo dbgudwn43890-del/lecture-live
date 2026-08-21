@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { checkRateLimit } from "../../lib/rate-limit";
+
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
   const apiKey = process.env.DEEPGRAM_API_KEY;
 
   if (!apiKey) {
@@ -12,7 +14,14 @@ export async function POST() {
     );
   }
 
-  // ponytail: 공개 전 인증 사용자별 rate limit을 이 경로에 추가한다.
+  const rateLimit = checkRateLimit(request, "deepgram-token", 10, 60_000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "음성 인식 연결 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    );
+  }
+
   const response = await fetch("https://api.deepgram.com/v1/auth/grant", {
     method: "POST",
     headers: { Authorization: `Token ${apiKey}` },

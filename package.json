@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:rate-limit": "node scripts/test-rate-limit.mjs",
+    "eval:ask": "node scripts/eval-ask.mjs"
   },
   "dependencies": {
     "next": "^16.3.2",
