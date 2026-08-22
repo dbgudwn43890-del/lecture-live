@@ -12,13 +12,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [pending, setPending] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).has("error")) {
       setIsError(true);
-      setMessage("이메일 확인을 완료하지 못했습니다. 다시 시도해 주세요.");
+      setMessage("로그인을 완료하지 못했습니다. 다시 시도해 주세요.");
     }
   }, []);
 
@@ -28,6 +29,26 @@ export default function LoginPage() {
     setPasswordConfirmation("");
     setMessage("");
     setIsError(false);
+  }
+
+  async function authenticateWithGoogle() {
+    setPending(true);
+    setGooglePending(true);
+    setMessage("");
+    setIsError(false);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+
+    if (error) {
+      setPending(false);
+      setGooglePending(false);
+      setIsError(true);
+      setMessage("Google 로그인을 시작하지 못했습니다. 다시 시도해 주세요.");
+    }
   }
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
@@ -81,10 +102,21 @@ export default function LoginPage() {
         <div className="login-intro">
           <span className="login-kicker">LIVE LECTURE ASSISTANT</span>
           <h1 id="login-title">강의실에 들어가기</h1>
-          <p>가입할 때만 이메일을 확인하고, 다음부터는 이메일과 비밀번호로 바로 입장합니다.</p>
+          <p>Google 계정으로 바로 시작하거나, 이메일 가입은 처음 한 번만 확인합니다.</p>
         </div>
 
         <div className="login-panel">
+          <button
+            type="button"
+            className="google-auth-button"
+            onClick={authenticateWithGoogle}
+            disabled={pending}
+          >
+            {googlePending ? "Google로 이동 중…" : "Google로 계속하기"}
+          </button>
+
+          <div className="auth-divider"><span>또는 이메일</span></div>
+
           <div className="auth-mode" aria-label="계정 메뉴">
             <button
               type="button"
