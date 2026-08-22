@@ -71,20 +71,20 @@ export default function EnglishTermsPage() {
         <p><strong>The current beta is free and no payment is taken.</strong> Final pricing, launch date, taxes, currency, and payment conditions will be shown before paid service begins.</p>
         <div className={styles.tableWrap}><table><thead><tr><th>Planned product</th><th>Access</th><th>Price</th><th>Recording included</th></tr></thead><tbody>
           <tr><td>First try</td><td>7 days</td><td>Free</td><td>One lecture · up to 3 hours · once per account</td></tr>
-          <tr><td>Monthly subscription</td><td>1 month</td><td>$17.99</td><td>120 hours each month</td></tr>
-          <tr><td>Semester pass</td><td>5 months</td><td>$79</td><td>600 hours total</td></tr>
+          <tr><td>Monthly subscription</td><td>1 month</td><td>$14.99</td><td>80 hours each month</td></tr>
+          <tr><td>Semester pass</td><td>6 months</td><td>$69</td><td>480 hours total</td></tr>
         </tbody></table></div>
         <ul>
           <li>The free trial ends at the earlier of 7 days after activation or completion of its one lecture, which may run for up to 3 hours.</li>
           <li>During the trial, checkout will clearly show the paid conversion date, pre- and post-conversion price, monthly billing cycle, payment method, cancellation method, and effect of cancellation.</li>
           <li><strong>The first charge occurs only after the member separately and expressly accepts those paid-conversion terms.</strong> Account creation or acceptance of the general Terms alone is not treated as consent to recurring billing.</li>
           <li>Without separate consent, the trial ends without a charge. A member who did consent may still cancel before the first charge and will not be billed.</li>
-          <li>The Monthly subscription renews for $17.99 on the same billing date each month until cancelled. We obtain renewed consent where a change in price or billing terms requires it.</li>
+          <li>The Monthly subscription renews for $14.99 on the same billing date each month until cancelled. We obtain renewed consent where a change in price or billing terms requires it.</li>
           <li>Members may cancel in account billing settings at any time. Cancellation stops the next charge and normally takes effect after the already-paid period. Section 9 applies to a request for immediate termination and refund.</li>
-          <li>The Semester pass is a single five-month purchase and does not renew automatically.</li>
-          <li>Monthly includes 120 hours each month, and Semester includes 600 hours across five months.</li>
+          <li>The Semester pass is a single six-month purchase and does not renew automatically.</li>
+          <li>Monthly includes 80 hours each month, and Semester includes 480 hours across six months.</li>
           <li>Each lecture can record continuously for up to 3 hours. If allowance remains, the member may start another lecture afterward.</li>
-          <li>Unused Monthly allowance does not roll over, and unused Semester allowance expires after five months.</li>
+          <li>Unused Monthly allowance does not roll over, and unused Semester allowance expires after six months.</li>
           <li>Time is deducted by the second only while microphone audio is actively sent for recognition.</li>
           <li>Connecting, paused, failed transmission, and review time are not deducted.</li>
           <li>Lecture questions, AI answers, and necessary web search are included in recorded-time pricing.</li>
