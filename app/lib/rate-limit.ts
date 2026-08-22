@@ -16,20 +16,12 @@ const globalRateLimits = globalThis as typeof globalThis & {
 const buckets = (globalRateLimits.lectureLiveRateLimits ??= new Map());
 const MAX_BUCKETS = 10_000;
 
-function clientAddress(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",", 1)[0];
-  const address = forwarded ?? request.headers.get("x-real-ip") ?? "unknown";
-  return address.trim().slice(0, 64) || "unknown";
-}
-
 export function checkRateLimit(
-  request: Request,
-  scope: string,
+  key: string,
   limit: number,
   windowMs: number,
   now = Date.now(),
 ): RateLimitResult {
-  const key = `${scope}:${clientAddress(request)}`;
   let bucket = buckets.get(key);
 
   if (!bucket || bucket.resetAt <= now) {
@@ -66,4 +58,4 @@ export function checkRateLimit(
   };
 }
 
-// ponytail: 프로세스 단위 제한이다. 다중 인스턴스 출시 전 사용자 ID와 공유 저장소 기반으로 교체한다.
+// ponytail: 프로세스 단위 제한이다. 다중 인스턴스 출시 전 공유 저장소 기반으로 교체한다.

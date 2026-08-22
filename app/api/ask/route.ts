@@ -1,6 +1,9 @@
+import { createHash } from "node:crypto";
+
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
+import { getAuthenticatedUserId } from "../../lib/auth";
 import { checkRateLimit } from "../../lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -16,7 +19,6 @@ type AskBody = {
   questionAtMs?: number;
   segments?: Segment[];
   interim?: string;
-  safetyIdentifier?: string;
 };
 
 function formatTime(milliseconds: number) {
@@ -40,6 +42,11 @@ function isSegment(value: unknown): value is Segment {
 }
 
 export async function POST(request: Request) {
+  const userId = await getAuthenticatedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: "OPENAI_API_KEY가 설정되지 않았습니다." },
@@ -47,7 +54,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit(request, "ask", 20, 60_000);
+  const rateLimit = checkRateLimit(`ask:${userId}`, 20, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "질문 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
@@ -66,9 +73,7 @@ export async function POST(request: Request) {
   const segments = Array.isArray(body.segments) ? body.segments.filter(isSegment) : [];
   const interim = typeof body.interim === "string" ? body.interim.trim().slice(0, 2_000) : "";
   const questionAtMs = Number.isFinite(body.questionAtMs) ? Math.max(0, body.questionAtMs!) : 0;
-  const safetyIdentifier = body.safetyIdentifier?.match(/^[a-zA-Z0-9_-]{8,64}$/)
-    ? body.safetyIdentifier
-    : "local-development";
+  const safetyIdentifier = createHash("sha256").update(userId).digest("hex");
 
   if (!question || question.length > 1_000) {
     return NextResponse.json({ error: "질문은 1~1,000자로 입력해 주세요." }, { status: 400 });

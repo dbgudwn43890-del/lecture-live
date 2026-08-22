@@ -1,4 +1,5 @@
 const baseUrl = process.env.ASK_EVAL_BASE_URL ?? "http://127.0.0.1:3000";
+const authCookie = process.env.ASK_EVAL_COOKIE;
 const endpoint = new URL("/api/ask", baseUrl);
 const segment = (startMs, text) => ({ startMs, endMs: startMs + 5_000, text });
 
@@ -123,6 +124,11 @@ function noWebSearch(data) {
   return data.usage?.webSearchCalls === 0 && data.sources.length === 0;
 }
 
+if (!authCookie) {
+  console.error("ASK_EVAL_COOKIE에 로그인된 로컬 세션의 Cookie 헤더를 넣어 주세요.");
+  process.exit(1);
+}
+
 // GPT-5.6 Luna 표준 토큰 가격(2026-08-22); 웹 검색 호출 요금은 제외한다.
 function estimateTokenCost(usage) {
   if (!usage) return 0;
@@ -145,8 +151,8 @@ for (const scenario of scenarios) {
   const startedAt = performance.now();
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...scenario.body, safetyIdentifier: "evaluation-suite" }),
+    headers: { "Content-Type": "application/json", Cookie: authCookie },
+    body: JSON.stringify(scenario.body),
   });
   const latencyMs = Math.round(performance.now() - startedAt);
   const data = await response.json();

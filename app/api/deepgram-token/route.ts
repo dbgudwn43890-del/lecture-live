@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 
+import { getAuthenticatedUserId } from "../../lib/auth";
 import { checkRateLimit } from "../../lib/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const userId = await getAuthenticatedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
   const apiKey = process.env.DEEPGRAM_API_KEY;
 
   if (!apiKey) {
@@ -14,7 +20,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit(request, "deepgram-token", 10, 60_000);
+  const rateLimit = checkRateLimit(`deepgram-token:${userId}`, 10, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "음성 인식 연결 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },

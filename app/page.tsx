@@ -209,12 +209,6 @@ export default function LectureWorkspace() {
     ]);
     setQuestion("");
 
-    let safetyIdentifier = localStorage.getItem("lecture-live-client-id");
-    if (!safetyIdentifier) {
-      safetyIdentifier = `client_${crypto.randomUUID().replaceAll("-", "")}`;
-      localStorage.setItem("lecture-live-client-id", safetyIdentifier);
-    }
-
     try {
       const response = await fetch("/api/ask", {
         method: "POST",
@@ -224,7 +218,6 @@ export default function LectureWorkspace() {
           questionAtMs: askedAt,
           segments,
           interim,
-          safetyIdentifier,
         }),
       });
       const data = (await response.json()) as { answer?: string; sources?: Source[]; error?: string };
@@ -292,6 +285,10 @@ export default function LectureWorkspace() {
             강의 시작
           </button>
         )}
+
+        <form className="signout-form" action="/auth/signout" method="post">
+          <button className="signout-button" type="submit">로그아웃</button>
+        </form>
       </header>
 
       <div className="error-banner" role="alert">{error}</div>
