@@ -319,6 +319,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-size: 10px;
 }
 
+.footnote-links { display: flex; align-items: center; gap: 18px; }
+.footnote a { color: inherit; text-decoration: none; }
+.footnote a:hover { color: white; }
+
 .login-shell {
   min-height: 100vh;
   display: grid;
@@ -461,6 +465,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 .login-message-error { color: #8f281a; }
 
+.auth-consent {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.auth-consent a { color: var(--ink); text-underline-offset: 2px; }
+
 .login-footnote {
   display: flex;
   align-items: center;
@@ -470,6 +483,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   background: var(--ink);
   font-size: 10px;
 }
+
+.login-footnote { gap: 18px; }
+.login-footnote a { color: inherit; text-decoration: none; }
+.login-footnote a:hover { color: white; }
 
 @media (max-width: 840px) {
   .workspace {
@@ -487,7 +504,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .panes { grid-template-columns: 1fr; }
   .chat-pane, .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
   .chat-pane { border-right: 0; border-bottom: 1px solid var(--line-strong); }
-  .footnote { min-height: 44px; gap: 12px; }
+  .footnote { min-height: 58px; align-items: flex-start; flex-direction: column; justify-content: center; gap: 7px; }
+  .footnote-links { flex-wrap: wrap; gap: 8px 14px; }
   .login-shell { grid-template-rows: 58px minmax(0, 1fr) 36px; }
   .login-topbar { padding: 0 16px; }
   .login-stage {

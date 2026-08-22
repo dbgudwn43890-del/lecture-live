@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 
 import { createClient } from "../lib/supabase/client";
 
@@ -84,7 +85,7 @@ export default function LoginPage() {
     }
 
     if (data.session) {
-      window.location.assign("/");
+      window.location.assign("/classroom");
       return;
     }
 
@@ -94,7 +95,7 @@ export default function LoginPage() {
   return (
     <main className="login-shell">
       <header className="login-topbar">
-        <span className="brand">Lecture Live</span>
+        <Link className="brand" href="/">Lecture Live</Link>
         <span>현장 강의 참여자 입장</span>
       </header>
 
@@ -187,10 +188,18 @@ export default function LoginPage() {
               {message || (mode === "signin" ? "가입한 이메일과 비밀번호를 입력하세요." : "비밀번호는 8자 이상 입력하세요.")}
             </p>
           </form>
+          <p className="auth-consent">
+            Google 또는 회원가입을 계속하면 <Link href="/terms">이용약관</Link>과{" "}
+            <Link href="/privacy">개인정보처리방침</Link>을 확인하고 동의한 것으로 봅니다.
+          </p>
         </div>
       </section>
 
-      <footer className="login-footnote">현장 녹음 권한을 확인한 뒤 사용하세요</footer>
+      <footer className="login-footnote">
+        <Link href="/privacy">개인정보처리방침</Link>
+        <Link href="/terms">이용약관</Link>
+        <span>현장 녹음 권한을 확인한 뒤 사용하세요</span>
+      </footer>
     </main>
   );
 }

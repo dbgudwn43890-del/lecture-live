@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   const redirectUrl = request.nextUrl.clone();
   redirectUrl.search = "";
-  redirectUrl.pathname = result.error ? "/login" : "/";
+  redirectUrl.pathname = result.error ? "/login" : "/classroom";
   if (result.error) redirectUrl.searchParams.set("error", "callback");
 
   return NextResponse.redirect(redirectUrl);
