@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test:auth": "node --experimental-strip-types --test proxy.test.ts",
     "test:rate-limit": "node scripts/test-rate-limit.mjs",
     "test:chunks": "node --experimental-strip-types --test app/lib/chunk-transcript.test.ts",
     "test:audio": "node --experimental-strip-types --test app/lib/audio.test.ts",

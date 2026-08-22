@@ -1,14 +1,26 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getOAuthFallbackNext } from "./app/lib/auth-redirect";
+
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const country = request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
+  const prefersEnglish = Boolean(country && country !== "KR" && country !== "XX");
+  const oauthFallbackNext = getOAuthFallbackNext(path, country, request.nextUrl.searchParams.has("code"));
+
+  // Supabase falls back to the Site URL when an OAuth redirect URL is not allow-listed.
+  // Recover the PKCE code instead of leaving the user signed out on the landing page.
+  if (oauthFallbackNext) {
+    const callbackUrl = request.nextUrl.clone();
+    callbackUrl.pathname = "/auth/callback";
+    callbackUrl.searchParams.set("next", oauthFallbackNext);
+    return NextResponse.redirect(callbackUrl);
+  }
+
   const localizablePaths = ["/", "/preview", "/login", "/classroom", "/privacy", "/terms"];
   if (
-    country &&
-    country !== "KR" &&
-    country !== "XX" &&
+    prefersEnglish &&
     !path.startsWith("/en") &&
     localizablePaths.includes(path)
   ) {
