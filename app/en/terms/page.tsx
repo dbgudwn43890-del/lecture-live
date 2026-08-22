@@ -71,17 +71,17 @@ export default function EnglishTermsPage() {
         <p><strong>The current beta is free and no payment is taken.</strong> Final pricing, launch date, taxes, currency, and payment conditions will be shown before paid service begins.</p>
         <div className={styles.tableWrap}><table><thead><tr><th>Planned product</th><th>Access</th><th>Price</th><th>Recording included</th></tr></thead><tbody>
           <tr><td>First try</td><td>7 days</td><td>Free</td><td>One lecture · up to 3 hours · once per account</td></tr>
-          <tr><td>Monthly subscription</td><td>1 month</td><td>$14.99</td><td>80 hours each month</td></tr>
-          <tr><td>Semester pass</td><td>6 months</td><td>$69</td><td>480 hours total</td></tr>
+          <tr><td>Monthly subscription</td><td>1 month</td><td>$9.99</td><td>80 hours each month</td></tr>
+          <tr><td>Semester pass</td><td>6 months</td><td>$54</td><td>480 hours total</td></tr>
         </tbody></table></div>
         <ul>
           <li>The free trial ends at the earlier of 7 days after activation or completion of its one lecture, which may run for up to 3 hours.</li>
-          <li>During the trial, checkout will clearly show the paid conversion date, pre- and post-conversion price, monthly billing cycle, payment method, cancellation method, and effect of cancellation.</li>
-          <li><strong>The first charge occurs only after the member separately and expressly accepts those paid-conversion terms.</strong> Account creation or acceptance of the general Terms alone is not treated as consent to recurring billing.</li>
-          <li>Without separate consent, the trial ends without a charge. A member who did consent may still cancel before the first charge and will not be billed.</li>
-          <li>The Monthly subscription renews for $14.99 on the same billing date each month until cancelled. We obtain renewed consent where a change in price or billing terms requires it.</li>
+          <li>Starting the free trial requires a payment method and separate express acceptance of the paid-conversion date, $9.99 price, monthly billing cycle, cancellation method, and effect of cancellation. The box is not preselected, and account creation or acceptance of the general Terms alone is not treated as recurring-billing consent.</li>
+          <li>Without that separate acceptance, the trial cannot be activated and no charge occurs. A member who accepted may still cancel before the first charge and will not be billed.</li>
+          <li>Before the first charge, we send a reminder of the billing date, amount, and cancellation method to the registered email or another durable contact method.</li>
+          <li>If not cancelled, the Monthly subscription charges $9.99 when the trial ends and renews for $9.99 on the same billing date each month. We obtain renewed consent where a change in price or billing terms requires it.</li>
           <li>Members may cancel in account billing settings at any time. Cancellation stops the next charge and normally takes effect after the already-paid period. Section 9 applies to a request for immediate termination and refund.</li>
-          <li>The Semester pass is a single six-month purchase and does not renew automatically.</li>
+          <li>The Semester pass is a single $54 purchase for six months and does not renew automatically.</li>
           <li>Monthly includes 80 hours each month, and Semester includes 480 hours across six months.</li>
           <li>Each lecture can record continuously for up to 3 hours. If allowance remains, the member may start another lecture afterward.</li>
           <li>Unused Monthly allowance does not roll over, and unused Semester allowance expires after six months.</li>
@@ -97,6 +97,7 @@ export default function EnglishTermsPage() {
 
       <section><h2>9. Cancellations and refunds</h2><div><ol>
         <li>A charge, including an automatic renewal charge, is fully refundable within 7 days if none of that paid period's recording allowance has been used.</li>
+        <li>Consumers in the EEA, United Kingdom, or another country with a longer mandatory cooling-off period keep that local right. Where permitted after a member expressly asks us to begin during that period, a refund may deduct only the proportion of service already supplied.</li>
         <li>Starting a digital recording service may limit cooling-off rights for the portion already supplied where law permits. It does not automatically remove rights over divisible, unused service or any mandatory cancellation right.</li>
         <li>After partial use, an immediate cancellation refund deducts the used portion based on remaining service time and recording allowance, plus only those deductions permitted by applicable law and consumer-dispute standards.</li>
         <li><strong>Failure to cancel during the free trial does not by itself make every refund unavailable.</strong> We consider whether paid use began, when the request was made, and the member's mandatory rights. Free or promotional access itself has no cash value.</li>
