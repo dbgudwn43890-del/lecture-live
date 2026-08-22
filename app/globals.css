@@ -46,9 +46,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 .workspace {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 560px;
   display: grid;
   grid-template-rows: 68px auto minmax(0, 1fr) 32px;
+  overflow: hidden;
 }
 
 .topbar {
@@ -156,10 +158,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 .chat-pane, .transcript-pane {
+  min-width: 0;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--surface);
+  overflow: hidden;
 }
 
 .chat-pane { border-right: 1px solid var(--line-strong); }
@@ -189,8 +193,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 .messages, .transcript {
+  height: 100%;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 
@@ -284,65 +290,24 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-weight: 750;
 }
 
-.transcript { padding: 0 28px 60px; }
+.transcript { padding: 20px 28px 48px; }
 .empty-transcript { padding-left: clamp(20px, 8vw, 120px); }
 
-.timeline {
-  position: relative;
-  margin: 0;
-  padding: 20px 0 0;
-  list-style: none;
-}
-
-.timeline::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 72px;
-  width: 1px;
-  background: var(--line-strong);
-}
-
-.timeline li {
-  position: relative;
+.transcript-copy {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  gap: 30px;
-  padding: 14px 0;
-}
-
-.timeline li::before {
-  content: "";
-  position: absolute;
-  top: 21px;
-  left: 68px;
-  width: 9px;
-  height: 9px;
-  /* deslop-ignore-next-line 19 -- 타임라인의 실제 음성 구간 위치 */
-  border-radius: 50%;
-  background: var(--paper);
-  border: 2px solid var(--focus);
-}
-
-.timeline time {
-  padding-top: 1px;
-  color: var(--muted);
-  font: 650 11px/1.5 ui-monospace, monospace;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.timeline p {
+  gap: 8px;
   max-width: 780px;
   margin: 0;
+}
+
+.transcript-copy p {
+  margin: 0;
   font-size: clamp(15px, 1.35vw, 18px);
-  line-height: 1.8;
+  line-height: 1.62;
   letter-spacing: -.018em;
 }
 
-.timeline .interim-line::before { border-color: var(--signal); }
-.interim-line p { color: var(--muted); }
+.transcript-copy .interim-line { color: var(--muted); }
 
 .footnote {
   display: flex;
@@ -480,7 +445,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 @media (max-width: 840px) {
-  .workspace { grid-template-rows: auto auto auto auto; }
+  .workspace {
+    height: auto;
+    min-height: 100svh;
+    grid-template-rows: auto auto auto auto;
+    overflow: visible;
+  }
   .topbar { grid-template-columns: 1fr auto; padding: 14px 16px; gap: 12px; }
   .title-field { grid-column: 1 / -1; grid-row: 2; }
   .session-state { grid-column: 1; grid-row: 3; }
@@ -488,8 +458,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .signout-form { grid-column: 2; grid-row: 1; justify-self: end; }
   .signout-button { padding-right: 0; }
   .panes { grid-template-columns: 1fr; }
-  .chat-pane { min-height: 620px; border-right: 0; border-bottom: 1px solid var(--line-strong); }
-  .transcript-pane { min-height: 620px; }
+  .chat-pane, .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
+  .chat-pane { border-right: 0; border-bottom: 1px solid var(--line-strong); }
   .footnote { min-height: 44px; gap: 12px; }
   .login-shell { grid-template-rows: 58px minmax(0, 1fr) 36px; }
   .login-topbar { padding: 0 16px; }

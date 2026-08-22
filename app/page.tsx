@@ -356,7 +356,7 @@ export default function LectureWorkspace() {
             <div>
               <h2 id="transcript-title">실시간 스크립트</h2>
             </div>
-            <span className="count">{segments.length}개 구간</span>
+            <span className="count">{segments.length}개 문단</span>
           </div>
 
           <div className="transcript" aria-live="polite" ref={transcriptScrollRef}>
@@ -366,20 +366,12 @@ export default function LectureWorkspace() {
                 <span>노트북을 강사와 가까운 곳에 두면 인식률이 좋아집니다.</span>
               </div>
             ) : (
-              <ol className="timeline">
+              <div className="transcript-copy">
                 {segments.map((segment) => (
-                  <li key={segment.id}>
-                    <time>{formatTime(segment.startMs)}</time>
-                    <p>{segment.text}</p>
-                  </li>
+                  <p key={segment.id}>{segment.text}</p>
                 ))}
-                {interim && (
-                  <li className="interim-line">
-                    <time>지금</time>
-                    <p>{interim}</p>
-                  </li>
-                )}
-              </ol>
+                {interim && <p className="interim-line">{interim}</p>}
+              </div>
             )}
           </div>
         </section>
