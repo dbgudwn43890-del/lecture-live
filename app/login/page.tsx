@@ -6,6 +6,18 @@ import Link from "next/link";
 import { createClient } from "../lib/supabase/client";
 
 type Mode = "signin" | "signup";
+type PendingAction = "google" | Mode | null;
+
+function GoogleMark() {
+  return (
+    <svg className="google-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.87h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.35Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.42l-3.24-2.51c-.9.6-2.05.96-3.38.96-2.6 0-4.8-1.76-5.6-4.12H3.05v2.59A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.4 13.91A6 6 0 0 1 6.08 12c0-.66.11-1.3.32-1.91V7.5H3.05A10 10 0 0 0 2 12c0 1.61.39 3.14 1.05 4.5l3.35-2.59Z" />
+      <path fill="#EA4335" d="M12 5.97c1.47 0 2.79.5 3.82 1.5l2.87-2.87A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.95 5.5l3.35 2.59c.8-2.36 3-4.12 5.6-4.12Z" />
+    </svg>
+  );
+}
 
 export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
   const isEnglish = locale === "en";
@@ -15,11 +27,18 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [pending, setPending] = useState(false);
-  const [googlePending, setGooglePending] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
+  const pending = pendingAction !== null;
+  const pendingMessage = pendingAction === "google"
+    ? isEnglish ? "Opening Google securely…" : "Google 로그인 화면을 여는 중입니다…"
+    : pendingAction === "signin"
+      ? isEnglish ? "Signing you in…" : "로그인 정보를 확인하는 중입니다…"
+      : pendingAction === "signup"
+        ? isEnglish ? "Creating your account…" : "계정을 만드는 중입니다…"
+        : "";
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).has("error")) {
@@ -28,7 +47,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
         ? "We could not complete sign-in. Please try again."
         : "로그인을 완료하지 못했습니다. 다시 시도해 주세요.");
     }
-  }, []);
+  }, [isEnglish]);
 
   function changeMode(nextMode: Mode) {
     setMode(nextMode);
@@ -40,8 +59,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
   }
 
   async function authenticateWithGoogle() {
-    setPending(true);
-    setGooglePending(true);
+    setPendingAction("google");
     setMessage("");
     setIsError(false);
 
@@ -53,8 +71,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       });
       if (error) throw error;
     } catch {
-      setPending(false);
-      setGooglePending(false);
+      setPendingAction(null);
       setIsError(true);
       setMessage(isEnglish
         ? "Google sign-in is not available. Check the Google provider in Supabase."
@@ -94,9 +111,10 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       return;
     }
 
-    setPending(true);
+    setPendingAction(mode);
     setMessage("");
     setIsError(false);
+    let redirecting = false;
 
     try {
       const supabase = createClient();
@@ -126,6 +144,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       }
 
       if (data.session) {
+        redirecting = true;
         window.location.assign(classroomPath);
         return;
       }
@@ -137,7 +156,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
         ? "We could not reach the authentication server. Check your connection and try again."
         : "인증 서버에 연결하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
     } finally {
-      setPending(false);
+      if (!redirecting) setPendingAction(null);
     }
   }
 
@@ -145,53 +164,69 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
     <main className="login-shell">
       <header className="login-topbar">
         <Link className="brand" href={basePath || "/"}>Lecue</Link>
-        <span>{isEnglish ? "For in-person learners" : "현장 강의 참여자 입장"}</span>
+        <nav className="login-nav" aria-label={isEnglish ? "Login navigation" : "로그인 화면 메뉴"}>
+          <span>lecue.app</span>
+          <Link href={isEnglish ? "/login" : "/en/login"}>{isEnglish ? "한국어" : "English"}</Link>
+          <Link className="login-home-link" href={basePath || "/"}>{isEnglish ? "Back home" : "홈으로"}</Link>
+        </nav>
       </header>
 
       <section className="login-stage" aria-labelledby="login-title">
         <div className="login-intro">
-          {/* deslop-ignore-next-line 10 -- 반복 장식이 아닌 제품 범주 라벨 */}
-          <span className="login-kicker">LIVE LECTURE ASSISTANT</span>
-          <h1 id="login-title">{isEnglish ? "Enter your classroom" : "강의실에 들어가기"}</h1>
+          <span className="login-context-label"><i aria-hidden="true" />{isEnglish ? "Live lecture context" : "실시간 강의 맥락"}</span>
+          <h1 id="login-title">{isEnglish ? "Follow the lecture. Ask as you go." : "수업에 집중하고, 모르는 건 바로 물어보세요."}</h1>
           <p>{isEnglish
-            ? "Continue with Google, or verify your email once when you create an account."
-            : "Google 계정으로 바로 시작하거나, 이메일 가입은 처음 한 번만 확인합니다."}</p>
+            ? "Lecue keeps the transcript moving while it answers from what has been taught so far."
+            : "Lecue는 답변 중에도 강의를 계속 기록하고, 지금까지 배운 내용을 바탕으로 설명합니다."}</p>
+
+          <div className="login-demo" aria-hidden="true">
+            <div className="login-demo-head">
+              <b>{isEnglish ? "Introduction to Economics" : "경제학개론"}</b>
+              <span>{isEnglish ? "Recording" : "기록 중"}</span>
+            </div>
+            <p className="login-demo-transcript">{isEnglish
+              ? "Stock represents a share of ownership in a company."
+              : "주식은 회사의 일부를 소유할 수 있는 권리입니다."}</p>
+            <div className="login-demo-answer">
+              <strong>{isEnglish ? "Then how is a bond different?" : "그럼 채권과는 뭐가 달라?"}</strong>
+              <p>{isEnglish
+                ? "Stock is ownership. A bond is closer to proof that you lent money."
+                : "주식은 함께 소유하는 권리이고, 채권은 돈을 빌려준 증서에 가깝습니다."}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="login-panel">
-          {confirmationEmail ? (
-            <div className="email-confirmation" role="status" aria-live="polite">
-              <span>{isEnglish ? "ONE LAST STEP" : "마지막 한 단계"}</span>
-              <h2>{isEnglish ? "Check your email" : "이메일을 확인해 주세요"}</h2>
-              <p>
-                {isEnglish ? "We sent a confirmation link to " : "확인 링크를 "}
-                <strong>{confirmationEmail}</strong>
-                {isEnglish ? "." : " 주소로 보냈습니다."}
-              </p>
-              <p>{isEnglish
-                ? "Open the link to confirm your address, sign in, and enter your classroom. You cannot sign in with this account until confirmation is complete."
-                : "메일의 링크를 누르면 이메일 확인과 로그인이 완료되고 강의실로 이동합니다. 확인 전에는 같은 계정으로 로그인할 수 없습니다."}</p>
-              <p className="email-confirmation-note">{isEnglish
-                ? "If you do not see it, check your spam folder."
-                : "메일이 보이지 않으면 스팸함도 확인해 주세요."}</p>
-              <button type="button" onClick={() => changeMode("signin")}>
-                {isEnglish ? "Back to sign in" : "로그인 화면으로 돌아가기"}
-              </button>
-            </div>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="google-auth-button"
-                onClick={authenticateWithGoogle}
-                disabled={pending}
-              >
-                {googlePending
-                  ? isEnglish ? "Opening Google…" : "Google로 이동 중…"
-                  : isEnglish ? "Continue with Google" : "Google로 계속하기"}
-              </button>
-
-              <div className="auth-divider"><span>{isEnglish ? "or email" : "또는 이메일"}</span></div>
+        <div className="login-panel-wrap">
+          <div className="login-panel" aria-busy={pending}>
+            {confirmationEmail ? (
+              <div className="email-confirmation" role="status" aria-live="polite">
+                <span>{isEnglish ? "Almost there" : "거의 다 됐어요"}</span>
+                <h2>{isEnglish ? "Check your email" : "이메일을 확인해 주세요"}</h2>
+                <p>
+                  {isEnglish ? "We sent a confirmation link to " : "확인 링크를 "}
+                  <strong>{confirmationEmail}</strong>
+                  {isEnglish ? "." : " 주소로 보냈습니다."}
+                </p>
+                <p>{isEnglish
+                  ? "Open the link to confirm your address, sign in, and enter your classroom. You cannot sign in with this account until confirmation is complete."
+                  : "메일의 링크를 누르면 이메일 확인과 로그인이 완료되고 강의실로 이동합니다. 확인 전에는 같은 계정으로 로그인할 수 없습니다."}</p>
+                <p className="email-confirmation-note">{isEnglish
+                  ? "If you do not see it, check your spam folder."
+                  : "메일이 보이지 않으면 스팸함도 확인해 주세요."}</p>
+                <button type="button" onClick={() => changeMode("signin")}>
+                  {isEnglish ? "Back to sign in" : "로그인 화면으로 돌아가기"}
+                </button>
+              </div>
+            ) : (
+              <>
+              <div className="auth-heading">
+                <h2>{mode === "signin"
+                  ? isEnglish ? "Sign in to Lecue" : "Lecue에 로그인"
+                  : isEnglish ? "Create your Lecue account" : "Lecue 계정 만들기"}</h2>
+                <p>{mode === "signin"
+                  ? isEnglish ? "Return to your classrooms and previous lectures." : "내 강의실과 지난 수업을 이어서 확인하세요."
+                  : isEnglish ? "Google is the quickest way to get started." : "Google 계정으로 가장 빠르게 시작할 수 있습니다."}</p>
+              </div>
 
               <div className="auth-mode" aria-label={isEnglish ? "Account options" : "계정 메뉴"}>
                 <button
@@ -214,6 +249,23 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                 </button>
               </div>
 
+              <button
+                type="button"
+                className="google-auth-button"
+                onClick={authenticateWithGoogle}
+                disabled={pending}
+              >
+                <GoogleMark />
+                <span>{pendingAction === "google"
+                  ? isEnglish ? "Opening Google…" : "Google로 이동 중…"
+                  : isEnglish ? "Continue with Google" : "Google로 계속하기"}</span>
+                <span className="auth-button-end" aria-hidden="true">
+                  {pendingAction === "google" && <i className="auth-spinner auth-spinner-dark" />}
+                </span>
+              </button>
+
+              <div className="auth-divider"><span>{isEnglish ? "or email" : "또는 이메일"}</span></div>
+
               <form className="login-form" onSubmit={authenticate} noValidate>
                 <label htmlFor="email">{isEnglish ? "Email" : "이메일"}</label>
                 <input
@@ -224,6 +276,8 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="name@example.com"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   required
                   disabled={pending}
                 />
@@ -258,17 +312,26 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                   </>
                 )}
 
-                <button type="submit" disabled={pending}>
-                  {pending
-                    ? isEnglish ? "Working…" : "처리 중…"
+                <button className="email-auth-button" type="submit" disabled={pending}>
+                  <span>{pendingAction === mode
+                    ? mode === "signin"
+                      ? isEnglish ? "Signing in…" : "로그인 중…"
+                      : isEnglish ? "Creating account…" : "계정 만드는 중…"
                     : mode === "signin"
-                      ? isEnglish ? "Sign in" : "로그인"
-                      : isEnglish ? "Create account" : "회원가입"}
+                      ? isEnglish ? "Sign in with email" : "이메일로 로그인"
+                      : isEnglish ? "Create account with email" : "이메일로 계정 만들기"}</span>
+                  {pendingAction === mode && <i className="auth-spinner" aria-hidden="true" />}
                 </button>
-                <p className={isError ? "login-message login-message-error" : "login-message"} aria-live="polite">
-                  {message || (mode === "signin"
+                <p
+                  id="auth-message"
+                  className={isError ? "login-message login-message-error" : "login-message"}
+                  role={isError ? "alert" : "status"}
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {message || pendingMessage || (mode === "signin"
                     ? isEnglish ? "Enter the email and password you used to sign up." : "가입한 이메일과 비밀번호를 입력하세요."
-                    : isEnglish ? "Use a password with at least 8 characters." : "비밀번호는 8자 이상 입력하세요.")}
+                    : isEnglish ? "Use at least 8 characters. Email verification is required once." : "8자 이상 입력하세요. 이메일 확인은 처음 한 번만 필요합니다.")}
                 </p>
               </form>
               <p className="auth-consent">
@@ -278,8 +341,9 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                 <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
                 {isEnglish ? "." : "을 확인하고 동의한 것으로 봅니다."}
               </p>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </section>
 
