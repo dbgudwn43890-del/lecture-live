@@ -8,40 +8,22 @@ const content = {
   ko: {
     homeLabel: "Lecue 홈",
     navLabel: "주요 메뉴",
-    nav: ["작동 방식", "내 강의실", "요금", "자주 묻는 질문"],
+    nav: ["제품 화면", "내 강의실", "요금", "자주 묻는 질문"],
     signIn: "로그인",
+    signUp: "회원가입",
     open: "강의실 열기",
     language: "EN",
     heroLabel: "현장 강의를 위한 실시간 조교",
     heroTitle: ["놓친 설명을,", "수업이 끝나기 전에."],
     heroDescription: "강의를 따라 받아 적고, 방금까지의 수업 흐름으로 질문에 답합니다. 답변을 읽는 동안에도 기록은 계속됩니다.",
     heroCta: "무료 베타 시작하기",
-    heroSecondary: "어떻게 작동하는지 보기",
+    heroSecondary: "실제 화면 보기",
     heroNote: "현재 베타 무료 · 카드 등록 없이 시작",
     promises: [
       ["5초 이내", "말이 문단으로 이어집니다"],
       ["기록 지속", "답변 중에도 강의를 놓치지 않습니다"],
       ["필요할 때만", "최신 정보는 외부에서 확인합니다"],
       ["모델 선택", "기본 AI 또는 내 API 키를 씁니다"],
-    ],
-    storyLabel: "세 단계로 이어지는 수업 흐름",
-    storyTitle: ["기록하고,", "질문하고,", "놓치지 않습니다."],
-    stories: [
-      {
-        label: "1 · 기록",
-        title: "강사의 말이 문단으로 쌓입니다",
-        description: "강사의 말이 짧은 문장 조각이 아니라 읽기 좋은 문단으로 쌓입니다. 시간 숫자보다 지금 설명의 흐름에 집중할 수 있습니다.",
-      },
-      {
-        label: "2 · 질문",
-        title: "모르는 순간, 바로 물어봅니다",
-        description: "강의 문장을 반복하는 대신 낯선 용어를 풀고, 실제로 누가 무엇을 하는지 예시와 흐름으로 설명합니다.",
-      },
-      {
-        label: "3 · 계속",
-        title: "답을 읽는 동안에도 수업은 이어집니다",
-        description: "질문과 답변은 왼쪽에서, 실시간 스크립트는 오른쪽에서 따로 움직입니다. 어느 쪽을 읽어도 녹음은 계속됩니다.",
-      },
     ],
     demoTitle: "질문과 강의가 나란히 흐릅니다",
     demoQuestionTitle: "강의에 질문하기",
@@ -103,28 +85,22 @@ const content = {
   en: {
     homeLabel: "Lecue home",
     navLabel: "Main navigation",
-    nav: ["How it works", "My classrooms", "Pricing", "FAQ"],
+    nav: ["Product", "My classrooms", "Pricing", "FAQ"],
     signIn: "Sign in",
+    signUp: "Sign up",
     open: "Open a classroom",
     language: "한국어",
     heroLabel: "A live assistant for in-person lectures",
     heroTitle: ["Catch the explanation", "before class moves on."],
     heroDescription: "Lecue follows the lecture, then answers from everything said up to the moment you ask. Recording continues while you read the answer.",
     heroCta: "Start the free beta",
-    heroSecondary: "See how it works",
+    heroSecondary: "See the product",
     heroNote: "Free during beta · no card required",
     promises: [
       ["Within 5 seconds", "Speech becomes readable paragraphs"],
       ["Still recording", "Questions never pause the lecture"],
       ["Only when needed", "Current facts are checked outside"],
       ["Your choice", "Use Lecue AI or your own API key"],
-    ],
-    storyLabel: "One classroom flow in three steps",
-    storyTitle: ["Capture.", "Ask.", "Keep up."],
-    stories: [
-      { label: "1 · Capture", title: "The lecturer's words build into paragraphs", description: "The lecturer's words build into readable paragraphs instead of scattered fragments. Stay with the idea rather than a stream of timestamps." },
-      { label: "2 · Ask", title: "Ask the moment an explanation stops making sense", description: "Lecue unpacks unfamiliar terms and shows who does what through concrete examples instead of repeating the lecture sentence." },
-      { label: "3 · Continue", title: "Class keeps moving while you read", description: "Questions and answers scroll on one side; the live transcript moves on the other. Recording continues whichever side you are reading." },
     ],
     demoTitle: "Questions and the lecture move side by side",
     demoQuestionTitle: "Ask about the lecture",
@@ -194,7 +170,7 @@ export default function LandingPage({ locale }: { locale: Locale }) {
       <header className={styles.header}>
         <Link className={styles.brand} href={base || "/"} aria-label={copy.homeLabel}>Lecue</Link>
         <nav className={styles.nav} aria-label={copy.navLabel}>
-          <a href="#how">{copy.nav[0]}</a>
+          <a href="#product">{copy.nav[0]}</a>
           <a href="#rooms">{copy.nav[1]}</a>
           <a href="#pricing">{copy.nav[2]}</a>
           <a href="#faq">{copy.nav[3]}</a>
@@ -202,7 +178,7 @@ export default function LandingPage({ locale }: { locale: Locale }) {
         <div className={styles.headerActions}>
           <Link className={styles.languageLink} href={locale === "en" ? "/" : "/en"}>{copy.language}</Link>
           <Link className={styles.loginLink} href={`${base}/login`}>{copy.signIn}</Link>
-          <Link className={styles.headerCta} href={`${base}/classroom`}>{copy.open}</Link>
+          <Link className={styles.headerCta} href={`${base}/login?mode=signup`}>{copy.signUp}</Link>
         </div>
       </header>
 
@@ -212,13 +188,13 @@ export default function LandingPage({ locale }: { locale: Locale }) {
           <h1 id={`hero-title-${locale}`}>{copy.heroTitle[0]}<br />{copy.heroTitle[1]}</h1>
           <p className={styles.heroDescription}>{copy.heroDescription}</p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryCta} href={`${base}/classroom`}>{copy.heroCta}<span aria-hidden>→</span></Link>
-            <a className={styles.secondaryCta} href="#how">{copy.heroSecondary}</a>
+            <Link className={styles.primaryCta} href={`${base}/login?mode=signup`}>{copy.heroCta}<span aria-hidden>→</span></Link>
+            <a className={styles.secondaryCta} href="#product">{copy.heroSecondary}</a>
           </div>
           <p className={styles.heroNote}>{copy.heroNote}</p>
         </div>
 
-        <div className={`${styles.productFrame} ${styles.heroProductFrame}`} aria-label={copy.demoTitle}>
+        <div className={`${styles.productFrame} ${styles.heroProductFrame}`} id="product" aria-label={copy.demoTitle}>
           <div className={styles.productTopbar}><b>Lecue</b><span>{locale === "en" ? "Introduction to Economics" : "경제학개론 · 증권시장"}</span><em><i />{locale === "en" ? "Recording" : "기록 중"}&nbsp;&nbsp;32:18</em></div>
           <div className={styles.productPanes}>
             <section className={styles.questionPane} aria-label={copy.demoQuestionTitle}>
@@ -238,24 +214,6 @@ export default function LandingPage({ locale }: { locale: Locale }) {
         {copy.promises.map(([title, detail]) => <p key={title}><strong>{title}</strong><span>{detail}</span></p>)}
       </section>
 
-      <section className={styles.storySection} id="how" aria-labelledby={`story-title-${locale}`}>
-        <header className={`${styles.storyHeader} ${styles.reveal}`}>
-          <p>{copy.storyLabel}</p>
-          <h2 id={`story-title-${locale}`}>{copy.storyTitle.map((line) => <span key={line}>{line}</span>)}</h2>
-        </header>
-
-        {copy.stories.map((story, index) => (
-          <article className={`${styles.story} ${index % 2 ? styles.storyReverse : ""} ${styles.reveal}`} key={story.title}>
-            <div className={styles.storyCopy}><span>{story.label}</span><h3>{story.title}</h3><p>{story.description}</p></div>
-            <div className={`${styles.storyArt} ${styles[`storyArt${index + 1}`]}`} aria-hidden>
-              {index === 0 && <><div className={styles.miniMic}><i /></div><div className={styles.inkTrail} /><div className={styles.paragraphSheet}><i /><i /><i /><i /></div></>}
-              {index === 1 && <><div className={styles.termBubble}>?</div><div className={styles.explainPath} /><div className={styles.plainAnswer}><i /><i /><i /><span>{locale === "en" ? "plain example" : "쉬운 예시"}</span></div></>}
-              {index === 2 && <><div className={styles.parallelTrack}><span>REC</span><i /><i /><i /></div><div className={styles.readingPane}><i /><i /><i /></div><div className={styles.livePane}><i /><i /><i /><i /></div></>}
-            </div>
-          </article>
-        ))}
-      </section>
-
       <section className={styles.rooms} id="rooms" aria-labelledby={`rooms-title-${locale}`}>
         <div className={`${styles.roomsCopy} ${styles.reveal}`}><p>{copy.roomsLabel}</p><h2 id={`rooms-title-${locale}`}>{copy.roomsTitle[0]}<br />{copy.roomsTitle[1]}</h2><span>{copy.roomsDescription}</span><Link href={`${base}/classroom`}>{copy.roomsCta} →</Link></div>
         <div className={`${styles.roomShelf} ${styles.reveal}`}>
@@ -270,11 +228,11 @@ export default function LandingPage({ locale }: { locale: Locale }) {
           {copy.plans.map((plan) => <article className={"featured" in plan ? styles.featuredPlan : undefined} key={plan.name}>
             <div><span>{plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
             <h3>{plan.time}</h3><strong>{plan.price}</strong><p>{plan.unit}</p><small>{plan.detail}</small>
-            <Link href={`${base}/classroom`}>{plan.price === "무료" || plan.price === "Free" ? copy.heroCta : copy.open}<span>→</span></Link>
+            <Link href={`${base}/login?mode=signup`}>{plan.price === "무료" || plan.price === "Free" ? copy.heroCta : copy.open}<span>→</span></Link>
           </article>)}
         </div>
         <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingPerSecond}</span><span>{copy.pricingIncluded}</span></div>
-        <Link className={styles.pricingCta} href={`${base}/classroom`}>{copy.pricingCta}<span>→</span></Link>
+        <Link className={styles.pricingCta} href={`${base}/login?mode=signup`}>{copy.pricingCta}<span>→</span></Link>
       </section>
 
       <section className={styles.faq} id="faq" aria-labelledby={`faq-title-${locale}`}>
@@ -282,7 +240,7 @@ export default function LandingPage({ locale }: { locale: Locale }) {
         <div>{copy.faqs.map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden>+</span></summary><p>{answer}</p></details>)}</div>
       </section>
 
-      <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={`${base}/classroom`}>{copy.finalCta}<span>→</span></Link></section>
+      <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={`${base}/login?mode=signup`}>{copy.finalCta}<span>→</span></Link></section>
       <footer className={styles.footer}><strong>Lecue</strong><p>{copy.footerDescription}</p><div><Link href={`${base}/privacy`}>{copy.privacy}</Link><Link href={`${base}/terms`}>{copy.terms}</Link><span>{copy.support}</span></div><small>{copy.recordingNotice}</small></footer>
     </main>
   );

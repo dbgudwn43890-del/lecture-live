@@ -41,7 +41,9 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
         : "";
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("error")) {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("mode") === "signup") setMode("signup");
+    if (searchParams.has("error")) {
       setIsError(true);
       setMessage(isEnglish
         ? "We could not complete sign-in. Please try again."
@@ -172,32 +174,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       </header>
 
       <section className="login-stage" aria-labelledby="login-title">
-        <div className="login-intro">
-          <span className="login-context-label"><i aria-hidden="true" />{isEnglish ? "Live lecture context" : "실시간 강의 맥락"}</span>
-          <h1 id="login-title">{isEnglish ? "Follow the lecture. Ask as you go." : "수업에 집중하고, 모르는 건 바로 물어보세요."}</h1>
-          <p>{isEnglish
-            ? "Lecue keeps the transcript moving while it answers from what has been taught so far."
-            : "Lecue는 답변 중에도 강의를 계속 기록하고, 지금까지 배운 내용을 바탕으로 설명합니다."}</p>
-
-          <div className="login-demo" aria-hidden="true">
-            <div className="login-demo-head">
-              <b>{isEnglish ? "Introduction to Economics" : "경제학개론"}</b>
-              <span>{isEnglish ? "Recording" : "기록 중"}</span>
-            </div>
-            <p className="login-demo-transcript">{isEnglish
-              ? "Stock represents a share of ownership in a company."
-              : "주식은 회사의 일부를 소유할 수 있는 권리입니다."}</p>
-            <div className="login-demo-answer">
-              <strong>{isEnglish ? "Then how is a bond different?" : "그럼 채권과는 뭐가 달라?"}</strong>
-              <p>{isEnglish
-                ? "Stock is ownership. A bond is closer to proof that you lent money."
-                : "주식은 함께 소유하는 권리이고, 채권은 돈을 빌려준 증서에 가깝습니다."}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="login-panel-wrap">
-          <div className="login-panel" aria-busy={pending}>
+        <div className="login-panel" aria-busy={pending}>
             {confirmationEmail ? (
               <div className="email-confirmation" role="status" aria-live="polite">
                 <span>{isEnglish ? "Almost there" : "거의 다 됐어요"}</span>
@@ -220,33 +197,12 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
             ) : (
               <>
               <div className="auth-heading">
-                <h2>{mode === "signin"
+                <h1 id="login-title">{mode === "signin"
                   ? isEnglish ? "Sign in to Lecue" : "Lecue에 로그인"
-                  : isEnglish ? "Create your Lecue account" : "Lecue 계정 만들기"}</h2>
+                  : isEnglish ? "Create your Lecue account" : "Lecue 계정 만들기"}</h1>
                 <p>{mode === "signin"
                   ? isEnglish ? "Return to your classrooms and previous lectures." : "내 강의실과 지난 수업을 이어서 확인하세요."
                   : isEnglish ? "Google is the quickest way to get started." : "Google 계정으로 가장 빠르게 시작할 수 있습니다."}</p>
-              </div>
-
-              <div className="auth-mode" aria-label={isEnglish ? "Account options" : "계정 메뉴"}>
-                <button
-                  type="button"
-                  className={mode === "signin" ? "auth-mode-active" : undefined}
-                  aria-pressed={mode === "signin"}
-                  disabled={pending}
-                  onClick={() => changeMode("signin")}
-                >
-                  {isEnglish ? "Sign in" : "로그인"}
-                </button>
-                <button
-                  type="button"
-                  className={mode === "signup" ? "auth-mode-active" : undefined}
-                  aria-pressed={mode === "signup"}
-                  disabled={pending}
-                  onClick={() => changeMode("signup")}
-                >
-                  {isEnglish ? "Create account" : "회원가입"}
-                </button>
               </div>
 
               <button
@@ -335,15 +291,24 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                 </p>
               </form>
               <p className="auth-consent">
-                {isEnglish ? "By continuing, you acknowledge the " : "Google 또는 회원가입을 계속하면 "}
+                {isEnglish ? "By continuing, you acknowledge the " : "계속하면 "}
                 <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
                 {isEnglish ? " and " : "과 "}
                 <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
                 {isEnglish ? "." : "을 확인하고 동의한 것으로 봅니다."}
               </p>
+              <p className="auth-switch">
+                {mode === "signin"
+                  ? isEnglish ? "New to Lecue?" : "아직 계정이 없나요?"
+                  : isEnglish ? "Already have an account?" : "이미 계정이 있나요?"}
+                <button type="button" disabled={pending} onClick={() => changeMode(mode === "signin" ? "signup" : "signin")}>
+                  {mode === "signin"
+                    ? isEnglish ? "Create account" : "회원가입"
+                    : isEnglish ? "Sign in" : "로그인"}
+                </button>
+              </p>
               </>
             )}
-          </div>
         </div>
       </section>
 
