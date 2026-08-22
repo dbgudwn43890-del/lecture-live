@@ -23,6 +23,7 @@ export default function EnglishTermsPage() {
         <li><strong>Classroom:</strong> a space that groups lectures for one subject and can use relevant earlier lectures in that classroom as supporting context.</li>
         <li><strong>Lecture:</strong> one continuous recording started and ended inside a classroom, limited to 3 hours per session.</li>
         <li><strong>Term pass:</strong> a product with a fixed access term and a recording allowance available during that term.</li>
+        <li><strong>Monthly subscription:</strong> a paid product that renews every month until the member cancels.</li>
         <li><strong>Usage time:</strong> recording time included in a term pass or free trial.</li>
         <li><strong>Content:</strong> text or audio submitted, transmitted, or generated through the Service.</li>
         <li><strong>Personal AI connection:</strong> the optional use of the member's OpenAI, Anthropic, or Google Gemini API key, either once in the current tab or saved encrypted to the account.</li>
@@ -66,33 +67,39 @@ export default function EnglishTermsPage() {
         <li>Encrypted account storage is optional. A member may replace or delete a saved key at any time, and plaintext is not redisplayed in the browser.</li>
       </ol></div></section>
 
-      <section><h2>8. Planned pricing and time deduction</h2><div>
+      <section><h2>8. Planned pricing, free trial, and recurring billing</h2><div>
         <p><strong>The current beta is free and no payment is taken.</strong> Final pricing, launch date, taxes, currency, and payment conditions will be shown before paid service begins.</p>
-        <div className={styles.tableWrap}><table><thead><tr><th>Planned term</th><th>Access</th><th>Price</th><th>Recording included</th></tr></thead><tbody>
+        <div className={styles.tableWrap}><table><thead><tr><th>Planned product</th><th>Access</th><th>Price</th><th>Recording included</th></tr></thead><tbody>
           <tr><td>First try</td><td>7 days</td><td>Free</td><td>One lecture · up to 3 hours · once per account</td></tr>
-          <tr><td>Monthly</td><td>1 month</td><td>$12.99</td><td>12 hours total</td></tr>
-          <tr><td>Semester</td><td>5 months</td><td>$49</td><td>60 hours total</td></tr>
-          <tr><td>Annual</td><td>12 months</td><td>$89</td><td>120 hours total</td></tr>
+          <tr><td>Monthly subscription</td><td>1 month</td><td>$17.99</td><td>120 hours each month</td></tr>
+          <tr><td>Semester pass</td><td>5 months</td><td>$79</td><td>600 hours total</td></tr>
         </tbody></table></div>
         <ul>
           <li>The free trial ends at the earlier of 7 days after activation or completion of its one lecture, which may run for up to 3 hours.</li>
-          <li>Term passes are prepaid and do not renew automatically. Members may purchase another pass after expiry.</li>
-          <li>Monthly includes 12 hours, Semester 60 hours, and Annual 120 hours, available at any time during the relevant term.</li>
+          <li>During the trial, checkout will clearly show the paid conversion date, pre- and post-conversion price, monthly billing cycle, payment method, cancellation method, and effect of cancellation.</li>
+          <li><strong>The first charge occurs only after the member separately and expressly accepts those paid-conversion terms.</strong> Account creation or acceptance of the general Terms alone is not treated as consent to recurring billing.</li>
+          <li>Without separate consent, the trial ends without a charge. A member who did consent may still cancel before the first charge and will not be billed.</li>
+          <li>The Monthly subscription renews for $17.99 on the same billing date each month until cancelled. We obtain renewed consent where a change in price or billing terms requires it.</li>
+          <li>Members may cancel in account billing settings at any time. Cancellation stops the next charge and normally takes effect after the already-paid period. Section 9 applies to a request for immediate termination and refund.</li>
+          <li>The Semester pass is a single five-month purchase and does not renew automatically.</li>
+          <li>Monthly includes 120 hours each month, and Semester includes 600 hours across five months.</li>
           <li>Each lecture can record continuously for up to 3 hours. If allowance remains, the member may start another lecture afterward.</li>
-          <li>Unused allowance expires when the term ends.</li>
+          <li>Unused Monthly allowance does not roll over, and unused Semester allowance expires after five months.</li>
           <li>Time is deducted by the second only while microphone audio is actively sent for recognition.</li>
           <li>Connecting, paused, failed transmission, and review time are not deducted.</li>
           <li>Lecture questions, AI answers, and necessary web search are included in recorded-time pricing.</li>
           <li>Using a personal AI key does not change Lecue time deduction. Provider token and search fees are separate.</li>
-          <li>Recording pauses after the allowance is exhausted until a new pass is purchased. Existing content remains available.</li>
-          <li>We plan notices 30, 7, and 1 day before expiry and a warning when 10 minutes remain.</li>
+          <li>Recording pauses after the allowance is exhausted until renewal or a new purchase. Existing content remains available.</li>
+          <li>We retain electronic records of paid-conversion consent and cancellation, and provide conversion, recurring-payment, and price-change notices at the time and in the manner required by applicable law.</li>
           <li>Displayed USD prices may exclude taxes collected according to the buyer's region. Final checkout shows the amount due.</li>
         </ul>
       </div></section>
 
       <section><h2>9. Cancellations and refunds</h2><div><ol>
-        <li>A paid term is fully refundable within 7 days if none of its recording allowance has been used.</li>
-        <li>After partial use, refunds reflect the ratios of remaining service time and paid recording allowance where applicable law permits. Free or promotional access has no cash value.</li>
+        <li>A charge, including an automatic renewal charge, is fully refundable within 7 days if none of that paid period's recording allowance has been used.</li>
+        <li>Starting a digital recording service may limit cooling-off rights for the portion already supplied where law permits. It does not automatically remove rights over divisible, unused service or any mandatory cancellation right.</li>
+        <li>After partial use, an immediate cancellation refund deducts the used portion based on remaining service time and recording allowance, plus only those deductions permitted by applicable law and consumer-dispute standards.</li>
+        <li><strong>Failure to cancel during the free trial does not by itself make every refund unavailable.</strong> We consider whether paid use began, when the request was made, and the member's mandatory rights. Free or promotional access itself has no cash value.</li>
         <li>Where our fault makes the contracted service materially unavailable or different from its description, we provide the refund or remedy required by applicable law.</li>
         <li>We request reversal within 3 business days after approval where the payment method permits; a bank or card network may take longer to post it.</li>
         <li>Mandatory cancellation, cooling-off, and consumer rights in the member's country prevail over any less favorable term here.</li>

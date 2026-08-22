@@ -69,7 +69,7 @@ export default function PrivacyPage() {
         <div>
           <h3>강의실과 수업 기록</h3>
           <p>
-            강의실 이름, 수업 제목, 스크립트, 질문과 답변은 회원 계정에 연결해 Supabase에 저장합니다. 같은 강의실의 관련 이전 수업을 찾기 위해 스크립트를 문단 묶음으로 나누고 OpenAI에서 생성한 수치형 임베딩을 함께 저장합니다. 음성 원본은 운영자 서버에 저장하지 않고 음성 인식 처리를 위해 Deepgram으로 실시간 전송합니다.
+            강의실 이름, 수업 제목, 스크립트, 질문과 답변은 회원 계정에 연결해 Supabase에 저장합니다. 같은 강의실의 관련 이전 수업을 찾기 위해 스크립트를 문단 묶음으로 나누고 OpenAI에서 생성한 수치형 임베딩을 함께 저장합니다. 음성 원본은 운영자 서버에 저장하지 않습니다. 기존 강의실에서는 Deepgram으로 실시간 전송하고, 별도 한국어 STT 실험실을 이용하면 최대 10초의 음성 구간을 Cloudflare Workers AI로 전송합니다.
           </p>
           <h3>이용자가 입력한 AI API 키</h3>
           <p>
@@ -120,6 +120,12 @@ export default function PrivacyPage() {
                   <td>실시간 음성 인식: 마이크 음성 스트림, 언어·모델 설정</td>
                   <td>미국 / 실시간 처리 및 해당 사업자의 계약·보안 정책상 기간</td>
                   <td>마이크 권한을 허용하지 않으면 거부 가능하나 실시간 스크립트 이용 불가</td>
+                </tr>
+                <tr>
+                  <td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noreferrer">Cloudflare, Inc.</a></td>
+                  <td>한국어 STT 실험실의 음성 인식: 최대 10초 WAV 음성 구간, 한국어·모델 설정, 직전 전사 일부</td>
+                  <td className={styles.placeholder}>Cloudflare가 고지한 처리 지역 / 별도 저장 서비스를 사용하지 않는 요청 처리 기간 · 공개 출시 전 국외 이전 국가 재확인 필요</td>
+                  <td>STT 실험실을 사용하지 않으면 Cloudflare로 음성이 전송되지 않으며 기존 강의실 이용 가능</td>
                 </tr>
                 <tr>
                   <td><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI, L.L.C.</a></td>

@@ -413,7 +413,7 @@
 /* deslop-ignore-next-line 11 -- 기간 선택과 동일한 기능 제공을 한눈에 보여주는 가격 제목 */
 .pricingIntro h2 { margin: 0; font-size: clamp(48px, 5.6vw, 78px); line-height: 1.03; letter-spacing: -.055em; }
 .pricingIntro > span { display: block; max-width: 670px; margin: 27px auto 0; color: var(--muted); font-size: 16px; line-height: 1.8; }
-.planGrid { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 76px; }
+.planGrid { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 76px; }
 .planGrid article { position: relative; min-width: 0; min-height: 382px; display: flex; flex-direction: column; padding: 27px 24px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .planGrid article > div { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .planGrid article > div > span { font-size: 12px; font-weight: 850; }
