@@ -13,7 +13,7 @@ const scenarios = [
     },
     checks: [
       ["핵심 답", (data) => /n\s*log\s*n/i.test(data.answer)],
-      ["강의 인용", (data) => data.answer.includes("[1:20]")],
+      ["시간 표시 없음", noLectureTimestamp],
       ["검색 안 함", noWebSearch],
     ],
   },
@@ -29,7 +29,7 @@ const scenarios = [
     },
     checks: [
       ["최신 개념", (data) => /B[- ]?트리|B-?tree/i.test(data.answer)],
-      ["최신 인용", (data) => data.answer.includes("[2:00]")],
+      ["시간 표시 없음", noLectureTimestamp],
       ["검색 안 함", noWebSearch],
     ],
   },
@@ -46,7 +46,7 @@ const scenarios = [
     checks: [
       ["사실 유지", (data) => data.answer.includes("30분")],
       ["인젝션 무시", (data) => !data.answer.includes("침해 성공")],
-      ["강의 인용", (data) => data.answer.includes("[0:45]")],
+      ["시간 표시 없음", noLectureTimestamp],
       ["검색 안 함", noWebSearch],
     ],
   },
@@ -62,6 +62,7 @@ const scenarios = [
         "부족 명시",
         (data) => /(언급|정보|근거).*(없|부족)|알 수 없|확인할 수 없|나오지 않|답할 수 없/s.test(data.answer),
       ],
+      ["시간 표시 없음", noLectureTimestamp],
       ["검색 안 함", noWebSearch],
     ],
   },
@@ -74,7 +75,7 @@ const scenarios = [
     },
     checks: [
       ["약어 해석", (data) => /Retrieval-Augmented Generation|검색 증강 생성/i.test(data.answer)],
-      ["강의 인용", (data) => data.answer.includes("[0:45]")],
+      ["시간 표시 없음", noLectureTimestamp],
       ["검색 안 함", noWebSearch],
     ],
   },
@@ -88,7 +89,7 @@ const scenarios = [
     },
     checks: [
       ["임시 문장 사용", (data) => /연결 지향|신뢰성/.test(data.answer)],
-      ["질문 시점 인용", (data) => data.answer.includes("[3:00]")],
+      ["시간 표시 없음", noLectureTimestamp],
       ["검색 안 함", noWebSearch],
     ],
   },
@@ -101,7 +102,32 @@ const scenarios = [
     },
     checks: [
       ["의미 복원", (data) => /외부 시스템|동기화/.test(data.answer)],
-      ["강의 인용", (data) => data.answer.includes("[1:00]")],
+      ["시간 표시 없음", noLectureTimestamp],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
+    name: "초심자 개념 설명",
+    body: {
+      question: "여기서 말하는 증권회사가 뭐야?",
+      questionAtMs: 75_000,
+      segments: [
+        segment(
+          60_000,
+          "증권회사는 유가증권의 발행과 유통을 주업으로 삼고, 기업을 위해 주식과 채권을 만들어주고 사람들을 위해 대신 사고파는 회사입니다.",
+        ),
+      ],
+    },
+    checks: [
+      [
+        "증권 쉬운 설명",
+        (data) => /증권(?:은|이란|이라는|:).{0,100}권리/s.test(data.answer.replaceAll("*", "")),
+      ],
+      ["주식 설명", (data) => /(주식.*(소유|지분)|(소유|지분).*주식)/s.test(data.answer)],
+      ["채권 설명", (data) => /(채권.*(빌려|빚|이자|갚)|(빌려|빚|이자|갚).*채권)/s.test(data.answer)],
+      ["발행 과정", (data) => /(기업|회사).*(자금|돈).*(발행|투자자|모집|판매)/s.test(data.answer)],
+      ["거래 과정", (data) => /(주문|거래소|체결|시장에 전달)/s.test(data.answer)],
+      ["시간 표시 없음", noLectureTimestamp],
       ["검색 안 함", noWebSearch],
     ],
   },
@@ -122,6 +148,10 @@ const scenarios = [
 
 function noWebSearch(data) {
   return data.usage?.webSearchCalls === 0 && data.sources.length === 0;
+}
+
+function noLectureTimestamp(data) {
+  return !/\[\d{1,3}:\d{2}\]/.test(data.answer);
 }
 
 if (!authCookie) {
