@@ -17,11 +17,7 @@ npm run dev
 
 ## Supabase 인증 설정
 
-Supabase Authentication의 Site URL은 `http://localhost:3000`, Redirect URL은 `http://localhost:3000/auth/callback`로 설정합니다. SSR 매직링크를 쓰려면 **Email Templates → Magic Link**의 링크를 아래처럼 지정합니다.
-
-```html
-<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email">로그인</a>
-```
+Supabase Authentication의 Site URL은 `http://localhost:3000`, Redirect URL은 `http://localhost:3000/auth/callback`로 설정합니다. **Sign In / Providers → Email**에서 이메일 확인을 켜 두면 회원가입 때만 확인 메일이 발송되고, 이후에는 이메일과 비밀번호로 바로 로그인합니다. 공개 배포 전에는 일반 사용자에게 확인 메일을 보낼 Custom SMTP를 연결해야 합니다.
 
 ## 현재 구현
 
@@ -30,7 +26,7 @@ Supabase Authentication의 Site URL은 `http://localhost:3000`, Redirect URL은 
 - 질문 순간의 확정 스크립트와 임시 문장을 GPT-5.6 Luna에 전달
 - 모델이 필요할 때만 사용하는 웹 검색과 출처 링크
 - 답변 생성과 독립적으로 계속되는 음성 전송
-- Supabase 이메일 로그인과 쿠키 기반 세션
+- Supabase 이메일·비밀번호 회원가입, 최초 이메일 확인, 쿠키 기반 세션
 - 질문 및 Deepgram 임시 토큰 경로의 서버 인증과 사용자별 요청 제한
 - 데스크톱 2열 및 좁은 화면 세로 배치
 

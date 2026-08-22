@@ -4,8 +4,13 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { createClient } from "../lib/supabase/client";
 
+type Mode = "signin" | "signup";
+
 export default function LoginPage() {
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -13,31 +18,56 @@ export default function LoginPage() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).has("error")) {
       setIsError(true);
-      setMessage("로그인 링크가 만료되었거나 이미 사용되었습니다. 새 링크를 받아 주세요.");
+      setMessage("이메일 확인을 완료하지 못했습니다. 다시 시도해 주세요.");
     }
   }, []);
 
-  async function sendMagicLink(event: FormEvent<HTMLFormElement>) {
+  function changeMode(nextMode: Mode) {
+    setMode(nextMode);
+    setPassword("");
+    setPasswordConfirmation("");
+    setMessage("");
+    setIsError(false);
+  }
+
+  async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mode === "signup" && password !== passwordConfirmation) {
+      setIsError(true);
+      setMessage("비밀번호가 서로 다릅니다.");
+      return;
+    }
+
     setPending(true);
     setMessage("");
     setIsError(false);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    const credentials = { email: email.trim(), password };
+    const { data, error } = mode === "signup"
+      ? await supabase.auth.signUp({
+          ...credentials,
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        })
+      : await supabase.auth.signInWithPassword(credentials);
 
     setPending(false);
-    setIsError(Boolean(error));
-    setMessage(
-      error
-        ? "로그인 링크를 보내지 못했습니다. 이메일 주소를 확인하고 다시 시도해 주세요."
-        : "로그인 링크를 보냈습니다. 받은 편지함을 확인해 주세요.",
-    );
+    if (error) {
+      setIsError(true);
+      setMessage(
+        mode === "signup"
+          ? "회원가입을 처리하지 못했습니다. 이메일과 비밀번호를 확인해 주세요."
+          : "이메일 또는 비밀번호가 올바르지 않습니다.",
+      );
+      return;
+    }
+
+    if (data.session) {
+      window.location.assign("/");
+      return;
+    }
+
+    setMessage("확인 메일을 보냈습니다. 처음 한 번만 이메일 확인이 필요합니다.");
   }
 
   return (
@@ -51,29 +81,81 @@ export default function LoginPage() {
         <div className="login-intro">
           <span className="login-kicker">LIVE LECTURE ASSISTANT</span>
           <h1 id="login-title">강의실에 들어가기</h1>
-          <p>이메일로 받은 링크를 누르면 바로 실시간 스크립트와 질문 화면이 열립니다.</p>
+          <p>가입할 때만 이메일을 확인하고, 다음부터는 이메일과 비밀번호로 바로 입장합니다.</p>
         </div>
 
-        <form className="login-form" onSubmit={sendMagicLink}>
-          <label htmlFor="email">이메일</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="name@example.com"
-            required
-            disabled={pending}
-          />
-          <button type="submit" disabled={pending || !email.trim()}>
-            {pending ? "보내는 중…" : "로그인 링크 받기"}
-          </button>
-          <p className={isError ? "login-message login-message-error" : "login-message"} aria-live="polite">
-            {message || "비밀번호는 필요하지 않습니다."}
-          </p>
-        </form>
+        <div className="login-panel">
+          <div className="auth-mode" aria-label="계정 메뉴">
+            <button
+              type="button"
+              className={mode === "signin" ? "auth-mode-active" : undefined}
+              aria-pressed={mode === "signin"}
+              onClick={() => changeMode("signin")}
+            >
+              로그인
+            </button>
+            <button
+              type="button"
+              className={mode === "signup" ? "auth-mode-active" : undefined}
+              aria-pressed={mode === "signup"}
+              onClick={() => changeMode("signup")}
+            >
+              회원가입
+            </button>
+          </div>
+
+          <form className="login-form" onSubmit={authenticate}>
+            <label htmlFor="email">이메일</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@example.com"
+              required
+              disabled={pending}
+            />
+
+            <label htmlFor="password">비밀번호</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              minLength={mode === "signup" ? 8 : undefined}
+              required
+              disabled={pending}
+            />
+
+            {mode === "signup" && (
+              <>
+                <label htmlFor="password-confirmation">비밀번호 확인</label>
+                <input
+                  id="password-confirmation"
+                  name="password-confirmation"
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordConfirmation}
+                  onChange={(event) => setPasswordConfirmation(event.target.value)}
+                  minLength={8}
+                  required
+                  disabled={pending}
+                />
+              </>
+            )}
+
+            <button type="submit" disabled={pending || !email.trim() || !password}>
+              {pending ? "처리 중…" : mode === "signin" ? "로그인" : "회원가입"}
+            </button>
+            <p className={isError ? "login-message login-message-error" : "login-message"} aria-live="polite">
+              {message || (mode === "signin" ? "가입한 이메일과 비밀번호를 입력하세요." : "비밀번호는 8자 이상 입력하세요.")}
+            </p>
+          </form>
+        </div>
       </section>
 
       <footer className="login-footnote">현장 녹음 권한을 확인한 뒤 사용하세요</footer>
