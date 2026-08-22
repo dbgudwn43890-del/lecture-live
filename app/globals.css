@@ -689,6 +689,52 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 .auth-consent a { color: var(--ink); text-underline-offset: 2px; }
 
+.email-confirmation {
+  padding: 30px 0;
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.email-confirmation > span {
+  color: var(--signal-dark);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.email-confirmation h2 {
+  margin: 12px 0 24px;
+  font-size: 30px;
+  letter-spacing: -.04em;
+}
+
+.email-confirmation p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.email-confirmation strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.email-confirmation .email-confirmation-note {
+  font-size: 11px;
+}
+
+.email-confirmation button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 13px 16px;
+  color: white;
+  background: var(--focus);
+  border: 0;
+  font-weight: 750;
+}
+
+.email-confirmation button:hover { background: #104b5b; }
+
 .login-footnote {
   display: flex;
   align-items: center;
