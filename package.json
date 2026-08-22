@@ -1,5 +1,5 @@
 {
-  "name": "lecture-live",
+  "name": "lecue",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:rate-limit": "node scripts/test-rate-limit.mjs",
+    "test:chunks": "node --experimental-strip-types --test app/lib/chunk-transcript.test.ts",
     "eval:ask": "node scripts/eval-ask.mjs"
   },
   "dependencies": {

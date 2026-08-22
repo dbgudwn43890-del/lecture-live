@@ -7,6 +7,8 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const tokenHash = request.nextUrl.searchParams.get("token_hash");
   const type = request.nextUrl.searchParams.get("type") as EmailOtpType | null;
+  const requestedNext = request.nextUrl.searchParams.get("next");
+  const nextPath = requestedNext === "/en/classroom" ? "/en/classroom" : "/classroom";
   const supabase = await createClient();
 
   const result = code
@@ -17,7 +19,9 @@ export async function GET(request: NextRequest) {
 
   const redirectUrl = request.nextUrl.clone();
   redirectUrl.search = "";
-  redirectUrl.pathname = result.error ? "/login" : "/classroom";
+  redirectUrl.pathname = result.error
+    ? nextPath.startsWith("/en/") ? "/en/login" : "/login"
+    : nextPath;
   if (result.error) redirectUrl.searchParams.set("error", "callback");
 
   return NextResponse.redirect(redirectUrl);
