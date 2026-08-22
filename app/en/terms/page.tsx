@@ -45,7 +45,7 @@ export default function EnglishTermsPage() {
         <li>Continued transcription while an answer is generated.</li>
         <li>Storage and review by classroom, with relevant earlier lectures in the same classroom available as supporting context.</li>
         <li>Record deletion and usage-balance functions planned before the paid public launch.</li>
-      </ul><p>Details may change during beta validation or because of technology or law. Material reductions or discontinuation will be announced in advance where practicable.</p></div></section>
+      </ul><p>Details may change during early-access validation or because of technology or law. Material reductions or discontinuation will be announced in advance where practicable.</p></div></section>
 
       <section><h2>5. Recording permission</h2><div><ol>
         <li>Members must use the Service only where recording is permitted.</li>
@@ -68,13 +68,14 @@ export default function EnglishTermsPage() {
       </ol></div></section>
 
       <section><h2>8. Planned pricing, free trial, and recurring billing</h2><div>
-        <p><strong>The current beta is free and no payment is taken.</strong> Final pricing, launch date, taxes, currency, and payment conditions will be shown before paid service begins.</p>
+        <p><strong>No payment is taken during the current free-access period.</strong> Final pricing, launch date, taxes, currency, and payment conditions will be shown before paid service begins.</p>
         <div className={styles.tableWrap}><table><thead><tr><th>Planned product</th><th>Access</th><th>Price</th><th>Recording included</th></tr></thead><tbody>
           <tr><td>First try</td><td>7 days</td><td>Free</td><td>One lecture · up to 3 hours · once per account</td></tr>
-          <tr><td>Monthly subscription</td><td>1 month</td><td>$9.99</td><td>80 hours each month</td></tr>
-          <tr><td>Semester pass</td><td>6 months</td><td>$54</td><td>480 hours total</td></tr>
+          <tr><td>Monthly subscription</td><td>1 month</td><td>$9.99 launch price · planned $14.99 regular price</td><td>80 hours each month</td></tr>
+          <tr><td>Semester pass</td><td>6 months</td><td>$54 · save $35.94 against six regular monthly payments</td><td>480 hours total</td></tr>
         </tbody></table></div>
         <ul>
+          <li>$14.99 is a planned future monthly price, not a price previously charged. Eligibility, the offer end date, and the actual first and renewal charges will be shown at checkout and sent to the member before paid conversion.</li>
           <li>The free trial ends at the earlier of 7 days after activation or completion of its one lecture, which may run for up to 3 hours.</li>
           <li>Starting the free trial requires a payment method and separate express acceptance of the paid-conversion date, $9.99 price, monthly billing cycle, cancellation method, and effect of cancellation. The box is not preselected, and account creation or acceptance of the general Terms alone is not treated as recurring-billing consent.</li>
           <li>Without that separate acceptance, the trial cannot be activated and no charge occurs. A member who accepted may still cancel before the first charge and will not be billed.</li>

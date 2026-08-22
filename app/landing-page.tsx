@@ -15,10 +15,10 @@ const content = {
     language: "EN",
     heroLabel: "현장 강의를 위한 실시간 조교",
     heroTitle: ["놓친 설명을,", "수업이 끝나기 전에."],
-    heroDescription: "강의를 따라 받아 적고, 방금까지의 수업 흐름으로 질문에 답합니다. 답변을 읽는 동안에도 기록은 계속됩니다.",
-    heroCta: "무료 베타 시작하기",
+    heroDescription: "Lecue는 현장 강의를 실시간으로 기록하고, 방금까지의 수업 흐름을 바탕으로 질문에 답하는 학습 서비스입니다. 답변을 읽는 동안에도 기록은 계속됩니다.",
+    heroCta: "무료로 시작하기",
     heroSecondary: "실제 화면 보기",
-    heroNote: "현재 베타 무료 · 카드 등록 없이 시작",
+    heroNote: "현재 무료 공개 중 · 카드 등록 없이 시작",
     promises: [
       ["5초 이내", "말이 문단으로 이어집니다"],
       ["기록 지속", "답변 중에도 강의를 놓치지 않습니다"],
@@ -50,28 +50,30 @@ const content = {
       ["8월 20일", "재무관리 · 채권의 가격", "52분 · 4개 질문"],
       ["8월 18일", "경영학원론 · 기업의 구조", "1시간 05분 · 9개 질문"],
     ],
-    pricingLabel: "출시 예정 요금 · 부가세 포함",
+    pricingLabel: "런칭 멤버 혜택 · 부가세 포함",
     pricingTitle: ["한 달 수업을,", "빠짐없이 따라가게."],
-    pricingDescription: "월 13,900원에 정규 수업 약 80시간을 기록할 수 있습니다. 모든 유료 상품에서 기록, 질문, 강의실 맥락과 필요한 검색을 그대로 제공합니다.",
-    pricingNoCard: "카드 없이 무료 베타 이용",
+    pricingDescription: "지금은 카드 없이 무료입니다. 유료 출시 후에는 런칭 멤버 가격 월 13,900원으로 정규 수업 약 80시간을 기록할 수 있습니다.",
+    pricingNoCard: "무료 공개 기간 결제 없음",
     pricingPerSecond: "실제 녹음한 시간만 차감",
     pricingIncluded: "기록·질문·강의실 맥락 포함",
-    pricingCta: "무료 베타 시작하기",
+    pricingCta: "런칭 멤버로 시작하기",
     plans: [
       { name: "첫 체험", time: "7일", price: "무료", unit: "수업 1회 · 최대 3시간", detail: "계정당 한 번 · 모든 기능 체험" },
-      { name: "월간", time: "1개월", price: "13,900원", unit: "강의 기록 80시간", detail: "주 20시간 기준 한 달 분량", featured: true },
-      { name: "한 학기", time: "6개월", price: "74,900원", unit: "강의 기록 480시간", detail: "월간 이용보다 8,500원 절약" },
+      { name: "월간", time: "1개월", compareLabel: "정상가", comparePrice: "19,900원", price: "13,900원", priceNote: "/월", unit: "강의 기록 80시간", detail: "런칭 멤버 가격 · 30% 혜택", featured: true },
+      { name: "한 학기", time: "6개월", compareLabel: "정상 월간가 6회", comparePrice: "119,400원", price: "74,900원", priceNote: "/6개월", unit: "강의 기록 480시간", detail: "44,500원 절약 · 한 번 결제" },
     ],
-    featured: "출시 추천",
+    featured: "런칭 30%",
+    pricingFootnote: "19,900원은 프로모션 종료 후 적용할 예정인 월간 정상가입니다. 종료 시점과 실제 결제·갱신 금액은 유료 전환 전에 별도로 안내합니다.",
     faqTitle: "자주 묻는 질문",
     faqs: [
       ["온라인 강의용 서비스인가요?", "아니요. 교실, 학원, 세미나처럼 같은 공간에서 듣는 현장 강의를 우선해 만들고 있습니다."],
       ["질문하는 동안 강의 기록이 멈추나요?", "멈추지 않습니다. 답변을 만드는 동안에도 마이크 음성과 스크립트는 계속 이어집니다."],
       ["모든 질문에 웹 검색을 사용하나요?", "아닙니다. 강의 내용만으로 충분한지 모델이 판단하고, 최신 정보나 외부 확인이 필요할 때만 검색합니다."],
-      ["무료 베타에서도 모든 기능을 쓸 수 있나요?", "네. 카드 등록 없이 강의 기록, 질문, 강의실 맥락과 필요한 웹 검색을 모두 이용할 수 있습니다."],
+      ["무료 공개 기간에도 모든 기능을 쓸 수 있나요?", "네. 카드 등록 없이 강의 기록, 질문, 강의실 맥락과 필요한 웹 검색을 모두 이용할 수 있습니다."],
       ["요금제 시간은 실제 대학 수업에 충분한가요?", "월간은 80시간, 한 학기권은 6개월 동안 480시간을 제공합니다. 한 번의 수업은 최대 3시간이며 실제 녹음 시간만 계산합니다."],
       ["지난 수업도 답변에 반영되나요?", "같은 강의실에 저장한 이전 수업 중 질문과 관련된 부분만 찾아 보조 맥락으로 사용합니다. 다른 강의실의 내용은 섞지 않습니다."],
       ["제 OpenAI·Claude·Gemini 키를 쓸 수 있나요?", "네. 현재 탭에서 한 번만 쓰거나 계정에 암호화해 저장할 수 있습니다. 해당 공급자의 모델 비용은 본인 계정에 별도로 청구됩니다."],
+      ["Google 로그인 정보는 어디에 사용하나요?", "Google에서 받은 이름, 이메일 주소와 프로필 사진은 Lecue 계정을 만들고 로그인 상태를 유지하는 데만 사용합니다. Gmail, Google Drive, 캘린더 등의 다른 Google 데이터에는 접근하지 않습니다."],
       ["강의를 녹음해도 되나요?", "강의자와 기관의 녹음 정책을 먼저 확인하고, 녹음이 허용된 환경에서만 사용해야 합니다."],
     ],
     finalTitle: ["다음 설명은,", "놓치지 않게."],
@@ -92,10 +94,10 @@ const content = {
     language: "한국어",
     heroLabel: "A live assistant for in-person lectures",
     heroTitle: ["Catch the explanation", "before class moves on."],
-    heroDescription: "Lecue follows the lecture, then answers from everything said up to the moment you ask. Recording continues while you read the answer.",
-    heroCta: "Start the free beta",
+    heroDescription: "Lecue is a learning service that transcribes in-person lectures in real time and answers from everything said up to the moment you ask. Recording continues while you read the answer.",
+    heroCta: "Start free",
     heroSecondary: "See the product",
-    heroNote: "Free during beta · no card required",
+    heroNote: "Free during early access · no card required",
     promises: [
       ["Within 5 seconds", "Speech becomes readable paragraphs"],
       ["Still recording", "Questions never pause the lecture"],
@@ -127,28 +129,30 @@ const content = {
       ["Aug 20", "Corporate Finance · Bond Pricing", "52 min · 4 questions"],
       ["Aug 18", "Business Fundamentals · Company Structure", "1 hr 05 min · 9 questions"],
     ],
-    pricingLabel: "Planned launch pricing · local taxes may apply",
+    pricingLabel: "Founding member offer · local taxes may apply",
     pricingTitle: ["A full month of class.", "Nothing important missed."],
-    pricingDescription: "$9.99 a month covers about 80 hours of regular classes. Every paid option includes transcription, questions, classroom context, and needed search.",
-    pricingNoCard: "Free beta, no card required",
+    pricingDescription: "Early access is free with no card required. After paid launch, founding members can start at $9.99 a month for about 80 hours of regular classes.",
+    pricingNoCard: "No charge during early access",
     pricingPerSecond: "Only active recording time counts",
     pricingIncluded: "Transcription, questions, and classroom context included",
-    pricingCta: "Start the free beta",
+    pricingCta: "Join as a founding member",
     plans: [
       { name: "First try", time: "7 days", price: "Free", unit: "One lecture · up to 3 hours", detail: "Once per account · every feature included" },
-      { name: "Monthly", time: "1 month", price: "$9.99", unit: "80 recording hours", detail: "A month at 20 class hours per week", featured: true },
-      { name: "Semester", time: "6 months", price: "$54", unit: "480 recording hours", detail: "Save $5.94 over six monthly payments" },
+      { name: "Monthly", time: "1 month", compareLabel: "Regular price", comparePrice: "$14.99", price: "$9.99", priceNote: "/month", unit: "80 recording hours", detail: "Founding member price · save 33%", featured: true },
+      { name: "Semester", time: "6 months", compareLabel: "Six regular monthly payments", comparePrice: "$89.94", price: "$54", priceNote: "/6 months", unit: "480 recording hours", detail: "Save $35.94 · one payment" },
     ],
-    featured: "Launch pick",
+    featured: "Launch 33%",
+    pricingFootnote: "$14.99 is the planned regular monthly price after the launch offer. The offer end date and actual billing and renewal amount will be shown before paid conversion.",
     faqTitle: "Common questions",
     faqs: [
       ["Is this for online courses?", "No. Lecue is designed first for classrooms, seminars, workshops, and other lectures you attend in person."],
       ["Does recording stop while I ask?", "No. The microphone and transcript continue while an answer is being prepared."],
       ["Does every answer use web search?", "No. The model decides whether the lecture is enough and searches only when current information or outside verification is needed."],
-      ["What can I use during the free beta?", "Transcription, questions, classroom context, and needed web search are all available without adding a card."],
+      ["What can I use during free early access?", "Transcription, questions, classroom context, and needed web search are all available without adding a card."],
       ["Is the allowance enough for a real class schedule?", "Monthly includes 80 recording hours, and Semester includes 480 hours across six months. Each lecture can run for up to 3 hours and only active recording counts."],
       ["Can answers use earlier lectures?", "Yes. Lecue retrieves only relevant excerpts from earlier lectures in the same classroom as supporting context. It never mixes in another classroom."],
       ["Can I use my own OpenAI, Claude, or Gemini key?", "Yes. Use it once in the current tab or save it encrypted to your account. That provider bills its own model charges separately."],
+      ["How does Lecue use my Google sign-in data?", "Lecue uses your Google name, email address, and profile photo only to create your account and keep you signed in. It does not access Gmail, Google Drive, Calendar, or other Google data."],
       ["May I record any lecture?", "Check the lecturer's, institution's, and local recording rules first. Use Lecue only where recording is permitted."],
     ],
     finalTitle: ["Stay with the next explanation", "from start to finish."],
@@ -227,10 +231,15 @@ export default function LandingPage({ locale }: { locale: Locale }) {
         <div className={styles.planGrid}>
           {copy.plans.map((plan) => <article className={"featured" in plan ? styles.featuredPlan : undefined} key={plan.name}>
             <div><span>{plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
-            <h3>{plan.time}</h3><strong>{plan.price}</strong><p>{plan.unit}</p><small>{plan.detail}</small>
+            <h3>{plan.time}</h3>
+            {/* deslop-ignore-next-line 09 -- 실제 정상가와 런칭가의 가격 비교를 명시 */}
+            {"comparePrice" in plan && <div className={styles.comparePrice}><span>{plan.compareLabel}</span><del>{plan.comparePrice}</del></div>}
+            <div className={styles.planPrice}><strong>{plan.price}</strong>{"priceNote" in plan && <span>{plan.priceNote}</span>}</div>
+            <p>{plan.unit}</p><small>{plan.detail}</small>
             <Link href={`${base}/login?mode=signup`}>{plan.price === "무료" || plan.price === "Free" ? copy.heroCta : copy.open}<span>→</span></Link>
           </article>)}
         </div>
+        <p className={styles.pricingFootnote}>{copy.pricingFootnote}</p>
         <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingPerSecond}</span><span>{copy.pricingIncluded}</span></div>
         <Link className={styles.pricingCta} href={`${base}/login?mode=signup`}>{copy.pricingCta}<span>→</span></Link>
       </section>

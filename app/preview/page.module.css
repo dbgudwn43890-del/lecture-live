@@ -263,19 +263,27 @@
 .pricingIntro h2 { margin: 0; font-size: clamp(48px, 5.6vw, 78px); line-height: 1.03; letter-spacing: -.055em; }
 .pricingIntro > span { display: block; max-width: 670px; margin: 27px auto 0; color: var(--muted); font-size: 16px; line-height: 1.8; }
 .planGrid { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 76px; }
-.planGrid article { position: relative; min-width: 0; min-height: 382px; display: flex; flex-direction: column; padding: 27px 24px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.planGrid article { position: relative; min-width: 0; min-height: 410px; display: flex; flex-direction: column; padding: 27px 24px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .planGrid article > div { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .planGrid article > div > span { font-size: 12px; font-weight: 850; }
 .planGrid article > div > b { padding: 6px 8px; color: white; background: var(--signal); font-size: 9px; }
 .planGrid h3 { margin: 35px 0 0; font-size: 36px; letter-spacing: -.045em; }
-.planGrid article > strong { margin-top: 9px; font-size: 23px; }
+.comparePrice { min-height: 30px !important; justify-content: flex-start !important; gap: 9px !important; margin-top: 18px; color: var(--muted); }
+.comparePrice span { font-size: 9px !important; font-weight: 650 !important; }
+.comparePrice del { text-decoration-color: var(--signal); text-decoration-thickness: 2px; font-size: 13px; font-weight: 800; }
+.planPrice { min-height: 35px !important; justify-content: flex-start !important; gap: 7px !important; margin-top: 3px; }
+.planPrice strong { font-size: 27px; letter-spacing: -.035em; }
+.planPrice span { align-self: flex-end; margin-bottom: 4px; color: var(--muted); font-size: 10px !important; font-weight: 700 !important; }
 .planGrid article > p { margin: 15px 0 0; color: var(--focus); font-size: 11px; font-weight: 800; }
 .planGrid article > small { margin-top: 8px; color: var(--muted); font-size: 10px; }
 .planGrid article > a { min-height: 45px; display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding: 0 14px; color: white; background: var(--ink); font-size: 11px; font-weight: 800; }
 .planGrid .featuredPlan { color: white; background: var(--focus); border-color: var(--focus); transform: translateY(-13px); box-shadow: 0 22px 48px rgba(20, 94, 114, .18); }
 .planGrid .featuredPlan > p,
 .planGrid .featuredPlan > small { color: #c5e0e5; }
+.planGrid .featuredPlan .comparePrice,
+.planGrid .featuredPlan .planPrice span { color: #c5e0e5; }
 .planGrid .featuredPlan > a { color: var(--ink); background: white; }
+.pricingFootnote { max-width: 720px; margin: 30px auto 0; color: var(--muted); font-size: 10px; line-height: 1.7; text-align: center; }
 .pricingFacts { gap: 28px; margin-top: 42px; color: var(--muted); font-size: 11px; }
 .pricingFacts span { display: flex; align-items: center; gap: 8px; }
 .pricingFacts span::before { content: "✓"; color: var(--focus); font-weight: 900; }
@@ -404,7 +412,7 @@
   .pricing { padding: 100px 16px; }
   .pricingIntro h2 { font-size: 46px; }
   .planGrid { grid-template-columns: 1fr; margin-top: 56px; }
-  .planGrid article { min-height: 340px; }
+  .planGrid article { min-height: 370px; }
   .pricingFacts { align-items: flex-start; flex-direction: column; gap: 12px; }
   .faq { width: calc(100% - 32px); grid-template-columns: 1fr; gap: 52px; padding: 100px 0; }
   .faq h2 { font-size: 43px; }

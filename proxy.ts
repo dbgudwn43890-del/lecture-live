@@ -7,6 +7,7 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const country = request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
   const prefersEnglish = Boolean(country && country !== "KR" && country !== "XX");
+  const usesEnglishHomepage = path === "/" && prefersEnglish;
   const oauthFallbackNext = getOAuthFallbackNext(path, country, request.nextUrl.searchParams.has("code"));
 
   // Supabase falls back to the Site URL when an OAuth redirect URL is not allow-listed.
@@ -21,6 +22,7 @@ export async function proxy(request: NextRequest) {
   const localizablePaths = ["/", "/preview", "/login", "/classroom", "/privacy", "/terms"];
   if (
     prefersEnglish &&
+    path !== "/" &&
     !path.startsWith("/en") &&
     localizablePaths.includes(path)
   ) {
@@ -30,7 +32,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-site-locale", path === "/en" || path.startsWith("/en/") ? "en" : "ko");
+  requestHeaders.set("x-site-locale", usesEnglishHomepage || path === "/en" || path.startsWith("/en/") ? "en" : "ko");
   let response = NextResponse.next({ request: { headers: requestHeaders } });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
