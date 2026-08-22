@@ -43,25 +43,50 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
     setMessage("");
     setIsError(false);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(classroomPath)}` },
-    });
-
-    if (error) {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(classroomPath)}` },
+      });
+      if (error) throw error;
+    } catch {
       setPending(false);
       setGooglePending(false);
       setIsError(true);
       setMessage(isEnglish
-        ? "We could not start Google sign-in. Please try again."
-        : "Google 로그인을 시작하지 못했습니다. 다시 시도해 주세요.");
+        ? "Google sign-in is not available. Check the Google provider in Supabase."
+        : "Google 로그인을 사용할 수 없습니다. Supabase의 Google 공급자 설정을 확인해 주세요.");
     }
   }
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (mode === "signup" && password !== passwordConfirmation) {
+    const formData = new FormData(event.currentTarget);
+    const submittedEmail = String(formData.get("email") ?? "").trim();
+    const submittedPassword = String(formData.get("password") ?? "");
+    const submittedConfirmation = String(formData.get("password-confirmation") ?? "");
+
+    setEmail(submittedEmail);
+    setPassword(submittedPassword);
+    setPasswordConfirmation(submittedConfirmation);
+
+    if (!submittedEmail || !submittedPassword) {
+      setIsError(true);
+      setMessage(isEnglish ? "Enter your email and password." : "이메일과 비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (!submittedEmail.includes("@")) {
+      setIsError(true);
+      setMessage(isEnglish ? "Enter a valid email address." : "올바른 이메일 주소를 입력해 주세요.");
+      return;
+    }
+    if (mode === "signup" && submittedPassword.length < 8) {
+      setIsError(true);
+      setMessage(isEnglish ? "Use a password with at least 8 characters." : "비밀번호는 8자 이상 입력해 주세요.");
+      return;
+    }
+    if (mode === "signup" && submittedPassword !== submittedConfirmation) {
       setIsError(true);
       setMessage(isEnglish ? "The passwords do not match." : "비밀번호가 서로 다릅니다.");
       return;
@@ -71,38 +96,43 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
     setMessage("");
     setIsError(false);
 
-    const supabase = createClient();
-    const credentials = { email: email.trim(), password };
-    const { data, error } = mode === "signup"
-      ? await supabase.auth.signUp({
-          ...credentials,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(classroomPath)}` },
-        })
-      : await supabase.auth.signInWithPassword(credentials);
+    try {
+      const supabase = createClient();
+      const credentials = { email: submittedEmail, password: submittedPassword };
+      const { data, error } = mode === "signup"
+        ? await supabase.auth.signUp({
+            ...credentials,
+            options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(classroomPath)}` },
+          })
+        : await supabase.auth.signInWithPassword(credentials);
 
-    setPending(false);
-    if (error) {
+      if (error) {
+        const rateLimited = error.message.toLowerCase().includes("rate limit");
+        setIsError(true);
+        setMessage(rateLimited
+          ? isEnglish ? "Too many emails were requested. Wait a few minutes and try again." : "인증 메일 요청이 너무 많습니다. 몇 분 뒤 다시 시도해 주세요."
+          : mode === "signup"
+            ? isEnglish ? "We could not create the account. Check your email and password." : "회원가입을 처리하지 못했습니다. 이메일과 비밀번호를 확인해 주세요."
+            : isEnglish ? "The email or password is incorrect." : "이메일 또는 비밀번호가 올바르지 않습니다.");
+        return;
+      }
+
+      if (data.session) {
+        window.location.assign(classroomPath);
+        return;
+      }
+
+      setMessage(isEnglish
+        ? "We sent a confirmation email. You only need to verify your address once."
+        : "확인 메일을 보냈습니다. 처음 한 번만 이메일 확인이 필요합니다.");
+    } catch {
       setIsError(true);
-      setMessage(
-        mode === "signup"
-          ? isEnglish
-            ? "We could not create the account. Check your email and password."
-            : "회원가입을 처리하지 못했습니다. 이메일과 비밀번호를 확인해 주세요."
-          : isEnglish
-            ? "The email or password is incorrect."
-            : "이메일 또는 비밀번호가 올바르지 않습니다.",
-      );
-      return;
+      setMessage(isEnglish
+        ? "We could not reach the authentication server. Check your connection and try again."
+        : "인증 서버에 연결하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+    } finally {
+      setPending(false);
     }
-
-    if (data.session) {
-      window.location.assign(classroomPath);
-      return;
-    }
-
-    setMessage(isEnglish
-      ? "We sent a confirmation email. You only need to verify your address once."
-      : "확인 메일을 보냈습니다. 처음 한 번만 이메일 확인이 필요합니다.");
   }
 
   return (
@@ -141,6 +171,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
               type="button"
               className={mode === "signin" ? "auth-mode-active" : undefined}
               aria-pressed={mode === "signin"}
+              disabled={pending}
               onClick={() => changeMode("signin")}
             >
               {isEnglish ? "Sign in" : "로그인"}
@@ -149,13 +180,14 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
               type="button"
               className={mode === "signup" ? "auth-mode-active" : undefined}
               aria-pressed={mode === "signup"}
+              disabled={pending}
               onClick={() => changeMode("signup")}
             >
               {isEnglish ? "Create account" : "회원가입"}
             </button>
           </div>
 
-          <form className="login-form" onSubmit={authenticate}>
+          <form className="login-form" onSubmit={authenticate} noValidate>
             <label htmlFor="email">{isEnglish ? "Email" : "이메일"}</label>
             <input
               id="email"
@@ -199,7 +231,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
               </>
             )}
 
-            <button type="submit" disabled={pending || !email.trim() || !password}>
+            <button type="submit" disabled={pending}>
               {pending
                 ? isEnglish ? "Working…" : "처리 중…"
                 : mode === "signin"

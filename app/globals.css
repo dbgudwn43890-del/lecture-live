@@ -547,6 +547,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-size: 11px;
 }
 
+.login-topbar .brand { color: white; text-decoration: none; }
+
 .login-stage {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
@@ -594,7 +596,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-weight: 750;
 }
 
-.google-auth-button:hover { background: var(--surface); }
+.google-auth-button:not(:disabled):hover { background: var(--surface); }
 
 .auth-divider {
   display: grid;
@@ -627,6 +629,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-size: 13px;
   font-weight: 750;
 }
+
+.auth-mode button:not(:disabled):hover { color: var(--ink); }
 
 .auth-mode .auth-mode-active {
   color: var(--ink);
@@ -663,6 +667,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   border: 0;
   font-weight: 750;
 }
+
+.login-form button:not(:disabled):hover { background: #104b5b; }
 
 .login-message {
   min-height: 20px;
