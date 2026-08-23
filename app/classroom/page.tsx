@@ -29,6 +29,7 @@ type SessionSummary = {
 type Classroom = { id: string; title: string; locale: "ko" | "en"; sessions: SessionSummary[] };
 type AiProvider = "lecture-live" | PersonalProvider;
 type SavedCredential = { provider: PersonalProvider; model: string; updated_at: string };
+type CreditStatus = { credits: number; nextExpiry: string | null; latestGrantAt: string | null; subscriptionStatus: string | null; trialUsed: boolean };
 type Message = {
   id: string;
   role: "user" | "assistant";
@@ -98,6 +99,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const [activeSessionId, setActiveSessionId] = useState("");
   const [newClassroomName, setNewClassroomName] = useState("");
   const [classroomPending, setClassroomPending] = useState(false);
+  const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -108,12 +110,18 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const segmentsRef = useRef<Segment[]>([]);
   const activeSessionIdRef = useRef("");
   const finishingRef = useRef(false);
+  const chargedMinuteRef = useRef(-1);
+  const creditChargePendingRef = useRef(false);
 
   useEffect(() => {
     if (status !== "recording") return;
     const timer = window.setInterval(() => {
       const elapsed = Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current);
       setElapsedMs(elapsed);
+      const minuteIndex = Math.min(179, Math.floor(elapsed / 60_000));
+      if (activeSessionIdRef.current && minuteIndex > chargedMinuteRef.current && !creditChargePendingRef.current) {
+        void consumeCreditsThrough(activeSessionIdRef.current, minuteIndex);
+      }
       if (elapsed >= MAX_LECTURE_MS) void finishLecture();
     }, 250);
     return () => window.clearInterval(timer);
@@ -154,7 +162,43 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
 
   useEffect(() => {
     void loadClassrooms();
+    void loadCredits();
   }, [locale]);
+
+  async function loadCredits() {
+    try {
+      const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
+      if (!response.ok) return;
+      setCreditStatus(await response.json() as CreditStatus);
+    } catch {
+      // The server enforces credits even when this display cannot refresh.
+    }
+  }
+
+  async function consumeCreditsThrough(sessionId: string, minuteIndex: number) {
+    if (creditChargePendingRef.current || minuteIndex <= chargedMinuteRef.current) return;
+    creditChargePendingRef.current = true;
+    try {
+      const response = await fetch("/api/credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ sessionId, minuteIndex }),
+      });
+      const data = await response.json() as { credits?: number; chargedThrough?: number; error?: string };
+      if (!response.ok) throw new Error(data.error);
+      chargedMinuteRef.current = data.chargedThrough ?? minuteIndex;
+      setCreditStatus((current) => current ? { ...current, credits: data.credits ?? current.credits } : current);
+    } catch (caught) {
+      const creditError = caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Recording stopped because credits could not be verified." : "크레딧을 확인하지 못해 강의를 종료합니다.";
+      await finishLecture();
+      setError(creditError);
+      await loadCredits();
+    } finally {
+      creditChargePendingRef.current = false;
+    }
+  }
 
   async function loadClassrooms(preferredId?: string) {
     try {
@@ -234,6 +278,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
     setMessages([]);
     setInterim("");
     setElapsedMs(0);
+    chargedMinuteRef.current = -1;
     setStatus("idle");
   }
 
@@ -297,6 +342,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
     setError("");
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
+    chargedMinuteRef.current = -1;
     setActiveSessionId("");
     setStatus("connecting");
 
@@ -310,14 +356,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
         },
       });
       streamRef.current = stream;
-
-      const tokenResponse = await fetch("/api/deepgram-token", { method: "POST" });
-      const tokenData = (await tokenResponse.json()) as { accessToken?: string; error?: string };
-      if (!tokenResponse.ok || !tokenData.accessToken) {
-        throw new Error(tokenData.error ?? (isEnglish
-          ? "Could not obtain a speech-recognition token."
-          : "음성 인식 토큰을 받지 못했습니다."));
-      }
 
       const sessionResponse = await fetch("/api/lecture-sessions", {
         method: "POST",
@@ -337,6 +375,22 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
       setMessages([]);
+
+      const tokenResponse = await fetch("/api/deepgram-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ sessionId: sessionData.session.id }),
+      });
+      const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; error?: string };
+      if (!tokenResponse.ok || !tokenData.accessToken) {
+        throw new Error(tokenData.error ?? (isEnglish
+          ? "Could not obtain a speech-recognition token."
+          : "음성 인식 토큰을 받지 못했습니다."));
+      }
+      chargedMinuteRef.current = 0;
+      setCreditStatus((current) => current && typeof tokenData.credits === "number"
+        ? { ...current, credits: tokenData.credits }
+        : current);
 
       const params = new URLSearchParams({
         model: "nova-3",
@@ -404,6 +458,14 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       };
 
       socket.onerror = () => {
+        if (startedAtRef.current === 0 && activeSessionIdRef.current) {
+          void fetch("/api/lecture-sessions", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+            body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
+          }).then(() => loadCredits());
+          stream.getTracks().forEach((track) => track.stop());
+        }
         setError(isEnglish
           ? "Speech recognition could not connect. Check the network and API settings."
           : "음성 인식 연결에 실패했습니다. 네트워크와 API 설정을 확인해 주세요.");
@@ -450,6 +512,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
         const data = await response.json() as { error?: string };
         if (!response.ok) throw new Error(data.error);
         await loadClassrooms(activeClassroomId);
+        await loadCredits();
         if (Date.now() - startedAtRef.current >= MAX_LECTURE_MS) {
           setError(isEnglish ? "This lecture reached the 3-hour session limit and was saved." : "수업 1회 최대 3시간에 도달해 자동으로 저장·종료했습니다.");
         }
@@ -560,8 +623,11 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
     }
   }
 
-  const canStart = status === "idle" || status === "ended" || status === "error";
-  const canAsk = (segments.length > 0 || interim.length > 0) && !messages.some((message) => message.pending);
+  const canStart = (status === "idle" || status === "ended" || status === "error")
+    && (creditStatus === null || creditStatus.credits > 0);
+  const canAsk = (segments.length > 0 || interim.length > 0)
+    && !messages.some((message) => message.pending)
+    && (creditStatus === null || creditStatus.credits > 0 || status === "recording");
   const activeModelLabel =
     aiProvider === "lecture-live"
       ? isEnglish ? "Default AI" : "기본 AI"
@@ -590,6 +656,11 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
           <span>{statusCopy[status]}</span>
           <time>{formatTime(elapsedMs)}</time>
         </div>
+
+        <Link className="credit-balance" href={`${basePath}/billing`}>
+          <span>{isEnglish ? "Credits" : "크레딧"}</span>
+          <b>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</b>
+        </Link>
 
         <details className="ai-settings">
           <summary>

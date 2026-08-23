@@ -41,7 +41,7 @@ export default function PrivacyPage() {
               <tr><td>음성</td><td>마이크에서 입력되는 강의 음성 스트림</td><td>강의 기록 중</td><td>서비스 이용 시</td></tr>
               <tr><td>개인 AI 연결</td><td>선택한 AI 공급자·모델, 이용자가 직접 입력한 API 키</td><td>개인 AI 선택·질문 시</td><td>선택</td></tr>
               <tr><td>기술 정보</td><td>IP 주소, 브라우저·기기 정보, 접속 일시, 쿠키, 오류 및 보안 로그</td><td>접속·이용 과정</td><td>자동 생성</td></tr>
-              <tr><td>결제</td><td>상품, 결제 금액·시각·상태, 거래 식별자, 환불 내역</td><td>향후 유료 결제 시</td><td>결제 시</td></tr>
+              <tr><td>결제</td><td>상품, 결제 금액·시각·상태, Paddle 고객·거래·구독 식별자, 구독 기간, 환불 내역과 잔여 크레딧</td><td>결제·무료 체험·환불 시</td><td>결제 기능 이용 시</td></tr>
               <tr><td>문의</td><td>이메일, 문의 내용, 답변 기록</td><td>고객 문의 시</td><td>문의 시</td></tr>
             </tbody>
           </table>
@@ -56,7 +56,7 @@ export default function PrivacyPage() {
             <li>실시간 음성 인식, 강의 스크립트 표시, 질문 시점까지의 강의 맥락을 반영한 답변 제공</li>
             <li>필요한 경우 최신 정보 확인을 위한 웹 검색과 출처 표시</li>
             <li>이용자가 선택한 외부 AI 공급자로 질문을 전달하고 답변을 표시하는 개인 API 키 연결</li>
-            <li>기록 시간 산정, 잔여 시간 관리, 결제·환불 처리</li>
+            <li>기록 분 산정, 잔여 크레딧 관리, 결제·환불 처리</li>
             <li>오류 분석, 보안 사고 대응, 서비스 품질과 음성 인식 성능 개선</li>
             <li>문의 처리, 법적 의무 이행과 분쟁 대응</li>
           </ul>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
           <p>
             운영자는 원칙적으로 개인정보를 제3자에게 제공하지 않습니다. 다만 이용자가 별도로 동의한 경우, 법률에 특별한 규정이 있거나 생명·신체의 급박한 위험에 대응하기 위해 필요한 경우에는 관계 법령이 허용하는 범위에서 제공할 수 있습니다.
           </p>
-          <p>아래 6항의 클라우드·AI 사업자는 운영자를 대신해 서비스를 처리하는 수탁자이며, 개인정보를 독자적인 광고 목적으로 이용하도록 허용하지 않습니다.</p>
+          <p>아래 6항의 클라우드·AI 사업자는 운영자를 대신해 서비스를 처리합니다. Paddle은 결제 화면에서 판매·결제·세금·환불을 담당하는 Merchant of Record로서 결제정보를 별도로 처리하며, 운영자는 카드번호 원문을 저장하지 않습니다.</p>
         </div>
       </section>
 
@@ -152,10 +152,10 @@ export default function PrivacyPage() {
                   <td>Gemini 개인 연결을 선택하지 않으면 이전 없이 기본 AI 이용 가능</td>
                 </tr>
                 <tr>
-                  <td className={styles.placeholder}>결제대행사 확정 필요</td>
-                  <td>향후 결제·환불: 결제수단 정보, 거래 식별자와 상태</td>
-                  <td className={styles.placeholder}>결제 도입 전 확정</td>
-                  <td>결제하지 않으면 유료 시간 구매 불가</td>
+                  <td><a href="https://www.paddle.com/legal/privacy" target="_blank" rel="noreferrer">Paddle.com Market Limited 및 구매 지역에 따른 Paddle 관계사</a></td>
+                  <td>Merchant of Record 결제·정기결제·세금·환불·부정결제 방지: 이름, 이메일, 청구지, 결제수단·구매 정보. 운영자는 고객·거래·구독 식별자와 상태를 전달받으며 카드번호 원문을 저장하지 않음</td>
+                  <td>영국, 미국, 캐나다 등 Paddle이 고지한 처리 국가 / 거래 관계 유지 및 법적 의무·분쟁 대응에 필요한 기간</td>
+                  <td>결제창을 닫아 이전을 거부할 수 있으나 무료 체험·유료 크레딧 구매 불가</td>
                 </tr>
               </tbody>
             </table>

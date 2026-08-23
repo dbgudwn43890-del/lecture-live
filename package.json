@@ -11,6 +11,7 @@
     "test:rate-limit": "node scripts/test-rate-limit.mjs",
     "test:chunks": "node --experimental-strip-types --test app/lib/chunk-transcript.test.ts",
     "test:audio": "node --experimental-strip-types --test app/lib/audio.test.ts",
+    "test:billing": "node --experimental-strip-types --test app/lib/billing.test.ts",
     "eval:ask": "node scripts/eval-ask.mjs"
   },
   "dependencies": {

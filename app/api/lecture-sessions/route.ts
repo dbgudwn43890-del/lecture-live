@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { chunkTranscript, type TranscriptPart } from "../../lib/chunk-transcript";
 import { createAdminClient } from "../../lib/supabase/admin";
+import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -132,6 +133,14 @@ export async function PATCH(request: Request) {
   }
 
   const durationSeconds = Math.min(10_800, Math.max(0, Math.ceil(body.durationMs / 1_000)));
+  if (durationSeconds > 0) {
+    const supabase = await createClient();
+    const { error: creditError } = await supabase.rpc("consume_lecture_credits", {
+      p_session_id: body.sessionId,
+      p_minute_index: Math.min(179, Math.max(0, Math.ceil(durationSeconds / 60) - 1)),
+    });
+    if (creditError) console.error("Final credit reconciliation failed", creditError.code);
+  }
   const { error: updateError } = await current.admin.from("lecture_sessions").update({ status: "completed", ended_at: new Date().toISOString(), duration_seconds: durationSeconds }).eq("id", body.sessionId).eq("user_id", current.userId);
   if (updateError) {
     console.error("Lecture completion failed", updateError.code);

@@ -19,7 +19,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
-  const localizablePaths = ["/", "/preview", "/login", "/classroom", "/privacy", "/terms"];
+  const localizablePaths = ["/", "/preview", "/login", "/classroom", "/billing", "/privacy", "/terms"];
   if (
     prefersEnglish &&
     path !== "/" &&
@@ -62,6 +62,7 @@ export async function proxy(request: NextRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = path.startsWith("/en/") ? "/en/login" : "/login";
     loginUrl.search = "";
+    loginUrl.searchParams.set("next", `${path}${request.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
 

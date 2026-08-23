@@ -11,6 +11,7 @@ import {
 } from "../../lib/llm-models";
 import { checkRateLimit } from "../../lib/rate-limit";
 import { createAdminClient } from "../../lib/supabase/admin";
+import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -426,6 +427,24 @@ export async function POST(request: Request) {
   }
   const locale = body.locale === "en" ? "en" : "ko";
   const isEnglish = locale === "en";
+  const requestedSessionId = isUuid(body.lectureSessionId) ? body.lectureSessionId : null;
+  const requestedMinuteIndex = typeof body.questionAtMs === "number" && Number.isFinite(body.questionAtMs)
+    ? Math.min(179, Math.max(0, Math.floor(body.questionAtMs / 60_000)))
+    : 0;
+  const supabase = await createClient();
+  const { data: canAsk, error: creditError } = await supabase.rpc("can_ask_with_credits", {
+    p_session_id: requestedSessionId,
+    p_minute_index: requestedMinuteIndex,
+  });
+  if (creditError) {
+    console.error("Question credit check failed", creditError.code);
+    return NextResponse.json({ error: isEnglish ? "Credits are not configured yet." : "크레딧 기능이 아직 설정되지 않았습니다." }, { status: 503 });
+  }
+  if (!canAsk) {
+    return NextResponse.json({
+      error: isEnglish ? "You are out of credits. Choose a plan to ask another question." : "남은 크레딧이 없습니다. 질문을 계속하려면 요금제를 선택해 주세요.",
+    }, { status: 402 });
+  }
 
   let personalLlm = parsePersonalLlm(body.personalLlm);
   if (body.personalLlm !== undefined && !personalLlm) {
@@ -477,7 +496,7 @@ export async function POST(request: Request) {
   }
 
   const classroomId = isUuid(body.classroomId) ? body.classroomId : null;
-  const lectureSessionId = isUuid(body.lectureSessionId) ? body.lectureSessionId : null;
+  const lectureSessionId = requestedSessionId;
   const earlier = classroomId && lectureSessionId
     ? await findEarlierLectureContext(userId, classroomId, lectureSessionId, question)
     : { text: "", sources: [] as LectureSource[], admin: null };

@@ -29,7 +29,7 @@ export default function EnglishPrivacyPage() {
           <tr><td>Voice</td><td>Microphone audio stream</td><td>During active recording</td></tr>
           <tr><td>Personal AI</td><td>Selected provider and model; API key entered by the user</td><td>When selected, saved, or used</td></tr>
           <tr><td>Technical</td><td>IP address, browser and device data, cookies, access time, security and error logs</td><td>Automatically during access</td></tr>
-          <tr><td>Payment</td><td>Product, amount, time, status, transaction ID, and refund history</td><td>When paid service launches</td></tr>
+          <tr><td>Payment</td><td>Product, amount, time, status, Paddle customer, transaction and subscription IDs, billing period, refund history, and credit balance</td><td>At checkout, trial activation, renewal, or refund</td></tr>
           <tr><td>Support</td><td>Email, request, and response history</td><td>When contacting support</td></tr>
         </tbody>
       </table></div></section>
@@ -39,7 +39,7 @@ export default function EnglishPrivacyPage() {
         <li>Transcribe speech, display the lecture, and answer from context available at question time.</li>
         <li>Search the web and show sources when current or independently verified information is needed.</li>
         <li>Send a request to the external AI provider the user selects.</li>
-        <li>Measure recorded time, manage balances, and process future payments and refunds.</li>
+        <li>Measure recording minutes, manage credits, and process payments and refunds.</li>
         <li>Diagnose errors, respond to security incidents, improve quality, answer support requests, and meet legal obligations.</li>
       </ul><p><strong>We do not use lecture content or questions for targeted advertising.</strong></p></div></section>
 
@@ -65,7 +65,7 @@ export default function EnglishPrivacyPage() {
           <tr><td>OpenAI, L.L.C.</td><td>Default or user-selected answers and web search: transcript, question, randomized safety identifier, and personal key when applicable</td><td>OpenAI processing regions and API retention settings</td></tr>
           <tr><td>Anthropic, PBC</td><td>User-selected Claude answers and search: transcript, question, and personal key</td><td>Locations and retention described by Anthropic and the user's API account</td></tr>
           <tr><td>Google LLC</td><td>Optional Google sign-in; optional Gemini answers and Google Search</td><td>Locations and retention described by Google and the user's API account</td></tr>
-          <tr><td className={styles.placeholder}>Payment processor to be selected</td><td>Future payment and refund processing</td><td className={styles.placeholder}>To be confirmed before paid launch</td></tr>
+          <tr><td><a href="https://www.paddle.com/legal/privacy" target="_blank" rel="noreferrer">Paddle.com Market Limited and the Paddle entity for the buyer's region</a></td><td>Merchant of Record for checkout, recurring billing, tax, refunds, and fraud prevention: name, email, billing address, payment method, and purchase data. Lecue receives customer, transaction, and subscription IDs and status, but does not store full card numbers.</td><td>United Kingdom, United States, Canada, and other locations disclosed by Paddle; retained for the commercial relationship and legal or dispute requirements</td></tr>
         </tbody></table></div>
         <p>Default OpenAI Responses API calls use <code>store: false</code>. Retention and training choices for a personal provider follow the user's contract and account settings with that provider. Users can avoid an optional transfer by not selecting that function; core features affected by the transfer will then be unavailable.</p>
       </div></section>

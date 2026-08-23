@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
+import { getSafeAuthNext } from "../lib/auth-redirect";
 import { createClient } from "../lib/supabase/client";
 
 type Mode = "signin" | "signup";
@@ -23,6 +24,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
   const classroomPath = `${basePath}/classroom`;
+  const [nextPath, setNextPath] = useState(classroomPath);
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,6 +44,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
+    setNextPath(getSafeAuthNext(searchParams.get("next"), classroomPath));
     if (searchParams.get("mode") === "signup") setMode("signup");
     if (searchParams.has("error")) {
       setIsError(true);
@@ -69,7 +72,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(classroomPath)}` },
+        options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}` },
       });
       if (error) throw error;
     } catch {
@@ -124,7 +127,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       const { data, error } = mode === "signup"
         ? await supabase.auth.signUp({
             ...credentials,
-            options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(classroomPath)}` },
+            options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}` },
           })
         : await supabase.auth.signInWithPassword(credentials);
 
@@ -147,7 +150,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
 
       if (data.session) {
         redirecting = true;
-        window.location.assign(classroomPath);
+        window.location.assign(nextPath);
         return;
       }
 

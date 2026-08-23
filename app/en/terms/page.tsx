@@ -13,7 +13,7 @@ export default function EnglishTermsPage() {
     <LegalPage
       locale="en"
       title="Terms of Service"
-      description="These terms govern Lecue, an in-person lecture transcription and question service, including planned term passes, refunds, recording responsibilities, and optional personal AI connections."
+      description="These terms govern Lecue, an in-person lecture transcription and question service, including credits, term passes, refunds, recording responsibilities, and optional personal AI connections."
     >
       <section><h2>1. Purpose and agreement</h2><div><p>These Terms govern the web service and related functions provided by the operator of Lecue (“we”). They become effective when posted during account creation or use and accepted by the user (“member”).</p><p>We may change these Terms within applicable law. Ordinary changes will be announced 7 days in advance; material or unfavorable changes 30 days in advance. Separate consent will be obtained where law requires it.</p></div></section>
 
@@ -22,9 +22,9 @@ export default function EnglishTermsPage() {
         <li><strong>Lecture record:</strong> title, speech-recognition result, question, answer, sources, and recorded time.</li>
         <li><strong>Classroom:</strong> a space that groups lectures for one subject and can use relevant earlier lectures in that classroom as supporting context.</li>
         <li><strong>Lecture:</strong> one continuous recording started and ended inside a classroom, limited to 3 hours per session.</li>
-        <li><strong>Term pass:</strong> a product with a fixed access term and a recording allowance available during that term.</li>
+        <li><strong>Term pass:</strong> a product with a fixed access term and credits available during that term.</li>
         <li><strong>Monthly subscription:</strong> a paid product that renews every month until the member cancels.</li>
-        <li><strong>Usage time:</strong> recording time included in a term pass or free trial.</li>
+        <li><strong>Credit:</strong> the usage unit for recording. One credit is charged for each started recording minute, including a final partial minute.</li>
         <li><strong>Content:</strong> text or audio submitted, transmitted, or generated through the Service.</li>
         <li><strong>Personal AI connection:</strong> the optional use of the member's OpenAI, Anthropic, or Google Gemini API key, either once in the current tab or saved encrypted to the account.</li>
       </ul></div></section>
@@ -44,7 +44,7 @@ export default function EnglishTermsPage() {
         <li>Optional OpenAI, Anthropic Claude, or Google Gemini answers using a member-provided API key.</li>
         <li>Continued transcription while an answer is generated.</li>
         <li>Storage and review by classroom, with relevant earlier lectures in the same classroom available as supporting context.</li>
-        <li>Record deletion and usage-balance functions planned before the paid public launch.</li>
+        <li>Billing history, subscription status, and remaining-credit management.</li>
       </ul><p>Details may change during early-access validation or because of technology or law. Material reductions or discontinuation will be announced in advance where practicable.</p></div></section>
 
       <section><h2>5. Recording permission</h2><div><ol>
@@ -67,12 +67,11 @@ export default function EnglishTermsPage() {
         <li>Encrypted account storage is optional. A member may replace or delete a saved key at any time, and plaintext is not redisplayed in the browser.</li>
       </ol></div></section>
 
-      <section><h2>8. Planned pricing, free trial, and recurring billing</h2><div>
-        <p><strong>No payment is taken during the current free-access period.</strong> Final pricing, launch date, taxes, currency, and payment conditions will be shown before paid service begins.</p>
-        <div className={styles.tableWrap}><table><thead><tr><th>Planned product</th><th>Access</th><th>Price</th><th>Recording included</th></tr></thead><tbody>
-          <tr><td>First try</td><td>7 days</td><td>Free</td><td>One lecture · up to 3 hours · once per account</td></tr>
-          <tr><td>Monthly subscription</td><td>1 month</td><td>$9.99 launch price · planned $14.99 regular price</td><td>80 hours each month</td></tr>
-          <tr><td>Semester pass</td><td>6 months</td><td>$54 · save $35.94 against six regular monthly payments</td><td>480 hours total</td></tr>
+      <section><h2>8. Pricing, free trial, and recurring billing</h2><div>
+        <div className={styles.tableWrap}><table><thead><tr><th>Product</th><th>Access</th><th>Price</th><th>Credits included</th></tr></thead><tbody>
+          <tr><td>First try</td><td>7 days</td><td>Free</td><td>180 credits · one lecture · once per account</td></tr>
+          <tr><td>Monthly subscription</td><td>1 month</td><td>$9.99 launch price · planned $14.99 regular price</td><td>4,800 credits each billing period</td></tr>
+          <tr><td>Semester pass</td><td>6 months</td><td>$54 · save $35.94 against six regular monthly payments</td><td>28,800 credits</td></tr>
         </tbody></table></div>
         <ul>
           <li>$14.99 is a planned future monthly price, not a price previously charged. Eligibility, the offer end date, and the actual first and renewal charges will be shown at checkout and sent to the member before paid conversion.</li>
@@ -83,13 +82,13 @@ export default function EnglishTermsPage() {
           <li>If not cancelled, the Monthly subscription charges $9.99 when the trial ends and renews for $9.99 on the same billing date each month. We obtain renewed consent where a change in price or billing terms requires it.</li>
           <li>Members may cancel in account billing settings at any time. Cancellation stops the next charge and normally takes effect after the already-paid period. Section 9 applies to a request for immediate termination and refund.</li>
           <li>The Semester pass is a single $54 purchase for six months and does not renew automatically.</li>
-          <li>Monthly includes 80 hours each month, and Semester includes 480 hours across six months.</li>
+          <li>Monthly includes 4,800 credits each billing period, and Semester includes 28,800 credits across six months.</li>
           <li>Each lecture can record continuously for up to 3 hours. If allowance remains, the member may start another lecture afterward.</li>
-          <li>Unused Monthly allowance does not roll over, and unused Semester allowance expires after six months.</li>
-          <li>Time is deducted by the second only while microphone audio is actively sent for recognition.</li>
-          <li>Connecting, paused, failed transmission, and review time are not deducted.</li>
-          <li>Lecture questions, AI answers, and necessary web search are included in recorded-time pricing.</li>
-          <li>Using a personal AI key does not change Lecue time deduction. Provider token and search fees are separate.</li>
+          <li>Unused Monthly credits do not roll over, and unused Semester credits expire after six months.</li>
+          <li>One credit is charged for each started recording minute. A final partial minute costs one credit, and the same minute in the same lecture is never charged twice.</li>
+          <li>Connection time before recording begins, time after recording stops, failed starts, and record review are not charged.</li>
+          <li>Lecture questions, AI answers, and necessary web search require no separate credit while recording.</li>
+          <li>Using a personal AI key does not change Lecue credit deduction. Provider token and search fees are separate.</li>
           <li>Recording pauses after the allowance is exhausted until renewal or a new purchase. Existing content remains available.</li>
           <li>We retain electronic records of paid-conversion consent and cancellation, and provide conversion, recurring-payment, and price-change notices at the time and in the manner required by applicable law.</li>
           <li>Displayed USD prices may exclude taxes collected according to the buyer's region. Final checkout shows the amount due.</li>
@@ -97,17 +96,17 @@ export default function EnglishTermsPage() {
       </div></section>
 
       <section><h2>9. Cancellations and refunds</h2><div><ol>
-        <li>A charge, including an automatic renewal charge, is fully refundable within 7 days if none of that paid period's recording allowance has been used.</li>
+        <li>A charge, including an automatic renewal charge, is fully refundable within 7 days if none of that paid period's credits have been used.</li>
         <li>Consumers in the EEA, United Kingdom, or another country with a longer mandatory cooling-off period keep that local right. Where permitted after a member expressly asks us to begin during that period, a refund may deduct only the proportion of service already supplied.</li>
         <li>Starting a digital recording service may limit cooling-off rights for the portion already supplied where law permits. It does not automatically remove rights over divisible, unused service or any mandatory cancellation right.</li>
-        <li>After partial use, an immediate cancellation refund deducts the used portion based on remaining service time and recording allowance, plus only those deductions permitted by applicable law and consumer-dispute standards.</li>
+        <li>After partial use, an immediate cancellation refund deducts the used portion based on remaining service time and paid credits, plus only those deductions permitted by applicable law and consumer-dispute standards.</li>
         <li><strong>Failure to cancel during the free trial does not by itself make every refund unavailable.</strong> We consider whether paid use began, when the request was made, and the member's mandatory rights. Free or promotional access itself has no cash value.</li>
         <li>Where our fault makes the contracted service materially unavailable or different from its description, we provide the refund or remedy required by applicable law.</li>
         <li>We request reversal within 3 business days after approval where the payment method permits; a bank or card network may take longer to post it.</li>
         <li>Mandatory cancellation, cooling-off, and consumer rights in the member's country prevail over any less favorable term here.</li>
-      </ol><p className={styles.placeholder}>Refund email and processor procedure: [add before paid launch]</p></div></section>
+      </ol><p>Members can cancel a subscription or update a payment method through the Paddle billing portal linked from the account. Refund requests go to the operator's support email, which will be added to the operator details before public launch.</p></div></section>
 
-      <section><h2>10. Interruptions and service credit</h2><div><p>Maintenance, network failures, external API failures, or events beyond reasonable control may interrupt the Service. Planned work will be announced where practicable. If our fault makes paid recording continuously unavailable for at least 10 minutes, we will restore the verified affected time plus 10%, unless applicable law provides a better remedy.</p></div></section>
+      <section><h2>10. Interruptions and service credit</h2><div><p>Maintenance, network failures, external API failures, or events beyond reasonable control may interrupt the Service. Planned work will be announced where practicable. If our fault makes paid recording continuously unavailable for at least 10 minutes, we will restore credits equal to the verified affected minutes plus 10%, rounded up, unless applicable law provides a better remedy.</p></div></section>
 
       <section><h2>11. Prohibited conduct</h2><div><ul>
         <li>Recording or disclosing private speech without the required permission.</li>
