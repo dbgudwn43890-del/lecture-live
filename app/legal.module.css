@@ -48,20 +48,6 @@
 .hero dt { color: var(--legal-muted); }
 .hero dd { margin: 0; font-weight: 750; }
 
-.draftNotice {
-  width: min(1120px, calc(100% - 60px));
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 36px;
-  margin: 36px auto 0;
-  padding: 26px 0;
-  border-top: 1px solid var(--legal-signal);
-  border-bottom: 1px solid var(--legal-signal);
-}
-
-.draftNotice strong { color: #9b2f20; font-size: 13px; }
-.draftNotice p { margin: 0; color: var(--legal-muted); font-size: 13px; line-height: 1.75; }
-
 .content {
   width: min(1120px, calc(100% - 60px));
   margin: 0 auto;
@@ -109,7 +95,6 @@
   .hero h1 { font-size: clamp(44px, 14vw, 68px); }
   .hero > div { grid-template-columns: 1fr; gap: 34px; margin-top: 34px; }
   .hero dl { min-width: 0; }
-  .draftNotice { width: calc(100% - 32px); grid-template-columns: 1fr; gap: 10px; }
   .content { width: calc(100% - 32px); padding: 42px 0 80px; }
   .content section { grid-template-columns: 1fr; gap: 20px; padding: 34px 0; }
   .content h2 { font-size: 20px; }

@@ -36,15 +36,6 @@ export default function LegalPage({ title, description, children, locale = "ko" 
         </div>
       </section>
 
-      <aside className={styles.draftNotice}>
-        <strong>{isEnglish ? "Items to complete before public launch" : "정식 배포 전 확인할 내용"}</strong>
-        <p>
-          {isEnglish
-            ? "This draft reflects the current product, credit plans, and Paddle billing. Before launch, the operator's legal name, representative, address, registration details, support email, and actual server region must be added."
-            : "이 문서는 현재 구현, 크레딧 요금제와 Paddle 결제를 반영한 운영 초안입니다. 공개 전 운영자 상호·대표자·주소·사업자등록번호·통신판매업 신고번호·문의 이메일과 실제 서버 리전을 확정해야 합니다."}
-        </p>
-      </aside>
-
       <article className={styles.content}>{children}</article>
 
       <footer className={styles.footer}>
