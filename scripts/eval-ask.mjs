@@ -107,6 +107,24 @@ const scenarios = [
     ],
   },
   {
+    name: "STT 전문용어 문맥 복원",
+    body: {
+      question: "방금 말한 과잉 적압이 왜 문제가 되는 거야?",
+      questionAtMs: 80_000,
+      segments: [
+        segment(65_000, "훈련 데이터에는 지나치게 잘 맞지만 새로운 데이터에서는 성능이 떨어지는 현상을 과잉 적압이라고 합니다."),
+        segment(70_000, "모델이 훈련 문제의 세부 특징과 잡음까지 외워 버리기 때문에 생깁니다."),
+      ],
+    },
+    checks: [
+      ["과적합 복원", (data) => /과적합|overfitting/i.test(data.answer)],
+      ["잘못된 표기 미사용", (data) => !/과잉\s*적압/.test(data.answer)],
+      ["복원 메타 설명 없음", (data) => !/(문맥상|추정|음성\s*인식|잘못\s*인식|오류로\s*보)/.test(data.answer)],
+      ["핵심 원인", (data) => /(훈련|학습).*(외우|잡음|지나치)|(외우|잡음|지나치).*(훈련|학습)/s.test(data.answer)],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
     name: "초심자 개념 설명",
     body: {
       question: "여기서 말하는 증권회사가 뭐야?",
