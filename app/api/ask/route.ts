@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
+import { cleanAnswerText, cleanSources } from "../../lib/answer-format";
 import {
   isAllowedPersonalModel,
   isPersonalProvider,
@@ -63,7 +64,10 @@ const koreanInstructions = [
   "강의에 없는 보편적 배경지식은 보충할 수 있지만 강의에서 직접 말한 내용처럼 표현하지 않는다.",
   "같은 강의실의 이전 수업 내용이 제공되면 현재 수업을 이해하는 보조 맥락으로만 사용한다. 현재 수업에서 말한 내용과 혼동하지 않는다.",
   "강의 내용으로 충분하면 검색하지 않는다. 최신 정보나 검증이 필요하면 웹 검색을 사용한다.",
+  "검색할 때는 질문의 핵심 사실 하나를 겨냥한 좁은 검색어로 먼저 한 번만 검색한다. 신뢰할 만한 근거가 부족할 때만 한 번 더 검색하고, 충분하면 즉시 멈춘다.",
+  "공식 자료나 원문처럼 결정적인 근거를 우선하고, 답변에 실제로 사용한 소수의 출처만 인용한다.",
   "웹 검색을 사용하면 검증한 외부 사실에 출처 인용을 포함한다.",
+  "답변 본문에 URL이나 도메인명을 직접 쓰지 않는다. 출처 링크는 인터페이스가 별도로 표시한다.",
   "답변 본문에 강의 타임스탬프를 표시하지 않는다.",
   "근거가 부족하면 추측하지 말고 부족한 점을 짧게 밝힌다.",
   "한국어로 짧고 밀도 있게 답한다. 불필요한 서론과 반복은 생략하되 이해에 필요한 정의·작동 원리·차이는 생략하지 않는다.",
@@ -78,7 +82,10 @@ const englishInstructions = [
   "You may add general background knowledge that was not stated in the lecture, but do not present it as something the lecturer said.",
   "When excerpts from earlier lectures in the same classroom are provided, use them only as supporting context and do not present them as statements from the current lecture.",
   "Do not search when the lecture and stable background knowledge are enough. Search the web when current or independently verified information is needed.",
+  "Start with one narrow search query aimed at the single fact needed to answer. Search once more only if trustworthy evidence is still missing, and stop as soon as the evidence is sufficient.",
+  "Prefer decisive primary or official sources and cite only the small set actually used in the answer.",
   "When you use web search, cite the external facts you verified.",
+  "Do not write URLs or domain names in the answer body. The interface displays source links separately.",
   "Do not include lecture timestamps in the answer body.",
   "If the evidence is insufficient, say what is missing instead of guessing.",
   "Answer in concise, natural English. Omit filler and repetition, but keep the definitions, mechanisms, and distinctions needed for understanding.",
@@ -127,10 +134,6 @@ function parsePersonalLlm(value: unknown): PersonalLlm | null {
   if (!useSaved && (apiKey.length < 10 || apiKey.length > 512 || /[\r\n]/.test(apiKey))) return null;
 
   return { provider: candidate.provider, model, apiKey: useSaved ? null : apiKey, useSaved };
-}
-
-function uniqueSources(sources: Source[]) {
-  return [...new Map(sources.map((source) => [source.url, source])).values()];
 }
 
 function isUuid(value: unknown): value is string {
@@ -249,7 +252,7 @@ async function askOpenAI(
 
   return {
     answer,
-    sources: uniqueSources([...citations, ...searchSources]),
+    sources: [...citations, ...searchSources],
     usage: usage
       ? {
           inputTokens: usage.input_tokens,
@@ -318,7 +321,7 @@ async function askAnthropic(
 
   return {
     answer,
-    sources: uniqueSources(sources),
+    sources,
     usage: data.usage
       ? {
           inputTokens: data.usage.input_tokens ?? 0,
@@ -378,7 +381,7 @@ async function askGoogle(
 
   return {
     answer,
-    sources: uniqueSources(sources),
+    sources,
     usage: data.usageMetadata
       ? {
           inputTokens: data.usageMetadata.promptTokenCount ?? 0,
@@ -542,6 +545,11 @@ export async function POST(request: Request) {
     } else {
       result = await askGoogle(personalLlm.apiKey!, personalLlm.model, input, instructions);
     }
+    result = {
+      ...result,
+      answer: cleanAnswerText(result.answer),
+      sources: cleanSources(result.sources),
+    };
 
     const provider = personalLlm?.provider ?? "lecture-live";
     const model = personalLlm?.model ?? "gpt-5.6-luna";

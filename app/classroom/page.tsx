@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
+import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 
 type Status = "idle" | "connecting" | "recording" | "ended" | "error";
@@ -66,13 +67,12 @@ function formatTime(milliseconds: number) {
     : `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function safeSource(source: Source) {
-  try {
-    const url = new URL(source.url);
-    return url.protocol === "https:";
-  } catch {
-    return false;
-  }
+function renderAnswerText(text: string) {
+  return cleanAnswerText(text).split(/(\*\*[^*\n]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index}>{part.slice(2, -2)}</strong>
+      : part.replace(/\*\*/g, ""),
+  );
 }
 
 export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "en" }) {
@@ -248,7 +248,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       segmentIdsRef.current = new Set(restoredSegments.map((segment) => segment.id));
       setMessages((data.questions ?? []).flatMap((item) => [
         { id: `${item.id}-q`, role: "user" as const, text: item.question },
-        { id: `${item.id}-a`, role: "assistant" as const, text: item.answer, sources: item.external_sources, lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
+        { id: `${item.id}-a`, role: "assistant" as const, text: item.answer, sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
       ]));
       setInterim("");
       setElapsedMs(data.session.duration_seconds * 1_000);
@@ -618,7 +618,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
                 ...message,
                 text: data.answer!,
                 pending: false,
-                sources: (data.sources ?? []).filter(safeSource),
+                sources: cleanSources(data.sources ?? []),
                 lectureSources: data.lectureSources ?? [],
               }
             : message,
@@ -898,15 +898,29 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
                   {message.role === "assistant" && (
                     <span className="message-label">{message.assistantLabel ?? (isEnglish ? "Lecture assistant · AI" : "강의 조교 · AI")}</span>
                   )}
-                  <p className={message.pending ? "pending" : undefined}>{message.text}</p>
+                  <p className={message.pending ? "pending" : undefined}>
+                    {message.role === "assistant" ? renderAnswerText(message.text) : message.text}
+                  </p>
                   {message.sources && message.sources.length > 0 && (
                     <div className="sources">
                       <span>{isEnglish ? "External search used" : "외부 검색 사용"}</span>
-                      {message.sources.map((source) => (
+                      {message.sources.slice(0, 5).map((source) => (
                         <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
                           {source.title || new URL(source.url).hostname}
                         </a>
                       ))}
+                      {message.sources.length > 5 && (
+                        <details className="source-more">
+                          <summary>{isEnglish ? `Show ${message.sources.length - 5} more sources` : `출처 ${message.sources.length - 5}개 더 보기`}</summary>
+                          <div>
+                            {message.sources.slice(5).map((source) => (
+                              <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                                {source.title || new URL(source.url).hostname}
+                              </a>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   )}
                   {message.lectureSources && message.lectureSources.length > 0 && (

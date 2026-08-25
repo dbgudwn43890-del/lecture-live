@@ -566,6 +566,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* deslop-ignore-next-line 09 -- 밑줄은 링크의 상호작용 상태를 표시한다. */
 .sources a:hover { text-decoration: underline; }
 
+.source-more { flex-basis: 100%; }
+.source-more summary { width: fit-content; padding: 5px 0; color: var(--focus); cursor: pointer; font-weight: 800; }
+.source-more > div { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+
 .lecture-sources {
   display: flex;
   flex-wrap: wrap;
