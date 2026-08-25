@@ -1292,3 +1292,166 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; }
 }
+
+/* Lecue brutalism: retain the brand palette, expose the product structure. */
+:root {
+  --brutal-border: 2px solid var(--ink);
+  --brutal-shadow: 5px 5px 0 var(--line-strong);
+}
+
+.title-field input,
+.credit-balance,
+.ai-settings summary,
+.ai-settings-panel,
+.ai-settings-panel input,
+.settings-choice-list button,
+.credential-actions button,
+.start-button,
+.stop-button,
+.context-menu summary,
+.context-menu-panel,
+.context-menu-panel button,
+.new-lecture-button,
+.manage-classrooms-link,
+.chat-pane,
+.transcript-pane,
+.message p,
+.question-form textarea,
+.question-form button,
+.transcript-copy,
+.login-home-link,
+.login-panel,
+.google-auth-button,
+.login-form input,
+.email-auth-button,
+.email-confirmation button,
+.classroom-create,
+.classroom-create input,
+.classroom-create button,
+.classroom-unit,
+.classroom-actions button,
+.classroom-actions a,
+.classroom-unit > header > a,
+.classroom-rename input,
+.classroom-rename button,
+.session-move summary,
+.session-move-menu button,
+.classrooms-first-run a {
+  border-radius: 2px;
+}
+
+.ai-settings-panel,
+.context-menu-panel,
+.login-panel,
+.classroom-create,
+.session-move-menu {
+  border: var(--brutal-border);
+  box-shadow: var(--brutal-shadow);
+}
+
+.chat-pane,
+.transcript-pane,
+.classroom-unit,
+.billing-plan {
+  border: var(--brutal-border);
+  box-shadow: 4px 4px 0 var(--line-strong);
+}
+
+.workspace .topbar,
+.classrooms-topbar {
+  border-bottom: 3px solid var(--signal);
+}
+
+.classroom-bar,
+.pane-heading,
+.classroom-unit > header,
+.billing-topbar,
+.billing-footer {
+  border-color: var(--ink);
+}
+
+.title-field input,
+.credit-balance,
+.ai-settings summary,
+.context-menu summary,
+.question-form textarea,
+.login-form input,
+.classroom-create input,
+.classroom-rename input {
+  border-width: 2px;
+}
+
+.start-button,
+.stop-button,
+.new-lecture-button,
+.classroom-create button,
+.classroom-rename button,
+.email-auth-button,
+.email-confirmation button,
+.billing-plan button {
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.stop-button { border-color: #000; }
+.billing-plan-featured { border: 3px solid var(--focus); }
+.billing-plan-featured button { border-color: var(--ink); }
+
+.pane-heading h1,
+.pane-heading h2,
+.auth-heading h1,
+.classrooms-intro h1,
+.billing-heading h1 {
+  font-weight: 900;
+  letter-spacing: -.055em;
+}
+
+.lecture-hierarchy span,
+.context-menu summary span,
+.settings-choice legend,
+.classroom-unit header span,
+.credit-balance span,
+.ai-settings summary span {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: .08em;
+}
+
+.message p { border: 2px solid var(--line-strong); }
+.message-user p { border-color: var(--ink); }
+.sources a,
+.lecture-sources span {
+  border: 1px solid var(--focus);
+}
+
+.classrooms-intro { border-bottom-width: 2px; }
+.classroom-unit::before { height: 7px; }
+.credit-summary { border: var(--brutal-border); box-shadow: 5px 5px 0 var(--signal); }
+
+@media (hover: hover) {
+  .start-button:not(:disabled):hover,
+  .stop-button:not(:disabled):hover,
+  .new-lecture-button:not(:disabled):hover,
+  .classroom-create button:not(:disabled):hover,
+  .classroom-rename button:not(:disabled):hover,
+  .email-auth-button:not(:disabled):hover,
+  .email-confirmation button:not(:disabled):hover,
+  .billing-plan button:not(:disabled):hover {
+    box-shadow: 5px 5px 0 var(--ink);
+    transform: translate(-2px, -2px);
+  }
+}
+
+button:active,
+.new-lecture-button:active,
+.email-auth-button:active,
+.billing-plan button:active {
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
+@media (max-width: 520px) {
+  .login-panel { border-radius: 2px; }
+  .chat-pane,
+  .transcript-pane,
+  .classroom-unit { box-shadow: 3px 3px 0 var(--line-strong); }
+}

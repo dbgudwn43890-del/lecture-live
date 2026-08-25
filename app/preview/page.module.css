@@ -436,3 +436,96 @@
   }
   .reveal { opacity: 1 !important; transform: none !important; }
 }
+
+/* Brand-preserving brutalism: hard edges, structural rules, explicit states. */
+.header { border-bottom: 2px solid var(--ink); }
+
+.headerCta,
+.primaryCta,
+.pricingCta,
+.finalCta a {
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.productFrame,
+.questionPane,
+.transcriptPane,
+.userQuestion,
+.demoAnswer p,
+.demoInput,
+.demoInput span,
+.roomShelf,
+.planGrid article {
+  border-radius: 2px;
+}
+
+.productFrame {
+  border: 2px solid var(--ink);
+  box-shadow: 9px 9px 0 var(--focus);
+}
+
+.productPanes { gap: 0; padding: 0; border-top: 2px solid var(--ink); }
+.questionPane,
+.transcriptPane { border: 0; }
+.questionPane { border-right: 2px solid var(--ink); }
+.questionPane > header,
+.transcriptPane > header { border-bottom: 2px solid var(--ink); }
+.userQuestion { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--signal); }
+.demoAnswer p { border: 2px solid var(--ink); }
+.demoInput { border: 2px solid var(--ink); }
+
+.promiseStrip { border-color: var(--ink); border-width: 2px 0; }
+.promiseStrip p { border-color: var(--ink); border-width: 0 2px 0 0; }
+
+.roomShelf {
+  border: 2px solid var(--ink);
+  box-shadow: 10px 10px 0 var(--focus);
+  transform: rotate(-.6deg);
+}
+.roomShelf article { border-color: var(--ink); }
+
+.planGrid { gap: 18px; }
+.planGrid article { border: 2px solid var(--ink); }
+.planGrid .featuredPlan {
+  border: 3px solid var(--ink);
+  box-shadow: 9px 9px 0 var(--signal);
+}
+
+.faq > div { border-top: 2px solid var(--ink); }
+.faq details { border-color: var(--ink); }
+.finalCta { border-block: 3px solid var(--ink); }
+.footer { border-top: 3px solid var(--signal); }
+
+.heroLabel,
+.roomsCopy > p,
+.pricingIntro > p,
+.productTopbar,
+.roomShelf time {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+@media (hover: hover) {
+  .headerCta:hover,
+  .primaryCta:hover,
+  .pricingCta:hover,
+  .finalCta a:hover {
+    box-shadow: 6px 6px 0 var(--ink);
+    transform: translate(-2px, -2px);
+  }
+}
+
+.headerCta:active,
+.primaryCta:active,
+.pricingCta:active,
+.finalCta a:active {
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+
+@media (max-width: 760px) {
+  .questionPane { border-right: 0; border-bottom: 2px solid var(--ink); }
+  .productFrame { box-shadow: 6px 6px 0 var(--focus); }
+  .roomShelf { box-shadow: 6px 6px 0 var(--focus); }
+  .planGrid .featuredPlan { box-shadow: 6px 6px 0 var(--signal); }
+}

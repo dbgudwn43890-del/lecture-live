@@ -143,3 +143,27 @@
 @media (prefers-reduced-motion: reduce) {
   .liveDot { animation: none; }
 }
+
+/* Keep the lab visually aligned with the product's hard-edged structure. */
+.intro { border-bottom: 2px solid var(--ink); }
+.intro > div > p,
+.controls time,
+.resultList article > header {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+.controls button {
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.workspace { border: 2px solid var(--ink); box-shadow: 7px 7px 0 var(--focus); }
+.script { border-color: var(--ink); }
+.script > header,
+.results > header { border-bottom: 2px solid var(--ink); }
+.resultList article { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--line-strong); }
+.resultList article button { border-color: var(--ink); }
+
+@media (hover: hover) {
+  .controls button:not(:disabled):hover { box-shadow: 5px 5px 0 var(--ink); transform: translate(-2px, -2px); }
+}
+
+.controls button:active { box-shadow: none; transform: translate(2px, 2px); }
