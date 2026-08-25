@@ -50,19 +50,19 @@ const content = {
       ["8월 20일", "재무관리 · 채권의 가격", "52분 · 4개 질문"],
       ["8월 18일", "경영학원론 · 기업의 구조", "1시간 05분 · 9개 질문"],
     ],
-    pricingLabel: "런칭 멤버 혜택 · 부가세 포함",
+    pricingLabel: "프로모션 할인 · 부가세 포함",
     pricingTitle: ["한 달 수업을,", "빠짐없이 따라가게."],
     pricingDescription: "7일 동안 첫 수업을 무료로 체험하고, 월 13,900원으로 정규 수업 약 80시간을 기록할 수 있습니다.",
     pricingNoCard: "카카오페이·네이버페이·국내 카드",
     pricingPerSecond: "1분 기록 = 1크레딧",
     pricingIncluded: "기록·질문·강의실 맥락 포함",
-    pricingCta: "런칭 멤버로 시작하기",
+    pricingCta: "프로모션 가격으로 시작하기",
     plans: [
       { name: "첫 체험", time: "7일", price: "무료", unit: "180크레딧 · 수업 1회", detail: "계정당 한 번 · 모든 기능 체험", billingPlan: "monthly" },
-      { name: "월간", time: "1개월", compareLabel: "정상가", comparePrice: "19,900원", price: "13,900원", priceNote: "/월", unit: "4,800크레딧 · 약 80시간", detail: "런칭 멤버 가격 · 30% 혜택", featured: true, billingPlan: "monthly" },
+      { name: "월간", time: "1개월", compareLabel: "정상가", comparePrice: "19,900원", price: "13,900원", priceNote: "/월", unit: "4,800크레딧 · 약 80시간", detail: "프로모션 가격 · 30% 할인", featured: true, billingPlan: "monthly" },
       { name: "한 학기", time: "6개월", compareLabel: "정상 월간가 6회", comparePrice: "119,400원", price: "74,900원", priceNote: "/6개월", unit: "28,800크레딧 · 약 480시간", detail: "44,500원 절약 · 한 번 결제", billingPlan: "semester" },
     ],
-    featured: "런칭 30%",
+    featured: "30% 할인",
     pricingFootnote: "19,900원은 프로모션 종료 후 적용할 예정인 월간 정상가입니다. 프로모션 종료 시점은 사전에 안내합니다.",
     faqTitle: "자주 묻는 질문",
     faqs: [
@@ -129,20 +129,20 @@ const content = {
       ["Aug 20", "Corporate Finance · Bond Pricing", "52 min · 4 questions"],
       ["Aug 18", "Business Fundamentals · Company Structure", "1 hr 05 min · 9 questions"],
     ],
-    pricingLabel: "Founding member offer · local taxes may apply",
+    pricingLabel: "Promotional pricing · local taxes may apply",
     pricingTitle: ["A full month of class.", "Nothing important missed."],
     pricingDescription: "Try your first lecture free for 7 days, then record about 80 hours of regular classes for $9.99 a month.",
     pricingNoCard: "Cards, Apple Pay, Google Pay, PayPal, and local options",
     pricingPerSecond: "1 recording minute = 1 credit",
     pricingIncluded: "Transcription, questions, and classroom context included",
-    pricingCta: "Join as a founding member",
+    pricingCta: "Start with promotional pricing",
     plans: [
       { name: "First try", time: "7 days", price: "Free", unit: "180 credits · one lecture", detail: "Once per account · every feature included", billingPlan: "monthly" },
-      { name: "Monthly", time: "1 month", compareLabel: "Regular price", comparePrice: "$14.99", price: "$9.99", priceNote: "/month", unit: "4,800 credits · about 80 hours", detail: "Founding member price · save 33%", featured: true, billingPlan: "monthly" },
+      { name: "Monthly", time: "1 month", compareLabel: "Regular price", comparePrice: "$14.99", price: "$9.99", priceNote: "/month", unit: "4,800 credits · about 80 hours", detail: "Promotional price · save 33%", featured: true, billingPlan: "monthly" },
       { name: "Semester", time: "6 months", compareLabel: "Six regular monthly payments", comparePrice: "$89.94", price: "$54", priceNote: "/6 months", unit: "28,800 credits · about 480 hours", detail: "Save $35.94 · one payment", billingPlan: "semester" },
     ],
-    featured: "Launch 33%",
-    pricingFootnote: "$14.99 is the planned regular monthly price after the launch offer. We will announce the offer end date in advance.",
+    featured: "Save 33%",
+    pricingFootnote: "$14.99 is the planned regular monthly price after the promotion. We will announce the promotion end date in advance.",
     faqTitle: "Common questions",
     faqs: [
       ["Is this for online courses?", "No. Lecue is designed first for classrooms, seminars, workshops, and other lectures you attend in person."],
@@ -232,7 +232,7 @@ export default function LandingPage({ locale }: { locale: Locale }) {
           {copy.plans.map((plan) => <article className={"featured" in plan ? styles.featuredPlan : undefined} key={plan.name}>
             <div><span>{plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
             <h3>{plan.time}</h3>
-            {/* deslop-ignore-next-line 09 -- 실제 정상가와 런칭가의 가격 비교를 명시 */}
+            {/* deslop-ignore-next-line 09 -- 실제 정상가와 프로모션가의 가격 비교를 명시 */}
             {"comparePrice" in plan && <div className={styles.comparePrice}><span>{plan.compareLabel}</span><del>{plan.comparePrice}</del></div>}
             <div className={styles.planPrice}><strong>{plan.price}</strong>{"priceNote" in plan && <span>{plan.priceNote}</span>}</div>
             <p>{plan.unit}</p><small>{plan.detail}</small>

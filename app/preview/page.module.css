@@ -440,7 +440,6 @@
 /* Brand-preserving brutalism: hard edges, structural rules, explicit states. */
 .header { border-bottom: 2px solid var(--ink); }
 
-.headerCta,
 .primaryCta,
 .pricingCta,
 .finalCta a {
@@ -471,7 +470,7 @@
 .questionPane { border-right: 2px solid var(--ink); }
 .questionPane > header,
 .transcriptPane > header { border-bottom: 2px solid var(--ink); }
-.userQuestion { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--signal); }
+.userQuestion { border: 2px solid var(--ink); }
 .demoAnswer p { border: 2px solid var(--ink); }
 .demoInput { border: 2px solid var(--ink); }
 
@@ -506,7 +505,6 @@
 }
 
 @media (hover: hover) {
-  .headerCta:hover,
   .primaryCta:hover,
   .pricingCta:hover,
   .finalCta a:hover {
@@ -515,7 +513,6 @@
   }
 }
 
-.headerCta:active,
 .primaryCta:active,
 .pricingCta:active,
 .finalCta a:active {
