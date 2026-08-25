@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 
 import LandingPage from "./landing-page";
 import { createClient } from "./lib/supabase/server";
@@ -22,6 +21,5 @@ export default async function HomePage() {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
-  if (data?.claims) redirect(locale === "en" ? "/en/classroom" : "/classroom");
-  return <LandingPage locale={locale} />;
+  return <LandingPage locale={locale} isAuthenticated={Boolean(data?.claims)} />;
 }

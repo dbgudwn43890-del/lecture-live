@@ -11,6 +11,8 @@ const content = {
     nav: ["제품 화면", "내 강의실", "요금", "자주 묻는 질문"],
     signIn: "로그인",
     signUp: "회원가입",
+    classroom: "내 강의실",
+    openClassroom: "강의실 열기",
     open: "선택하기",
     language: "EN",
     heroLabel: "현장 강의를 위한 실시간 조교",
@@ -85,6 +87,8 @@ const content = {
     nav: ["Product", "My classrooms", "Pricing", "FAQ"],
     signIn: "Sign in",
     signUp: "Sign up",
+    classroom: "My classrooms",
+    openClassroom: "Open classroom",
     open: "Choose plan",
     language: "한국어",
     heroLabel: "A live assistant for in-person lectures",
@@ -155,9 +159,10 @@ const content = {
   },
 } as const;
 
-export default function LandingPage({ locale }: { locale: Locale }) {
+export default function LandingPage({ locale, isAuthenticated = false }: { locale: Locale; isAuthenticated?: boolean }) {
   const copy = content[locale];
   const base = locale === "en" ? "/en" : "";
+  const classroomPath = `${base}/classroom`;
 
   return (
     <main className={styles.page} id="top">
@@ -171,8 +176,14 @@ export default function LandingPage({ locale }: { locale: Locale }) {
         </nav>
         <div className={styles.headerActions}>
           <Link className={styles.languageLink} href={locale === "en" ? "/" : "/en"}>{copy.language}</Link>
-          <Link className={styles.loginLink} href={`${base}/login`}>{copy.signIn}</Link>
-          <Link className={styles.headerCta} href={`${base}/login?mode=signup`}>{copy.signUp}</Link>
+          {isAuthenticated ? (
+            <Link className={styles.headerCta} href={classroomPath}>{copy.classroom}</Link>
+          ) : (
+            <>
+              <Link className={styles.loginLink} href={`${base}/login`}>{copy.signIn}</Link>
+              <Link className={styles.headerCta} href={`${base}/login?mode=signup`}>{copy.signUp}</Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -182,7 +193,7 @@ export default function LandingPage({ locale }: { locale: Locale }) {
           <h1 id={`hero-title-${locale}`}>{copy.heroTitle[0]}<br />{copy.heroTitle[1]}</h1>
           <p className={styles.heroDescription}>{copy.heroDescription}</p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryCta} href={`${base}/billing?plan=monthly`}>{copy.heroCta}<span aria-hidden>→</span></Link>
+            <Link className={styles.primaryCta} href={isAuthenticated ? classroomPath : `${base}/billing?plan=monthly`}>{isAuthenticated ? copy.openClassroom : copy.heroCta}<span aria-hidden>→</span></Link>
             <a className={styles.secondaryCta} href="#product">{copy.heroSecondary}</a>
           </div>
           <p className={styles.heroNote}>{copy.heroNote}</p>
@@ -235,7 +246,7 @@ export default function LandingPage({ locale }: { locale: Locale }) {
         <div>{copy.faqs.map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden>+</span></summary><p>{answer}</p></details>)}</div>
       </section>
 
-      <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={`${base}/login?mode=signup`}>{copy.finalCta}<span>→</span></Link></section>
+      <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={isAuthenticated ? classroomPath : `${base}/login?mode=signup`}>{isAuthenticated ? copy.openClassroom : copy.finalCta}<span>→</span></Link></section>
       <footer className={styles.footer}><strong>Lecue</strong><p>{copy.footerDescription}</p><div><Link href={`${base}/privacy`}>{copy.privacy}</Link><Link href={`${base}/terms`}>{copy.terms}</Link><span>{copy.support}</span></div><small>{copy.recordingNotice}</small></footer>
     </main>
   );

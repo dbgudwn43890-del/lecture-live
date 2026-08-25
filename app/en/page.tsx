@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import LandingPage from "../landing-page";
 import { createClient } from "../lib/supabase/server";
@@ -12,6 +11,5 @@ export const metadata: Metadata = {
 export default async function EnglishLandingPage() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
-  if (data?.claims) redirect("/en/classroom");
-  return <LandingPage locale="en" />;
+  return <LandingPage locale="en" isAuthenticated={Boolean(data?.claims)} />;
 }
