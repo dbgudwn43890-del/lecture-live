@@ -113,6 +113,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const chargedMinuteRef = useRef(-1);
   const creditChargePendingRef = useRef(false);
   const initialRouteRef = useRef(false);
+  const savedLectureTitleRef = useRef("");
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -242,6 +243,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       setActiveClassroomId(data.session.classroom_id ?? "");
       setActiveSessionId(data.session.id);
       setLectureTitle(data.session.title);
+      savedLectureTitleRef.current = data.session.title;
       setSegments(restoredSegments);
       segmentIdsRef.current = new Set(restoredSegments.map((segment) => segment.id));
       setMessages((data.questions ?? []).flatMap((item) => [
@@ -262,6 +264,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
     if (status === "recording" || status === "connecting") return;
     setActiveSessionId("");
     setLectureTitle("");
+    savedLectureTitleRef.current = "";
     setSegments([]);
     segmentIdsRef.current.clear();
     setMessages([]);
@@ -269,6 +272,35 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
     setElapsedMs(0);
     chargedMinuteRef.current = -1;
     setStatus("idle");
+  }
+
+  async function saveLectureTitle() {
+    const title = lectureTitle.trim();
+    if (!activeSessionId) return;
+    if (!title) {
+      setLectureTitle(savedLectureTitleRef.current);
+      return;
+    }
+    if (title === savedLectureTitleRef.current) return;
+
+    setError("");
+    try {
+      const response = await fetch("/api/lecture-sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ action: "rename", sessionId: activeSessionId, title }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      savedLectureTitleRef.current = title;
+      setLectureTitle(title);
+      await loadClassrooms(activeClassroomId);
+    } catch (caught) {
+      setLectureTitle(savedLectureTitleRef.current);
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not rename the lecture." : "수업 이름을 바꾸지 못했습니다.");
+    }
   }
 
   const savedCredential = aiProvider === "lecture-live"
@@ -356,6 +388,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       setActiveSessionId(sessionData.session.id);
       activeSessionIdRef.current = sessionData.session.id;
       setLectureTitle(sessionData.session.title);
+      savedLectureTitleRef.current = sessionData.session.title;
       setSegments([]);
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
@@ -629,16 +662,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
           <span>Lecue</span>
         </div>
 
-        <label className="title-field">
-          <span className="sr-only">{isEnglish ? "Lecture title" : "강의 제목"}</span>
-          <input
-            value={lectureTitle}
-            onChange={(event) => setLectureTitle(event.target.value)}
-            placeholder={isEnglish ? "Enter a lecture title" : "강의 제목을 입력하세요"}
-            maxLength={80}
-          />
-        </label>
-
         <div className="session-state" aria-live="polite">
           <span className={`state-dot state-${status}`} />
           <span>{statusCopy[status]}</span>
@@ -766,7 +789,18 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
           <strong>{activeClassroomLabel}</strong>
           <i aria-hidden="true">›</i>
           <span>{isEnglish ? "Lecture" : "수업"}</span>
-          <strong>{lectureTitle.trim() || (isEnglish ? "New lecture" : "새 수업")}</strong>
+          <label className="lecture-title-field">
+            <span className="sr-only">{isEnglish ? "Lecture title" : "수업 이름"}</span>
+            <input
+              value={lectureTitle}
+              onChange={(event) => setLectureTitle(event.target.value)}
+              onBlur={() => void saveLectureTitle()}
+              onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+              placeholder={isEnglish ? "New lecture" : "새 수업"}
+              maxLength={80}
+              disabled={status === "connecting"}
+            />
+          </label>
         </div>
 
         <div className="classroom-controls">

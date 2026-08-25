@@ -56,7 +56,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) auto auto auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
   align-items: center;
   gap: 22px;
   padding: 0 20px;
@@ -71,21 +71,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   letter-spacing: -.025em;
 }
 
-.title-field input {
-  width: 100%;
-  max-width: 500px;
-  padding: 10px 12px;
-  color: white;
-  background: #252b2e;
-  border: 1px solid #596064;
-  border-radius: 10px;
-}
-
-.title-field input::placeholder { color: #a5adaf; }
-
 .session-state {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: 8px;
   color: #ced4d5;
   font-size: 12px;
@@ -315,7 +304,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .lecture-hierarchy span,
 .lecture-hierarchy > a {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -335,12 +324,30 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   max-width: 260px;
   overflow: hidden;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .lecture-hierarchy i { color: var(--focus); font: 800 21px/1 ui-monospace, monospace; }
+
+.lecture-title-field {
+  flex: 1 1 180px;
+  min-width: 120px;
+  max-width: 360px;
+}
+
+.lecture-title-field input {
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line-strong);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.lecture-title-field input::placeholder { color: var(--muted); }
 
 .classroom-controls {
   display: flex;
@@ -1219,13 +1226,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
     overflow: visible;
   }
   .topbar { grid-template-columns: 1fr auto; padding: 14px 16px; gap: 12px; }
-  .title-field { grid-column: 1 / -1; grid-row: 2; }
-  .credit-balance { grid-column: 1 / -1; grid-row: 3; }
-  .ai-settings { grid-column: 1 / -1; grid-row: 4; }
+  .credit-balance { grid-column: 1 / -1; grid-row: 2; }
+  .ai-settings { grid-column: 1 / -1; grid-row: 3; }
   .ai-settings summary { width: 100%; }
   .ai-settings-panel { left: 0; right: auto; }
-  .session-state { grid-column: 1; grid-row: 5; }
-  .topbar > button { grid-column: 2; grid-row: 5; }
+  .session-state { grid-column: 1; grid-row: 4; justify-self: start; }
+  .topbar > button { grid-column: 2; grid-row: 4; }
   .signout-form { grid-column: 2; grid-row: 1; justify-self: end; }
   .signout-button { padding-right: 0; }
   .classroom-bar { grid-template-columns: 1fr; gap: 9px; padding: 10px 12px; }
@@ -1309,7 +1315,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   --brutal-shadow: 5px 5px 0 var(--line-strong);
 }
 
-.title-field input,
+.lecture-title-field input,
 .credit-balance,
 .ai-settings summary,
 .ai-settings-panel,
@@ -1380,7 +1386,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   border-color: var(--ink);
 }
 
-.title-field input,
+.lecture-title-field input,
 .credit-balance,
 .ai-settings summary,
 .context-menu summary,

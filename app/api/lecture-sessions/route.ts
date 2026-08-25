@@ -108,12 +108,23 @@ export async function PATCH(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
 
-  let body: { action?: unknown; sessionId?: unknown; classroomId?: unknown; durationMs?: unknown; segments?: unknown };
+  let body: { action?: unknown; sessionId?: unknown; classroomId?: unknown; title?: unknown; durationMs?: unknown; segments?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
     return NextResponse.json({ error: current.isEnglish ? "Invalid request." : "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
+  if (body.action === "rename" && validId(body.sessionId)) {
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    if (!title || title.length > 80) return NextResponse.json({ error: current.isEnglish ? "Check the lecture title." : "수업 이름을 확인해 주세요." }, { status: 400 });
+    const { data: renamed, error } = await current.supabase.from("lecture_sessions").update({ title }).eq("id", body.sessionId).select("id").maybeSingle();
+    if (error || !renamed) {
+      if (error) console.error("Lecture rename failed", error.code);
+      return NextResponse.json({ error: current.isEnglish ? "Could not rename the lecture." : "수업 이름을 바꾸지 못했습니다." }, { status: 500 });
+    }
+    return NextResponse.json({ renamed: true, title });
+  }
+
   if (body.action === "move" && validId(body.sessionId)) {
     const classroomId = validId(body.classroomId) ? body.classroomId : null;
     if (body.classroomId !== null && body.classroomId !== "" && body.classroomId !== undefined && !classroomId) {
