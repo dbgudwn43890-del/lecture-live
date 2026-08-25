@@ -11,7 +11,7 @@ async function context(request: Request) {
   if (!user) {
     return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
   }
-  return { userId: user.id, supabase, isEnglish };
+  return { user, userId: user.id, supabase, isEnglish };
 }
 
 export async function GET(request: Request) {
@@ -40,6 +40,12 @@ export async function GET(request: Request) {
   }));
 
   return NextResponse.json({
+    profile: {
+      displayName: typeof current.user.user_metadata.full_name === "string"
+        ? current.user.user_metadata.full_name
+        : current.user.email?.split("@")[0] ?? "Lecue",
+      email: current.user.email ?? "",
+    },
     classrooms: (classrooms ?? []).map((classroom) => ({
       ...classroom,
       sessions: withQuestionCounts.filter((session) => session.classroom_id === classroom.id),

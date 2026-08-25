@@ -29,6 +29,7 @@ type SessionSummary = {
   question_count: number;
 };
 type Classroom = { id: string; title: string; locale: "ko" | "en"; sessions: SessionSummary[] };
+type UserProfile = { displayName: string; email: string };
 type AiProvider = "lecture-live" | PersonalProvider;
 type SavedCredential = { provider: PersonalProvider; model: string; updated_at: string };
 type CreditStatus = { credits: number; nextExpiry: string | null; latestGrantAt: string | null; subscriptionStatus: string | null; trialUsed: boolean };
@@ -92,6 +93,8 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const [activeClassroomId, setActiveClassroomId] = useState("");
   const [activeSessionId, setActiveSessionId] = useState("");
   const [classroomPending, setClassroomPending] = useState(false);
+  const [newClassroomTitle, setNewClassroomTitle] = useState("");
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(null);
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
@@ -200,11 +203,12 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   async function loadClassrooms(preferredId?: string) {
     try {
       const response = await fetch("/api/classrooms", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
-      const data = await response.json() as { classrooms?: Classroom[]; unassignedSessions?: SessionSummary[]; error?: string };
+      const data = await response.json() as { classrooms?: Classroom[]; unassignedSessions?: SessionSummary[]; profile?: UserProfile; error?: string };
       if (!response.ok) throw new Error(data.error);
       const next = data.classrooms ?? [];
       setClassrooms(next);
       setUnassignedSessions(data.unassignedSessions ?? []);
+      setProfile(data.profile ?? null);
       if (preferredId !== undefined) setActiveClassroomId(preferredId);
       if (!initialRouteRef.current) {
         initialRouteRef.current = true;
@@ -218,6 +222,34 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       setError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not load your classrooms." : "강의실을 불러오지 못했습니다.");
+    }
+  }
+
+  async function createClassroom(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = newClassroomTitle.trim();
+    if (!title || classroomPending) return;
+
+    setClassroomPending(true);
+    setError("");
+    try {
+      const response = await fetch("/api/classrooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ title, locale }),
+      });
+      const data = await response.json() as { classroom?: Classroom; error?: string };
+      if (!response.ok || !data.classroom) throw new Error(data.error);
+      setClassrooms((current) => [data.classroom!, ...current]);
+      setActiveClassroomId(data.classroom.id);
+      setNewClassroomTitle("");
+      prepareNewLecture();
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not create the classroom." : "강의실을 만들지 못했습니다.");
+    } finally {
+      setClassroomPending(false);
     }
   }
 
@@ -652,138 +684,233 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
 
   return (
     <main className="workspace">
-      <header className="topbar">
-        <div className="brand" aria-label="Lecue">
-          <span>Lecue</span>
-        </div>
+      <aside className="workspace-sidebar">
+        <Link className="sidebar-brand" href={basePath || "/"} aria-label={isEnglish ? "Lecue home" : "Lecue 홈"}>Lecue</Link>
 
-        <div className="session-state" aria-live="polite">
-          <span className={`state-dot state-${status}`} />
-          <span>{statusCopy[status]}</span>
-          <time>{formatTime(elapsedMs)}</time>
-        </div>
+        <button
+          type="button"
+          className="sidebar-new-lecture"
+          onClick={prepareNewLecture}
+          disabled={status === "recording" || status === "connecting"}
+        >
+          <span aria-hidden="true">＋</span>
+          {isEnglish ? "New lecture" : "새 수업"}
+        </button>
 
-        <Link className="credit-balance" href={`${basePath}/billing`}>
-          <span>{isEnglish ? "Credits" : "크레딧"}</span>
-          <b>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</b>
-        </Link>
+        <div className="sidebar-library">
+          <div className="sidebar-section-heading">
+            <span>{isEnglish ? "Classrooms" : "강의실"}</span>
+            <Link href={`${basePath}/classrooms`}>{isEnglish ? "Manage" : "관리"}</Link>
+          </div>
 
-        <details className="ai-settings">
-          <summary>
-            <span>{isEnglish ? "Answer model" : "답변 모델"}</span>
-            <b>{activeModelLabel}</b>
-          </summary>
-          <div className="ai-settings-panel">
-            <fieldset className="settings-choice">
-              <legend>{isEnglish ? "Provider" : "공급자"}</legend>
-              <div className="settings-choice-list">
-                {([
-                  { id: "lecture-live", label: isEnglish ? "Lecue default AI" : "Lecue 기본 AI" },
-                  { id: "openai", label: "OpenAI" },
-                  { id: "anthropic", label: "Anthropic Claude" },
-                  { id: "google", label: "Google Gemini" },
-                ] as Array<{ id: AiProvider; label: string }>).map((option) => (
+          <nav className="sidebar-classrooms" aria-label={isEnglish ? "Classrooms and lectures" : "강의실과 수업 목록"}>
+            <div className="sidebar-classroom-group">
+              <button
+                type="button"
+                className={!activeClassroomId ? "sidebar-classroom active" : "sidebar-classroom"}
+                onClick={() => {
+                  setActiveClassroomId("");
+                  prepareNewLecture();
+                }}
+                disabled={status === "recording" || status === "connecting"}
+              >
+                <span>{isEnglish ? "Unassigned" : "미분류 수업"}</span>
+                <small>{unassignedSessions.length}</small>
+              </button>
+              <div className="sidebar-sessions">
+                {unassignedSessions.map((session) => (
                   <button
                     type="button"
-                    key={option.id}
-                    className={aiProvider === option.id ? "active" : undefined}
-                    aria-pressed={aiProvider === option.id}
-                    onClick={() => {
-                      const provider = option.id;
-                      setAiProvider(provider);
-                      setPersonalApiKey("");
-                      if (provider !== "lecture-live") setAiModel(personalModelOptions[provider][0].id);
-                    }}
-                  >{option.label}</button>
+                    key={session.id}
+                    className={session.id === activeSessionId ? "active" : undefined}
+                    onClick={() => void openSession(session.id)}
+                    disabled={classroomPending || status === "recording" || status === "connecting"}
+                    title={session.title}
+                  >{session.title}</button>
                 ))}
               </div>
-            </fieldset>
+            </div>
 
-            {aiProvider !== "lecture-live" && (
-              <>
-                <fieldset className="settings-choice">
-                  <legend>{isEnglish ? "Model" : "모델"}</legend>
-                  <div className="settings-choice-list settings-model-list">
-                    {personalModelOptions[aiProvider].map((model) => (
-                      <button
-                        type="button"
-                        key={model.id}
-                        className={aiModel === model.id ? "active" : undefined}
-                        aria-pressed={aiModel === model.id}
-                        onClick={() => setAiModel(model.id)}
-                      >{model.label}</button>
-                    ))}
-                  </div>
-                </fieldset>
-                <label>
-                  <span>{isEnglish ? "Your API key" : "개인 API 키"}</span>
-                  <input
-                    type="password"
-                    value={personalApiKey}
-                    onChange={(event) => setPersonalApiKey(event.target.value)}
-                    placeholder={savedCredential
-                      ? isEnglish ? "A key is saved — enter one to replace it" : "저장됨 — 교체하려면 새 키 입력"
-                      : isEnglish ? "Enter API key" : "API 키 입력"}
-                    autoComplete="off"
-                    spellCheck={false}
-                    maxLength={512}
-                  />
-                </label>
-                <div className="credential-actions">
-                  <button
-                    type="button"
-                    onClick={saveCredential}
-                    disabled={credentialPending || !personalApiKey.trim()}
-                  >
-                    {credentialPending
-                      ? isEnglish ? "Working…" : "처리 중…"
-                      : savedCredential
-                        ? isEnglish ? "Replace saved key" : "저장된 키 교체"
-                        : isEnglish ? "Save to my account" : "내 계정에 저장"}
-                  </button>
-                  {savedCredential && (
-                    <button type="button" onClick={deleteCredential} disabled={credentialPending}>
-                      {isEnglish ? "Remove saved key" : "저장된 키 삭제"}
-                    </button>
-                  )}
+            {classrooms.map((classroom) => (
+              <div className="sidebar-classroom-group" key={classroom.id}>
+                <button
+                  type="button"
+                  className={classroom.id === activeClassroomId ? "sidebar-classroom active" : "sidebar-classroom"}
+                  onClick={() => {
+                    setActiveClassroomId(classroom.id);
+                    prepareNewLecture();
+                  }}
+                  disabled={status === "recording" || status === "connecting"}
+                >
+                  <span>{classroom.title}</span>
+                  <small>{classroom.sessions.length}</small>
+                </button>
+                <div className="sidebar-sessions">
+                  {classroom.sessions.map((session) => (
+                    <button
+                      type="button"
+                      key={session.id}
+                      className={session.id === activeSessionId ? "active" : undefined}
+                      onClick={() => void openSession(session.id)}
+                      disabled={classroomPending || status === "recording" || status === "connecting"}
+                      title={session.title}
+                    >{session.title}</button>
+                  ))}
                 </div>
-                <p>
-                  {savedCredential
-                    ? isEnglish
-                      ? "This provider's key is encrypted in your account. Its plaintext is never sent back to the browser."
-                      : "이 공급자의 키는 계정에 암호화되어 저장됩니다. 키 원문은 브라우저로 다시 보내지 않습니다."
-                    : isEnglish
-                      ? "Without saving, the key is used only in this tab. Provider charges apply to your own account."
-                      : "저장하지 않으면 이 탭에서만 사용합니다. 질문 비용은 선택한 공급자 계정에 별도로 청구됩니다."}
-                </p>
-              </>
-            )}
+              </div>
+            ))}
+          </nav>
+
+          <form className="sidebar-create-classroom" onSubmit={createClassroom}>
+            <label htmlFor="new-classroom">{isEnglish ? "Add a classroom" : "강의실 추가하기"}</label>
+            <div>
+              <input
+                id="new-classroom"
+                value={newClassroomTitle}
+                onChange={(event) => setNewClassroomTitle(event.target.value)}
+                placeholder={isEnglish ? "e.g. Economics" : "예: 경제학개론"}
+                maxLength={80}
+                disabled={classroomPending}
+              />
+              <button type="submit" disabled={classroomPending || !newClassroomTitle.trim()} aria-label={isEnglish ? "Add classroom" : "강의실 추가"}>＋</button>
+            </div>
+          </form>
+        </div>
+
+        <div className="sidebar-account">
+          <Link className="sidebar-credit" href={`${basePath}/billing`}>
+            <span>{isEnglish ? "Credits" : "남은 크레딧"}</span>
+            <b>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</b>
+          </Link>
+          <div className="sidebar-profile">
+            <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
+            <span className="profile-copy">
+              <strong>{profile?.displayName || (isEnglish ? "My account" : "내 계정")}</strong>
+              <small>{profile?.email}</small>
+            </span>
+            <form action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
+              <button type="submit" aria-label={isEnglish ? "Sign out" : "로그아웃"}>{isEnglish ? "Sign out" : "로그아웃"}</button>
+            </form>
           </div>
-        </details>
+        </div>
+      </aside>
 
-        {status === "recording" || status === "connecting" ? (
-          <button className="stop-button" type="button" onClick={stopLecture} disabled={status === "connecting"}>
-            {isEnglish ? "End lecture" : "강의 종료"}
-          </button>
-        ) : (
-          <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
-            {isEnglish ? "Start lecture" : "강의 시작"}
-          </button>
-        )}
+      <div className="workspace-main">
+        <header className="topbar">
+          <div className="session-state" aria-live="polite">
+            <span className={`state-dot state-${status}`} />
+            <span>{statusCopy[status]}</span>
+            <time>{formatTime(elapsedMs)}</time>
+          </div>
 
-        <form className="signout-form" action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
-          <button className="signout-button" type="submit">{isEnglish ? "Sign out" : "로그아웃"}</button>
-        </form>
-      </header>
+          <details className="ai-settings">
+            <summary>
+              <span>{isEnglish ? "Answer model" : "답변 모델"}</span>
+              <b>{activeModelLabel}</b>
+            </summary>
+            <div className="ai-settings-panel">
+              <fieldset className="settings-choice">
+                <legend>{isEnglish ? "Provider" : "공급자"}</legend>
+                <div className="settings-choice-list">
+                  {([
+                    { id: "lecture-live", label: isEnglish ? "Lecue default AI" : "Lecue 기본 AI" },
+                    { id: "openai", label: "OpenAI" },
+                    { id: "anthropic", label: "Anthropic Claude" },
+                    { id: "google", label: "Google Gemini" },
+                  ] as Array<{ id: AiProvider; label: string }>).map((option) => (
+                    <button
+                      type="button"
+                      key={option.id}
+                      className={aiProvider === option.id ? "active" : undefined}
+                      aria-pressed={aiProvider === option.id}
+                      onClick={() => {
+                        const provider = option.id;
+                        setAiProvider(provider);
+                        setPersonalApiKey("");
+                        if (provider !== "lecture-live") setAiModel(personalModelOptions[provider][0].id);
+                      }}
+                    >{option.label}</button>
+                  ))}
+                </div>
+              </fieldset>
 
-      <div className="error-banner" role="alert">{error}</div>
+              {aiProvider !== "lecture-live" && (
+                <>
+                  <fieldset className="settings-choice">
+                    <legend>{isEnglish ? "Model" : "모델"}</legend>
+                    <div className="settings-choice-list settings-model-list">
+                      {personalModelOptions[aiProvider].map((model) => (
+                        <button
+                          type="button"
+                          key={model.id}
+                          className={aiModel === model.id ? "active" : undefined}
+                          aria-pressed={aiModel === model.id}
+                          onClick={() => setAiModel(model.id)}
+                        >{model.label}</button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label>
+                    <span>{isEnglish ? "Your API key" : "개인 API 키"}</span>
+                    <input
+                      type="password"
+                      value={personalApiKey}
+                      onChange={(event) => setPersonalApiKey(event.target.value)}
+                      placeholder={savedCredential
+                        ? isEnglish ? "A key is saved — enter one to replace it" : "저장됨 — 교체하려면 새 키 입력"
+                        : isEnglish ? "Enter API key" : "API 키 입력"}
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={512}
+                    />
+                  </label>
+                  <div className="credential-actions">
+                    <button
+                      type="button"
+                      onClick={saveCredential}
+                      disabled={credentialPending || !personalApiKey.trim()}
+                    >
+                      {credentialPending
+                        ? isEnglish ? "Working…" : "처리 중…"
+                        : savedCredential
+                          ? isEnglish ? "Replace saved key" : "저장된 키 교체"
+                          : isEnglish ? "Save to my account" : "내 계정에 저장"}
+                    </button>
+                    {savedCredential && (
+                      <button type="button" onClick={deleteCredential} disabled={credentialPending}>
+                        {isEnglish ? "Remove saved key" : "저장된 키 삭제"}
+                      </button>
+                    )}
+                  </div>
+                  <p>
+                    {savedCredential
+                      ? isEnglish
+                        ? "This provider's key is encrypted in your account. Its plaintext is never sent back to the browser."
+                        : "이 공급자의 키는 계정에 암호화되어 저장됩니다. 키 원문은 브라우저로 다시 보내지 않습니다."
+                      : isEnglish
+                        ? "Without saving, the key is used only in this tab. Provider charges apply to your own account."
+                        : "저장하지 않으면 이 탭에서만 사용합니다. 질문 비용은 선택한 공급자 계정에 별도로 청구됩니다."}
+                  </p>
+                </>
+              )}
+            </div>
+          </details>
 
-      <section className="classroom-bar" aria-label={isEnglish ? "Classroom and lecture" : "강의실과 수업"}>
-        <div className="lecture-hierarchy" aria-label={isEnglish ? "Current lecture location" : "현재 수업 위치"}>
-          <Link href={`${basePath}/classrooms`}>{isEnglish ? "Classroom" : "강의실"}</Link>
-          <strong>{activeClassroomLabel}</strong>
-          <i aria-hidden="true">›</i>
-          <span>{isEnglish ? "Lecture" : "수업"}</span>
+          {status === "recording" || status === "connecting" ? (
+            <button className="stop-button" type="button" onClick={stopLecture} disabled={status === "connecting"}>
+              {isEnglish ? "End lecture" : "강의 종료"}
+            </button>
+          ) : (
+            <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
+              {isEnglish ? "Start lecture" : "강의 시작"}
+            </button>
+          )}
+        </header>
+
+        <div className="error-banner" role="alert">{error}</div>
+
+        <section className="lecture-toolbar" aria-label={isEnglish ? "Current lecture" : "현재 수업"}>
+          <span>{activeClassroomLabel}</span>
           <label className="lecture-title-field">
             <span className="sr-only">{isEnglish ? "Lecture title" : "수업 이름"}</span>
             <input
@@ -796,82 +923,11 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
               disabled={status === "connecting"}
             />
           </label>
-        </div>
+          <small>{activeSessions.length}{isEnglish ? " saved lectures" : "개 수업 저장됨"}</small>
+        </section>
 
-        <div className="classroom-controls">
-          <details className="context-menu">
-            <summary>
-              <span>{isEnglish ? "Classroom" : "강의실"}</span>
-              <b>{activeClassroomLabel}</b>
-            </summary>
-            <div className="context-menu-panel">
-              <p>{isEnglish ? "Recording without a classroom is allowed." : "강의실을 고르지 않아도 녹음할 수 있습니다."}</p>
-              <button
-                type="button"
-                className={!activeClassroomId ? "active" : undefined}
-                disabled={status === "recording" || status === "connecting"}
-                onClick={(event) => {
-                  event.currentTarget.closest("details")?.removeAttribute("open");
-                  setActiveClassroomId("");
-                  prepareNewLecture();
-                }}
-              >
-                <span>{isEnglish ? "Unassigned" : "미분류 수업"}</span>
-                <small>{isEnglish ? "Organize it later" : "나중에 강의실로 이동"}</small>
-              </button>
-              {classrooms.map((classroom) => (
-                <button
-                  type="button"
-                  key={classroom.id}
-                  className={classroom.id === activeClassroomId ? "active" : undefined}
-                  disabled={status === "recording" || status === "connecting"}
-                  onClick={(event) => {
-                    event.currentTarget.closest("details")?.removeAttribute("open");
-                    setActiveClassroomId(classroom.id);
-                    prepareNewLecture();
-                  }}
-                >
-                  <span>{classroom.title}</span>
-                  <small>{classroom.sessions.length}{isEnglish ? " lectures" : "개 수업"}</small>
-                </button>
-              ))}
-              <Link href={`${basePath}/classrooms`}>{isEnglish ? "Manage classrooms" : "강의실 관리"}</Link>
-            </div>
-          </details>
-
-          <details className="context-menu session-menu">
-            <summary>
-              <span>{isEnglish ? "Saved lectures" : "저장된 수업"}</span>
-              <b>{activeSessions.length}{isEnglish ? " lectures" : "개"}</b>
-            </summary>
-            <div className="context-menu-panel">
-              {activeSessions.length ? activeSessions.map((session) => (
-                <button
-                  type="button"
-                  key={session.id}
-                  className={session.id === activeSessionId ? "active" : undefined}
-                  disabled={classroomPending || status === "recording" || status === "connecting"}
-                  onClick={(event) => {
-                    event.currentTarget.closest("details")?.removeAttribute("open");
-                    void openSession(session.id);
-                  }}
-                >
-                  <span>{session.title}</span>
-                  <small>{formatTime(session.duration_seconds * 1_000)} · {session.question_count}{isEnglish ? " questions" : "개 질문"}</small>
-                </button>
-              )) : <p>{isEnglish ? "No saved lectures here yet." : "아직 저장된 수업이 없습니다."}</p>}
-            </div>
-          </details>
-
-          <button type="button" className="new-lecture-button" onClick={prepareNewLecture} disabled={status === "recording" || status === "connecting"}>
-            {isEnglish ? "New lecture" : "새 수업"}
-          </button>
-          <Link className="manage-classrooms-link" href={`${basePath}/classrooms`}>{isEnglish ? "Library" : "강의실 관리"}</Link>
-        </div>
-      </section>
-
-      <section className="panes">
-        <section className="chat-pane" aria-labelledby="chat-title">
+        <section className="panes">
+          <section className="chat-pane" aria-labelledby="chat-title">
           <div className="pane-heading">
             <div>
               <h1 id="chat-title">{isEnglish ? "Ask about the lecture" : "강의에 질문하기"}</h1>
@@ -956,9 +1012,9 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
               {isEnglish ? "Send" : "보내기"}
             </button>
           </form>
-        </section>
+          </section>
 
-        <section className="transcript-pane" aria-labelledby="transcript-title">
+          <section className="transcript-pane" aria-labelledby="transcript-title">
           <div className="pane-heading transcript-heading">
             <div>
               <h2 id="transcript-title">{isEnglish ? "Live transcript" : "실시간 스크립트"}</h2>
@@ -985,17 +1041,18 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
               </div>
             )}
           </div>
+          </section>
         </section>
-      </section>
 
-      <footer className="footnote">
-        <span>{isEnglish ? "AI transcription · errors may occur" : "AI 자동 변환 · 오류가 있을 수 있습니다"}</span>
-        <span className="footnote-links">
-          <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
-          <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
-          <span>{isEnglish ? "Confirm recording permission before use" : "현장 녹음 권한을 확인한 뒤 사용하세요"}</span>
-        </span>
-      </footer>
+        <footer className="footnote">
+          <span>{isEnglish ? "AI transcription · errors may occur" : "AI 자동 변환 · 오류가 있을 수 있습니다"}</span>
+          <span className="footnote-links">
+            <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
+            <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
+            <span>{isEnglish ? "Confirm recording permission before use" : "현장 녹음 권한을 확인한 뒤 사용하세요"}</span>
+          </span>
+        </footer>
+      </div>
     </main>
   );
 }

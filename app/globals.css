@@ -1468,3 +1468,367 @@ button:active,
   .transcript-pane,
   .classroom-unit { box-shadow: 3px 3px 0 var(--line-strong); }
 }
+
+/* Classroom workspace: quiet sidebar shell inspired by focused writing tools. */
+.workspace {
+  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  background: #f8f7f4;
+}
+
+.workspace-sidebar {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 20px 12px 14px;
+  background: #f1f0eb;
+  border-right: 1px solid #dedbd3;
+}
+
+.sidebar-brand {
+  width: fit-content;
+  padding: 0 8px;
+  color: #262521;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -.05em;
+  text-decoration: none;
+}
+
+.sidebar-new-lecture {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px;
+  color: #383631;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.sidebar-new-lecture span { color: var(--focus); font-size: 19px; font-weight: 400; }
+.sidebar-new-lecture:hover { background: #e7e5de; }
+
+.sidebar-library {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 9px 4px 18px;
+  scrollbar-width: thin;
+}
+
+.sidebar-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 8px;
+  color: #868179;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.sidebar-section-heading > span { letter-spacing: .06em; text-transform: uppercase; }
+.sidebar-section-heading a { color: inherit; text-decoration: none; }
+.sidebar-section-heading a:hover { color: var(--focus); }
+
+.sidebar-classrooms { display: grid; gap: 12px; }
+.sidebar-classroom-group { min-width: 0; }
+
+.sidebar-classroom {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  color: #403e39;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.sidebar-classroom > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-classroom small { color: #99948b; font-size: 9px; font-weight: 600; }
+.sidebar-classroom:hover { background: #e9e7e1; }
+.sidebar-classroom.active { color: #183f48; background: #e0e8e8; }
+.sidebar-classroom.active small { color: var(--focus); }
+
+.sidebar-sessions {
+  display: grid;
+  gap: 1px;
+  margin: 2px 0 0 17px;
+  padding-left: 9px;
+  border-left: 1px solid #d8d5ce;
+}
+
+.sidebar-sessions:empty { display: none; }
+
+.sidebar-sessions button {
+  min-width: 0;
+  padding: 6px 8px;
+  overflow: hidden;
+  color: #77736c;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-sessions button:hover { color: #302e2a; background: #e9e7e1; }
+.sidebar-sessions button.active { color: #24231f; background: #dedcd5; font-weight: 700; }
+
+.sidebar-create-classroom {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  padding: 16px 8px 0;
+  border-top: 1px solid #dedbd3;
+}
+
+.sidebar-create-classroom label { color: #77736c; font-size: 10px; font-weight: 750; }
+.sidebar-create-classroom > div { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 5px; }
+
+.sidebar-create-classroom input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  color: #302e2a;
+  background: #faf9f6;
+  border: 1px solid #d5d2ca;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.sidebar-create-classroom button {
+  color: white;
+  background: var(--focus);
+  border: 0;
+  border-radius: 7px;
+  font-size: 17px;
+}
+
+.sidebar-account { padding: 12px 5px 0; border-top: 1px solid #dedbd3; }
+
+.sidebar-credit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 8px 10px;
+  color: #77736c;
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.sidebar-credit b { color: #34322e; font-size: 11px; }
+.sidebar-credit:hover span { color: var(--focus); }
+
+.sidebar-profile {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  border-radius: 9px;
+}
+
+.sidebar-profile:hover { background: #e7e5de; }
+
+.profile-avatar {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--focus);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.profile-copy { min-width: 0; display: grid; gap: 2px; }
+.profile-copy strong,
+.profile-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-copy strong { color: #34322e; font-size: 11px; }
+.profile-copy small { color: #8b867e; font-size: 9px; }
+.sidebar-profile form { margin: 0; }
+.sidebar-profile button { padding: 5px 0 5px 5px; color: #8b867e; background: transparent; border: 0; font-size: 9px; }
+.sidebar-profile button:hover { color: #34322e; }
+
+.workspace-main {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 64px auto 56px minmax(0, 1fr) 30px;
+  overflow: hidden;
+}
+
+.workspace .topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  padding: 0 18px;
+  color: var(--ink);
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #e6e3dc;
+}
+
+.workspace .session-state { justify-self: start; color: #77736c; }
+.workspace .session-state time { color: #35332f; }
+
+.workspace .ai-settings summary {
+  min-width: 128px;
+  color: #807b73;
+  background: #f8f7f4;
+  border: 1px solid #dedbd3;
+  border-radius: 8px;
+}
+
+.workspace .ai-settings summary::after { color: #6f6a63; }
+.workspace .ai-settings summary b { color: #34322e; }
+.workspace .ai-settings-panel { border: 1px solid #d8d4cc; border-radius: 10px; box-shadow: 0 14px 36px rgba(45, 42, 36, .13); }
+
+.workspace .start-button,
+.workspace .stop-button {
+  min-width: 96px;
+  min-height: 38px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.workspace .start-button { color: white; background: var(--focus); }
+.workspace .start-button:hover { background: #104b5b; }
+.workspace .stop-button { background: var(--signal); }
+.workspace button:active { box-shadow: none; transform: none; }
+
+.lecture-toolbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 20px;
+  background: #fff;
+  border-bottom: 1px solid #ece9e3;
+}
+
+.lecture-toolbar > span {
+  max-width: 180px;
+  overflow: hidden;
+  color: #77736c;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lecture-toolbar > span::after { content: "/"; margin-left: 12px; color: #c0bcb4; }
+.lecture-toolbar .lecture-title-field { max-width: 430px; }
+
+.lecture-toolbar .lecture-title-field input {
+  padding: 6px 0;
+  color: #2e2c28;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lecture-toolbar .lecture-title-field input:hover,
+.lecture-toolbar .lecture-title-field input:focus { border-bottom-color: #c8c4bb; outline: 0; }
+.lecture-toolbar > small { margin-left: auto; color: #98938b; font-size: 10px; white-space: nowrap; }
+
+.workspace .panes { gap: 12px; padding: 14px 18px 16px; background: #f8f7f4; }
+
+.workspace .chat-pane,
+.workspace .transcript-pane {
+  background: #fff;
+  border: 1px solid #e0ddd6;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.workspace .pane-heading { min-height: 68px; padding: 16px 20px 14px; border-color: #ebe8e2; }
+.workspace .pane-heading h1,
+.workspace .pane-heading h2 { font-size: clamp(18px, 1.65vw, 22px); font-weight: 760; letter-spacing: -.035em; }
+.workspace .messages { padding: 20px; }
+.workspace .message p { border-width: 1px; border-radius: 12px 12px 12px 4px; }
+.workspace .message-user p { border-radius: 12px 12px 4px 12px; }
+.workspace .question-form { border-color: #e6e3dc; background: #fff; }
+.workspace .question-form textarea,
+.workspace .question-form button { border-radius: 9px; }
+.workspace .question-form textarea { border-width: 1px; border-color: #d8d4cc; }
+.workspace .question-form button { background: var(--focus); }
+.workspace .transcript { padding: 20px 24px 42px; }
+.workspace .footnote { color: #8a867f; background: #f1f0eb; border-top: 1px solid #dedbd3; }
+
+@media (max-width: 980px) {
+  .workspace { grid-template-columns: 224px minmax(0, 1fr); }
+  .workspace .panes { grid-template-columns: minmax(300px, 45%) minmax(0, 55%); }
+  .profile-copy small { display: none; }
+}
+
+@media (max-width: 800px) {
+  .workspace {
+    height: auto;
+    min-height: 100svh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    overflow: visible;
+  }
+
+  .workspace-sidebar {
+    max-height: 360px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    gap: 10px;
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid #dedbd3;
+  }
+
+  .sidebar-new-lecture { min-height: 34px; }
+  .sidebar-library { grid-column: 1 / -1; max-height: 190px; padding-bottom: 8px; }
+  .sidebar-account { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding-top: 8px; }
+  .sidebar-credit { gap: 8px; }
+  .sidebar-profile { min-width: 210px; }
+  .profile-copy small { display: block; }
+
+  .workspace-main { min-height: 100svh; grid-template-rows: 62px auto 54px auto 30px; overflow: visible; }
+  .workspace .topbar { display: grid; grid-template-columns: 1fr auto auto; padding: 0 12px; }
+  .workspace .session-state { grid-column: 1; grid-row: 1; }
+  .workspace .ai-settings { grid-column: 2; grid-row: 1; }
+  .workspace .topbar > button { grid-column: 3; grid-row: 1; }
+  .workspace .panes { grid-template-columns: 1fr; padding: 12px; }
+  .workspace .chat-pane,
+  .workspace .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
+}
+
+@media (max-width: 540px) {
+  .workspace-sidebar { max-height: 330px; }
+  .sidebar-account { align-items: stretch; flex-direction: column; }
+  .sidebar-profile { min-width: 0; }
+  .workspace .ai-settings summary { min-width: 104px; }
+  .workspace .start-button,
+  .workspace .stop-button { min-width: 76px; padding: 0 10px; font-size: 11px; }
+  .lecture-toolbar { padding: 8px 12px; }
+  .lecture-toolbar > span { max-width: 90px; }
+  .lecture-toolbar > small { display: none; }
+}
