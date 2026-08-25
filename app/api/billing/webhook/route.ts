@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { addUtcMonths, isBillingPlan, isUuid, PLAN_CREDITS, verifyPaddleSignature } from "../../../lib/billing";
+import { addUtcMonths, type BillingPlan, isBillingPlan, isUuid, PLAN_CREDITS, verifyPaddleSignature } from "../../../lib/billing";
 import { createAdminClient } from "../../../lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -31,10 +31,12 @@ function identity(data: Record<string, unknown>) {
   return { userId: custom.lecue_user_id, plan: custom.plan_code };
 }
 
-function hasExpectedPrice(data: Record<string, unknown>, plan: "monthly" | "semester") {
-  const configured = plan === "semester"
-    ? [process.env.PADDLE_SEMESTER_PRICE_ID]
-    : [process.env.PADDLE_MONTHLY_PRICE_ID, process.env.PADDLE_MONTHLY_NO_TRIAL_PRICE_ID];
+function hasExpectedPrice(data: Record<string, unknown>, plan: BillingPlan) {
+  const configured = plan === "term"
+    ? [process.env.PADDLE_TERM_PRICE_ID]
+    : plan === "semester"
+      ? [process.env.PADDLE_SEMESTER_PRICE_ID]
+      : [process.env.PADDLE_MONTHLY_PRICE_ID, process.env.PADDLE_MONTHLY_NO_TRIAL_PRICE_ID];
   const allowed = new Set(configured.filter(Boolean));
   const items = Array.isArray(data.items) ? data.items as PriceItem[] : [];
   return allowed.size > 0 && items.some((item) => allowed.has(text(item.price?.id) ?? ""));
@@ -101,7 +103,7 @@ async function grantPaidCredits(admin: NonNullable<ReturnType<typeof createAdmin
   const startsAt = date(period?.starts_at) ?? date(data.billed_at) ?? event.occurred_at;
   const expiresAt = owner.plan === "monthly"
     ? date(period?.ends_at) ?? addUtcMonths(startsAt, 1)
-    : addUtcMonths(startsAt, 6);
+    : addUtcMonths(startsAt, owner.plan === "term" ? 4 : 6);
   const credits = PLAN_CREDITS[owner.plan];
   const { error } = await admin.from("credit_grants").upsert({
     user_id: owner.userId,

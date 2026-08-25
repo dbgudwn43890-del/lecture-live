@@ -11,6 +11,8 @@
    - `supabase/migrations/20260822010000_classrooms.sql`
    - `supabase/migrations/20260823000000_billing_credits.sql`
    - `supabase/migrations/20260825000000_optional_classrooms.sql`
+   - `supabase/migrations/20260825010000_fix_credit_consumption.sql`
+   - `supabase/migrations/20260825020000_flexible_trial_term.sql`
 4. **Settings → API Keys**의 backend-only Secret Key를 `.env.local`의
    `SUPABASE_SECRET_KEY`에 입력합니다. 이 키에는 `NEXT_PUBLIC_`을 붙이지 않습니다.
 5. 다음 명령을 실행합니다.
@@ -24,12 +26,13 @@ npm run dev
 
 ## Paddle 결제 설정
 
-1. Paddle Sandbox에서 월간 상품의 반복 가격 2개와 한 학기권의 일회성 가격 1개를 만듭니다.
+1. Paddle Sandbox에서 월간 상품의 반복 가격 2개와 4개월권·한 학기권의 일회성 가격을 만듭니다.
    - 월간 체험 가격: 기본 `$9.99`, 한국 `13,900 KRW` 가격 재정의, 7일 체험
    - 월간 일반 가격: 같은 가격, 체험 없음
+   - 4개월권: 기본 `$37`, 한국 `52,900 KRW` 가격 재정의, 일회성
    - 한 학기권: 기본 `$54`, 한국 `74,900 KRW` 가격 재정의, 일회성
-2. 월간 체험·월간 일반·한 학기권 Price ID를 각각 `PADDLE_MONTHLY_PRICE_ID`,
-   `PADDLE_MONTHLY_NO_TRIAL_PRICE_ID`, `PADDLE_SEMESTER_PRICE_ID`에 넣습니다.
+2. 월간 체험·월간 일반·4개월권·한 학기권 Price ID를 각각 `PADDLE_MONTHLY_PRICE_ID`,
+   `PADDLE_MONTHLY_NO_TRIAL_PRICE_ID`, `PADDLE_TERM_PRICE_ID`, `PADDLE_SEMESTER_PRICE_ID`에 넣습니다.
 3. Paddle API key, Webhook secret, Client-side token을 `.env.local`과 배포 환경 변수에 넣습니다.
    API key와 Webhook secret에는 `NEXT_PUBLIC_`을 붙이지 않습니다.
 4. Paddle Checkout 설정에서 한국 결제수단을 켭니다. 한국 구매자에게는 카카오페이,
@@ -66,7 +69,7 @@ URL 또는 채팅에 넣지 않습니다. 개인 AI 키 원문은 Vault에서 �
 - 강의실별 수업 관리, 미분류 수업, 스크립트·질문 저장과 지난 수업 다시 열기
 - 같은 강의실의 관련 이전 수업만 검색해 답변에 보조 맥락으로 반영
 - 수업 1회 최대 3시간 자동 종료·저장
-- Paddle 간편결제, 7일 첫 수업 체험, 월간 구독과 한 학기권
+- Paddle 간편결제, 여러 수업에 쓸 수 있는 7일·180크레딧 체험, 월간 구독과 4개월·한 학기권
 - 결제 웹훅 기반 크레딧 부여, 1분당 1크레딧 원자적 차감과 환불 시 잔여 크레딧 회수
 - `/en` 수동 영문 서비스와 배포 환경의 접속 국가 기반 언어 진입 경로
 - 질문 및 Deepgram 임시 토큰 경로의 서버 인증과 사용자별 요청 제한

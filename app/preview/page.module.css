@@ -24,14 +24,14 @@
   top: 0;
   z-index: 20;
   width: min(1440px, 100%);
-  min-height: 72px;
+  min-height: 64px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 32px;
   margin: 0 auto;
   padding: 0 30px;
-  background: rgba(241, 243, 242, .96);
+  background: var(--paper);
   border-bottom: 1px solid var(--line);
 }
 
@@ -69,20 +69,21 @@
 
 .hero {
   width: min(1240px, calc(100% - 60px));
-  min-height: 850px;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(360px, .76fr) minmax(620px, 1.24fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: clamp(48px, 6vw, 88px);
+  gap: 70px;
   margin: 0 auto;
-  padding: 76px 0 92px;
+  padding: 112px 0 120px;
 }
 
 .heroCopy {
   position: relative;
   z-index: 2;
-  max-width: 510px;
-  text-align: left;
+  max-width: 780px;
+  justify-self: center;
+  text-align: center;
 }
 
 .heroLabel,
@@ -94,20 +95,20 @@
   letter-spacing: .05em;
 }
 
-.heroLabel { margin-bottom: 28px; animation: heroEnter .7s .05s both; }
+.heroLabel { margin-bottom: 22px; animation: heroEnter .7s .05s both; }
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(53px, 5.5vw, 82px);
-  line-height: 1.01;
+  font-size: clamp(52px, 6.4vw, 88px);
+  line-height: 1.04;
   /* deslop-ignore-next-line 11 -- 첫 화면의 짧은 두 줄 가치 제안을 브랜드 앵커로 사용 */
   letter-spacing: -.065em;
   animation: heroEnter .8s .12s cubic-bezier(.16, 1, .3, 1) both;
 }
 
 .heroDescription {
-  max-width: 510px;
-  margin: 32px 0 0;
+  max-width: 690px;
+  margin: 28px auto 0;
   color: var(--muted);
   font-size: clamp(16px, 1.4vw, 19px);
   line-height: 1.8;
@@ -115,7 +116,7 @@
 }
 
 .heroActions {
-  justify-content: flex-start;
+  justify-content: center;
   gap: 24px;
   margin-top: 38px;
   animation: heroEnter .8s .28s both;
@@ -150,42 +151,20 @@
 .secondaryCta { border-bottom: 1px solid var(--ink); }
 .heroNote { margin: 14px 0 0; color: #818b8e; font-size: 11px; animation: heroEnter .8s .32s both; }
 
-.promiseStrip {
-  width: min(1440px, 100%);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  margin: 0 auto;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.promiseStrip p {
-  min-height: 112px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 9px;
-  margin: 0;
-  padding: 18px 30px;
-  border-right: 1px solid var(--line);
-}
-.promiseStrip p:last-child { border-right: 0; }
-.promiseStrip strong { font-size: 13px; }
-.promiseStrip span { color: var(--muted); font-size: 11px; line-height: 1.5; }
-
 .productFrame {
   overflow: hidden;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid #919ea1;
-  border-radius: 18px;
-  box-shadow: 12px 14px 0 #d5dddd;
+  border-radius: 12px;
+  box-shadow: 0 10px 26px rgba(23, 27, 29, .1);
 }
 .heroProductFrame {
   min-width: 0;
-  width: 100%;
+  width: min(1080px, 100%);
+  justify-self: center;
   scroll-margin-top: 96px;
-  animation: heroEnter .9s .25s cubic-bezier(.16, 1, .3, 1) both;
+  animation: productEnter 1s .26s cubic-bezier(.16, 1, .3, 1) both;
 }
 .productTopbar {
   min-height: 64px;
@@ -202,7 +181,7 @@
 .productTopbar > span { color: #aab4b6; }
 .productTopbar em { display: flex; align-items: center; font-style: normal; font-weight: 800; }
 /* deslop-ignore-next-line 19 -- 제품 화면 속 실제 녹음 상태 표시 */
-.productTopbar em i { width: 8px; height: 8px; margin-right: 8px; background: var(--signal); border-radius: 50%; }
+.productTopbar em i { width: 8px; height: 8px; margin-right: 8px; background: var(--signal); border-radius: 50%; animation: recordingPulse 1.8s ease-in-out infinite; }
 .productPanes { min-height: 520px; display: grid; grid-template-columns: 46% 54%; gap: 9px; padding: 9px; background: var(--wash); }
 .questionPane,
 .transcriptPane { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; border: 1px solid var(--line); border-radius: 13px; }
@@ -215,23 +194,25 @@
 .questionPane > header span,
 .transcriptPane > header span { flex: 0 0 auto; color: var(--muted); font-size: 11px; font-weight: 750; }
 .demoMessages { padding: 50px 34px; }
-.userQuestion { width: max-content; max-width: 90%; margin-left: auto; padding: 15px 17px; color: white; background: var(--focus); border-radius: 14px 14px 4px 14px; font-size: 13px; line-height: 1.55; }
+.userQuestion { width: max-content; max-width: 90%; margin-left: auto; padding: 15px 17px; color: white; background: var(--focus); border-radius: 12px 12px 3px 12px; font-size: 13px; line-height: 1.55; animation: demoMessage 8s ease-in-out infinite; }
 .demoAnswer { max-width: 90%; margin-top: 42px; }
 .demoAnswer > span { color: var(--muted); font-size: 10px; font-weight: 800; }
-.demoAnswer p { margin: 10px 0 0; padding: 14px 15px; background: #e9eeee; border-radius: 14px 14px 14px 4px; font-size: 14px; line-height: 1.8; }
+.demoAnswer p { margin: 10px 0 0; padding: 14px 15px; background: #e9eeee; border-radius: 12px 12px 12px 3px; font-size: 14px; line-height: 1.8; animation: demoAnswer 8s ease-in-out infinite; }
 .demoAnswer small { display: block; margin-top: 14px; color: var(--muted); font-size: 9px; }
 .demoInput { min-height: 62px; display: flex; align-items: center; justify-content: space-between; margin: 0 22px 22px; padding: 0 15px 0 19px; color: #879194; background: white; border: 1px solid var(--line); border-radius: 12px; font-size: 11px; }
 .demoInput span { width: 31px; height: 31px; display: grid; place-items: center; color: white; background: var(--focus); border-radius: 9px; font-size: 16px; }
 .demoTranscript { padding: 48px 42px; }
-.demoTranscript p { margin: 0 0 30px; color: #394145; font-size: 15px; line-height: 1.85; }
-.demoTranscript .currentTranscript { color: var(--muted); animation: transcriptEnter 1.5s ease-in-out infinite alternate; }
+.demoTranscript p { margin: 0 0 24px; color: #394145; font-size: 15px; line-height: 1.85; animation: transcriptFlow 8s ease-in-out infinite; }
+.demoTranscript p:nth-child(2) { animation-delay: .45s; }
+.demoTranscript p:nth-child(3) { animation-delay: .9s; }
+.demoTranscript .currentTranscript { color: var(--muted); }
 
 .rooms {
   display: grid;
   grid-template-columns: minmax(320px, .76fr) minmax(540px, 1.24fr);
   align-items: center;
   gap: clamp(60px, 10vw, 150px);
-  padding: 155px max(30px, calc((100vw - 1240px) / 2));
+  padding: 128px max(30px, calc((100vw - 1160px) / 2));
   background: var(--wash);
 }
 .roomsCopy > p { color: var(--focus); }
@@ -239,7 +220,7 @@
 .roomsCopy h2 { margin: 24px 0 0; font-size: clamp(42px, 4.7vw, 66px); line-height: 1.08; letter-spacing: -.05em; }
 .roomsCopy > span { max-width: 490px; display: block; margin-top: 28px; color: var(--muted); font-size: 16px; line-height: 1.8; }
 .roomsCopy a { display: inline-flex; margin-top: 34px; padding-bottom: 7px; border-bottom: 1px solid var(--ink); font-size: 13px; font-weight: 800; }
-.roomShelf { overflow: hidden; background: var(--surface); border: 1px solid #9ba8aa; border-radius: 16px; box-shadow: 15px 17px 0 #c8d1d1; transform: rotate(1deg); }
+.roomShelf { overflow: hidden; background: var(--surface); border: 1px solid #aeb9bb; border-radius: 12px; box-shadow: 0 18px 45px rgba(23, 27, 29, .08); }
 .roomShelf > header { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 26px; color: white; background: var(--ink); }
 .roomShelf > header strong { font-size: 18px; }
 .roomShelf > header span { color: #9eaaac; font-size: 10px; }
@@ -254,7 +235,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 160px max(30px, calc((100vw - 1240px) / 2));
+  padding: 128px max(30px, calc((100vw - 1240px) / 2));
   background: #edf0ef;
 }
 .pricingIntro { max-width: 780px; text-align: center; }
@@ -262,8 +243,8 @@
 /* deslop-ignore-next-line 11 -- 기간 선택과 동일한 기능 제공을 한눈에 보여주는 가격 제목 */
 .pricingIntro h2 { margin: 0; font-size: clamp(48px, 5.6vw, 78px); line-height: 1.03; letter-spacing: -.055em; }
 .pricingIntro > span { display: block; max-width: 670px; margin: 27px auto 0; color: var(--muted); font-size: 16px; line-height: 1.8; }
-.planGrid { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 76px; }
-.planGrid article { position: relative; min-width: 0; min-height: 410px; display: flex; flex-direction: column; padding: 27px 24px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.planGrid { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 62px; }
+.planGrid article { position: relative; min-width: 0; min-height: 370px; display: flex; flex-direction: column; padding: 25px 22px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .planGrid article > div { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .planGrid article > div > span { font-size: 12px; font-weight: 850; }
 .planGrid article > div > b { padding: 6px 8px; color: white; background: var(--signal); font-size: 9px; }
@@ -277,7 +258,7 @@
 .planGrid article > p { margin: 15px 0 0; color: var(--focus); font-size: 11px; font-weight: 800; }
 .planGrid article > small { margin-top: 8px; color: var(--muted); font-size: 10px; }
 .planGrid article > a { min-height: 45px; display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding: 0 14px; color: white; background: var(--ink); font-size: 11px; font-weight: 800; }
-.planGrid .featuredPlan { color: white; background: var(--focus); border-color: var(--focus); transform: translateY(-13px); box-shadow: 0 22px 48px rgba(20, 94, 114, .18); }
+.planGrid .featuredPlan { color: white; background: var(--focus); border-color: var(--focus); }
 .planGrid .featuredPlan > p,
 .planGrid .featuredPlan > small { color: #c5e0e5; }
 .planGrid .featuredPlan .comparePrice,
@@ -309,7 +290,7 @@
 .faq details p { max-width: 670px; margin: -3px 52px 26px 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
 
 .finalCta {
-  min-height: 410px;
+  min-height: 320px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -318,7 +299,7 @@
   background: var(--signal);
 }
 /* deslop-ignore-next-line 11 -- 마지막 행동 요청의 짧은 브랜드 문장 */
-.finalCta p { max-width: 830px; margin: 0; color: white; font-size: clamp(48px, 5.8vw, 82px); font-weight: 900; line-height: 1.03; letter-spacing: -.055em; }
+.finalCta p { max-width: 760px; margin: 0; color: white; font-size: clamp(42px, 5vw, 68px); font-weight: 900; line-height: 1.06; letter-spacing: -.05em; }
 .finalCta a { min-width: 240px; min-height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px 0 24px; background: white; font-size: 14px; font-weight: 850; }
 
 .footer {
@@ -345,9 +326,31 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes transcriptEnter {
-  from { opacity: .35; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes productEnter {
+  from { opacity: 0; transform: translateY(34px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes recordingPulse {
+  50% { opacity: .35; transform: scale(.78); }
+}
+
+@keyframes transcriptFlow {
+  0%, 12% { opacity: .22; transform: translateY(9px); }
+  24%, 86% { opacity: 1; transform: translateY(0); }
+  100% { opacity: .45; }
+}
+
+@keyframes demoMessage {
+  0%, 18% { opacity: .35; transform: translateY(8px); }
+  28%, 92% { opacity: 1; transform: translateY(0); }
+  100% { opacity: .55; }
+}
+
+@keyframes demoAnswer {
+  0%, 30% { opacity: .2; transform: translateY(10px); }
+  42%, 92% { opacity: 1; transform: translateY(0); }
+  100% { opacity: .5; }
 }
 
 @keyframes scrollReveal {
@@ -366,12 +369,10 @@
 @media (max-width: 1080px) {
   .nav { display: none; }
   .header { grid-template-columns: 1fr auto; }
-  .hero { grid-template-columns: 1fr; padding-top: 90px; }
-  .heroCopy { max-width: 760px; }
+  .hero { padding-top: 90px; }
   .hero h1 { font-size: clamp(58px, 8vw, 86px); }
   .heroProductFrame { width: min(920px, 100%); justify-self: center; }
   .planGrid { grid-template-columns: 1fr 1fr; }
-  .planGrid .featuredPlan { transform: none; }
   .rooms { grid-template-columns: 1fr; }
   .roomsCopy { max-width: 700px; }
 }
@@ -387,10 +388,6 @@
   .heroDescription { margin-top: 25px; font-size: 15px; line-height: 1.75; }
   .heroActions { align-items: stretch; flex-direction: column; gap: 12px; }
   .secondaryCta { align-self: center; min-height: 38px; }
-  .promiseStrip { grid-template-columns: 1fr 1fr; }
-  .promiseStrip p { min-height: 100px; padding: 16px; }
-  .promiseStrip p:nth-child(2) { border-right: 0; }
-  .promiseStrip p:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
   .productTopbar { grid-template-columns: 1fr auto; padding: 0 16px; }
   .productTopbar > span { display: none; }
   .productPanes { min-height: 900px; grid-template-columns: 1fr; }
@@ -405,7 +402,6 @@
   .demoTranscript p { font-size: 14px; }
   .rooms { gap: 60px; padding: 100px 16px; }
   .roomsCopy h2 { font-size: 43px; }
-  .roomShelf { box-shadow: 8px 10px 0 #c8d1d1; }
   .roomShelf > header { padding: 18px; }
   .roomShelf article { grid-template-columns: 65px 1fr auto; gap: 12px; padding: 16px 18px; }
   .roomShelf h3 { font-size: 12px; }
@@ -416,7 +412,7 @@
   .pricingFacts { align-items: flex-start; flex-direction: column; gap: 12px; }
   .faq { width: calc(100% - 32px); grid-template-columns: 1fr; gap: 52px; padding: 100px 0; }
   .faq h2 { font-size: 43px; }
-  .finalCta { min-height: 450px; align-items: stretch; flex-direction: column; justify-content: center; padding: 80px 16px; }
+  .finalCta { min-height: 390px; align-items: stretch; flex-direction: column; justify-content: center; padding: 72px 16px; }
   /* deslop-ignore-next-line 11 -- 동일 CTA 제목의 모바일 크기 조정 */
   .finalCta p { font-size: 50px; }
   .finalCta a { min-width: 0; width: 100%; }
@@ -437,92 +433,14 @@
   .reveal { opacity: 1 !important; transform: none !important; }
 }
 
-/* Brand-preserving brutalism: hard edges, structural rules, explicit states. */
-.header { border-bottom: 2px solid var(--ink); }
-
-.primaryCta,
-.pricingCta,
-.finalCta a {
-  border: 2px solid var(--ink);
-  box-shadow: 4px 4px 0 var(--ink);
-}
-
-.productFrame,
-.questionPane,
-.transcriptPane,
-.userQuestion,
-.demoAnswer p,
-.demoInput,
-.demoInput span,
-.roomShelf,
-.planGrid article {
-  border-radius: 2px;
-}
-
-.productFrame {
-  border: 2px solid var(--ink);
-  box-shadow: 9px 9px 0 var(--focus);
-}
-
-.productPanes { gap: 0; padding: 0; border-top: 2px solid var(--ink); }
-.questionPane,
-.transcriptPane { border: 0; }
-.questionPane { border-right: 2px solid var(--ink); }
-.questionPane > header,
-.transcriptPane > header { border-bottom: 2px solid var(--ink); }
-.userQuestion { border: 2px solid var(--ink); }
-.demoAnswer p { border: 2px solid var(--ink); }
-.demoInput { border: 2px solid var(--ink); }
-
-.promiseStrip { border-color: var(--ink); border-width: 2px 0; }
-.promiseStrip p { border-color: var(--ink); border-width: 0 2px 0 0; }
-
-.roomShelf {
-  border: 2px solid var(--ink);
-  box-shadow: 10px 10px 0 var(--focus);
-  transform: rotate(-.6deg);
-}
-.roomShelf article { border-color: var(--ink); }
-
-.planGrid { gap: 18px; }
-.planGrid article { border: 2px solid var(--ink); }
-.planGrid .featuredPlan {
-  border: 3px solid var(--ink);
-  box-shadow: 9px 9px 0 var(--signal);
-}
-
-.faq > div { border-top: 2px solid var(--ink); }
-.faq details { border-color: var(--ink); }
-.finalCta { border-block: 3px solid var(--ink); }
-.footer { border-top: 3px solid var(--signal); }
-
-.heroLabel,
-.roomsCopy > p,
-.pricingIntro > p,
-.productTopbar,
-.roomShelf time {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-}
-
 @media (hover: hover) {
   .primaryCta:hover,
   .pricingCta:hover,
   .finalCta a:hover {
-    box-shadow: 6px 6px 0 var(--ink);
-    transform: translate(-2px, -2px);
+    filter: brightness(.92);
   }
 }
 
-.primaryCta:active,
-.pricingCta:active,
-.finalCta a:active {
-  box-shadow: none;
-  transform: translate(2px, 2px);
-}
-
 @media (max-width: 760px) {
-  .questionPane { border-right: 0; border-bottom: 2px solid var(--ink); }
-  .productFrame { box-shadow: 6px 6px 0 var(--focus); }
-  .roomShelf { box-shadow: 6px 6px 0 var(--focus); }
-  .planGrid .featuredPlan { box-shadow: 6px 6px 0 var(--signal); }
+  .questionPane { border-right: 0; border-bottom: 1px solid var(--line); }
 }

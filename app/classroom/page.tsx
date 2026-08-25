@@ -647,6 +647,8 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
         personalModelOptions[aiProvider][0].label;
   const planLabel = creditStatus?.planCode === "monthly"
     ? isEnglish ? "Monthly" : "월간"
+    : creditStatus?.planCode === "term"
+      ? isEnglish ? "4-month pass" : "4개월권"
     : creditStatus?.planCode === "semester"
       ? isEnglish ? "Semester" : "한 학기"
       : creditStatus?.planCode === "trial"

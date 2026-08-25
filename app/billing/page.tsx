@@ -5,7 +5,7 @@ import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
 type Locale = "ko" | "en";
-type Plan = "monthly" | "semester";
+type Plan = "monthly" | "term" | "semester";
 type CreditStatus = { credits: number; nextExpiry: string | null; latestGrantAt: string | null; subscriptionStatus: string | null; trialUsed: boolean };
 type PaddleEvent = { name?: string };
 type PaddleApi = {
@@ -32,13 +32,17 @@ const copy = {
     monthly: "월간",
     monthlyPrice: "13,900원 / 월",
     monthlyCredits: "매월 4,800크레딧 · 약 80시간",
-    trial: "처음 결제수단을 등록하면 7일 동안 수업 1회, 최대 180크레딧을 먼저 사용할 수 있습니다.",
+    trial: "처음 결제수단을 등록하면 7일 동안 180크레딧을 여러 수업에 나눠 사용할 수 있습니다.",
+    term: "4개월",
+    termPrice: "52,900원 / 4개월",
+    termCredits: "19,200크레딧 · 약 320시간",
     semester: "한 학기",
     semesterPrice: "74,900원 / 6개월",
     semesterCredits: "28,800크레딧 · 약 480시간",
     oneTime: "한 번 결제하며 자동 갱신되지 않습니다.",
     startTrial: "7일 무료로 시작",
     subscribe: "월간 시작",
+    buyTerm: "4개월권 결제",
     buy: "한 학기권 결제",
     methods: "한국에서는 카카오페이·네이버페이·국내 카드, 해외에서는 Apple Pay·Google Pay·PayPal과 현지 결제수단을 사용할 수 있습니다. 실제 표시 수단은 국가와 기기에 따라 달라집니다.",
     manage: "결제·구독 관리",
@@ -56,13 +60,17 @@ const copy = {
     monthly: "Monthly",
     monthlyPrice: "$9.99 / month",
     monthlyCredits: "4,800 credits each month · about 80 hours",
-    trial: "Add a payment method to try one lecture for 7 days, with up to 180 credits before the first charge.",
+    trial: "Add a payment method to use 180 credits across multiple lectures during the 7-day trial.",
+    term: "4 months",
+    termPrice: "$37 / 4 months",
+    termCredits: "19,200 credits · about 320 hours",
     semester: "Semester",
     semesterPrice: "$54 / 6 months",
     semesterCredits: "28,800 credits · about 480 hours",
     oneTime: "One payment. It does not renew automatically.",
     startTrial: "Start 7-day trial",
     subscribe: "Start monthly",
+    buyTerm: "Buy 4-month pass",
     buy: "Buy semester pass",
     methods: "Available methods include Apple Pay, Google Pay, PayPal, cards, and eligible local payment methods. What appears depends on your country and device.",
     manage: "Manage billing",
@@ -90,7 +98,7 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
   useEffect(() => {
     if (!paddleReady || !status || autoStartedRef.current) return;
     const plan = new URLSearchParams(window.location.search).get("plan");
-    if (plan === "monthly" || plan === "semester") {
+    if (plan === "monthly" || plan === "term" || plan === "semester") {
       autoStartedRef.current = true;
       void startCheckout(plan);
     }
@@ -185,6 +193,7 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
         <section className="credit-summary" aria-live="polite"><span>{t.credits}</span><strong>{status ? status.credits.toLocaleString(locale === "en" ? "en-US" : "ko-KR") : "—"}</strong><small>{t.unit}</small>{status?.nextExpiry && <time>{t.expiry} · {new Date(status.nextExpiry).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")}</time>}</section>
         <div className="billing-plans">
           <article className="billing-plan billing-plan-featured"><span>{t.monthly}</span><h2>{t.monthlyPrice}</h2><strong>{t.monthlyCredits}</strong><p>{t.trial}</p><button type="button" onClick={() => void startCheckout("monthly")} disabled={!paddleReady || !status || pending !== null}>{pending === "monthly" ? t.opening : status?.trialUsed ? t.subscribe : t.startTrial}</button></article>
+          <article className="billing-plan"><span>{t.term}</span><h2>{t.termPrice}</h2><strong>{t.termCredits}</strong><p>{t.oneTime}</p><button type="button" onClick={() => void startCheckout("term")} disabled={!paddleReady || !status || pending !== null}>{pending === "term" ? t.opening : t.buyTerm}</button></article>
           <article className="billing-plan"><span>{t.semester}</span><h2>{t.semesterPrice}</h2><strong>{t.semesterCredits}</strong><p>{t.oneTime}</p><button type="button" onClick={() => void startCheckout("semester")} disabled={!paddleReady || !status || pending !== null}>{pending === "semester" ? t.opening : t.buy}</button></article>
         </div>
         <p className="billing-methods">{t.methods}</p>

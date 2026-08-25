@@ -1,15 +1,16 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type BillingPlan = "monthly" | "semester";
+export type BillingPlan = "monthly" | "term" | "semester";
 
 export const PLAN_CREDITS = {
   trial: 180,
   monthly: 4_800,
+  term: 19_200,
   semester: 28_800,
 } as const;
 
 export function isBillingPlan(value: unknown): value is BillingPlan {
-  return value === "monthly" || value === "semester";
+  return value === "monthly" || value === "term" || value === "semester";
 }
 
 export function isUuid(value: unknown): value is string {
@@ -52,11 +53,13 @@ export function verifyPaddleSignature(
 }
 
 export function paddlePriceId(plan: BillingPlan, trialUsed: boolean) {
-  const key = plan === "semester"
-    ? "PADDLE_SEMESTER_PRICE_ID"
-    : trialUsed
-      ? "PADDLE_MONTHLY_NO_TRIAL_PRICE_ID"
-      : "PADDLE_MONTHLY_PRICE_ID";
+  const key = plan === "term"
+    ? "PADDLE_TERM_PRICE_ID"
+    : plan === "semester"
+      ? "PADDLE_SEMESTER_PRICE_ID"
+      : trialUsed
+        ? "PADDLE_MONTHLY_NO_TRIAL_PRICE_ID"
+        : "PADDLE_MONTHLY_PRICE_ID";
   const priceId = process.env[key];
   if (!priceId) throw new Error(`${key} is not configured`);
   return priceId;

@@ -27,16 +27,17 @@ export default function EnglishTermsPage() {
 
       <section><h2>6. Plans and credits</h2><div>
         <div className={styles.tableWrap}><table><thead><tr><th>Plan</th><th>Term</th><th>Credits</th><th>Billing</th></tr></thead><tbody>
-          <tr><td>First try</td><td>7 days</td><td>180 · one lecture · once per account</td><td>Converts to Monthly after trial</td></tr>
+          <tr><td>Free trial</td><td>7 days</td><td>180 · multiple lectures · once per account</td><td>Converts to Monthly after trial</td></tr>
           <tr><td>Monthly</td><td>1 month</td><td>4,800 each billing period</td><td>Renews monthly until cancelled</td></tr>
+          <tr><td>4-month pass</td><td>4 months</td><td>19,200</td><td>One-time purchase; no renewal</td></tr>
           <tr><td>Semester</td><td>6 months</td><td>28,800</td><td>One-time purchase; no renewal</td></tr>
         </tbody></table></div>
         <ul>
           <li>Checkout shows the actual price, tax, promotion, first charge date, and renewal amount.</li>
-          <li>The trial ends at the earlier of 7 days or completion of its first lecture, which may run for up to 3 hours.</li>
+          <li>The trial ends after 7 days or when all 180 credits are used. Credits may be split across multiple lectures during the trial.</li>
           <li>One credit is charged for each started recording minute. A partial minute costs one credit, and the same minute in the same lecture is not charged twice.</li>
           <li>Each lecture may record for up to 3 hours. A new lecture may be started while credits remain.</li>
-          <li>Monthly credits do not roll over. Semester credits expire when the six-month term ends.</li>
+          <li>Monthly credits do not roll over. Credits from the 4-month and Semester passes expire when their respective terms end.</li>
           <li>Questions, AI answers, and necessary web search use no separate credit while recording.</li>
           <li>A personal AI connection follows the same Lecue credit rule. The external provider may charge the member separately.</li>
           <li>Recording stops when credits are exhausted, but existing records remain available.</li>
