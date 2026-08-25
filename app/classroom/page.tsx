@@ -32,7 +32,7 @@ type Classroom = { id: string; title: string; locale: "ko" | "en"; sessions: Ses
 type UserProfile = { displayName: string; email: string };
 type AiProvider = "lecture-live" | PersonalProvider;
 type SavedCredential = { provider: PersonalProvider; model: string; updated_at: string };
-type CreditStatus = { credits: number; nextExpiry: string | null; latestGrantAt: string | null; subscriptionStatus: string | null; trialUsed: boolean };
+type CreditStatus = { credits: number; nextExpiry: string | null; latestGrantAt: string | null; subscriptionStatus: string | null; trialUsed: boolean; planCode: string | null };
 type Message = {
   id: string;
   role: "user" | "assistant";
@@ -111,7 +111,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const chargedMinuteRef = useRef(-1);
   const creditChargePendingRef = useRef(false);
   const initialRouteRef = useRef(false);
-  const savedLectureTitleRef = useRef("");
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -270,7 +269,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       setActiveClassroomId(data.session.classroom_id ?? "");
       setActiveSessionId(data.session.id);
       setLectureTitle(data.session.title);
-      savedLectureTitleRef.current = data.session.title;
       setSegments(restoredSegments);
       segmentIdsRef.current = new Set(restoredSegments.map((segment) => segment.id));
       setMessages((data.questions ?? []).flatMap((item) => [
@@ -291,7 +289,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
     if (status === "recording" || status === "connecting") return;
     setActiveSessionId("");
     setLectureTitle("");
-    savedLectureTitleRef.current = "";
     setSegments([]);
     segmentIdsRef.current.clear();
     setMessages([]);
@@ -299,35 +296,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
     setElapsedMs(0);
     chargedMinuteRef.current = -1;
     setStatus("idle");
-  }
-
-  async function saveLectureTitle() {
-    const title = lectureTitle.trim();
-    if (!activeSessionId) return;
-    if (!title) {
-      setLectureTitle(savedLectureTitleRef.current);
-      return;
-    }
-    if (title === savedLectureTitleRef.current) return;
-
-    setError("");
-    try {
-      const response = await fetch("/api/lecture-sessions", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ action: "rename", sessionId: activeSessionId, title }),
-      });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error);
-      savedLectureTitleRef.current = title;
-      setLectureTitle(title);
-      await loadClassrooms(activeClassroomId);
-    } catch (caught) {
-      setLectureTitle(savedLectureTitleRef.current);
-      setError(caught instanceof Error && caught.message
-        ? caught.message
-        : isEnglish ? "Could not rename the lecture." : "수업 이름을 바꾸지 못했습니다.");
-    }
   }
 
   const savedCredential = aiProvider === "lecture-live"
@@ -415,7 +383,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       setActiveSessionId(sessionData.session.id);
       activeSessionIdRef.current = sessionData.session.id;
       setLectureTitle(sessionData.session.title);
-      savedLectureTitleRef.current = sessionData.session.title;
       setSegments([]);
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
@@ -678,9 +645,15 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       ? isEnglish ? "Default AI" : "기본 AI"
       : personalModelOptions[aiProvider].find((model) => model.id === aiModel)?.label ??
         personalModelOptions[aiProvider][0].label;
-  const activeClassroom = classrooms.find((classroom) => classroom.id === activeClassroomId);
-  const activeClassroomLabel = activeClassroom?.title ?? (isEnglish ? "Unassigned" : "미분류 수업");
-  const activeSessions = activeClassroomId ? (activeClassroom?.sessions ?? []) : unassignedSessions;
+  const planLabel = creditStatus?.planCode === "monthly"
+    ? isEnglish ? "Monthly" : "월간"
+    : creditStatus?.planCode === "semester"
+      ? isEnglish ? "Semester" : "한 학기"
+      : creditStatus?.planCode === "trial"
+        ? isEnglish ? "Free trial" : "무료 체험"
+        : creditStatus?.planCode === "service_credit"
+          ? isEnglish ? "Service credit" : "서비스 크레딧"
+          : isEnglish ? "No plan" : "요금제 없음";
 
   return (
     <main className="workspace">
@@ -782,16 +755,115 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
             <span>{isEnglish ? "Credits" : "남은 크레딧"}</span>
             <b>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</b>
           </Link>
-          <div className="sidebar-profile">
-            <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
-            <span className="profile-copy">
-              <strong>{profile?.displayName || (isEnglish ? "My account" : "내 계정")}</strong>
-              <small>{profile?.email}</small>
-            </span>
-            <form action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
-              <button type="submit" aria-label={isEnglish ? "Sign out" : "로그아웃"}>{isEnglish ? "Sign out" : "로그아웃"}</button>
-            </form>
-          </div>
+          <details className="profile-menu">
+            <summary className="sidebar-profile">
+              <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
+              <span className="profile-copy">
+                <strong>{profile?.displayName || (isEnglish ? "My account" : "내 계정")}</strong>
+                <small>{planLabel}</small>
+              </span>
+              <span className="profile-chevron" aria-hidden="true">•••</span>
+            </summary>
+
+            <div className="profile-menu-panel">
+              <header>
+                <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
+                <span>
+                  <strong>{profile?.displayName || (isEnglish ? "My account" : "내 계정")}</strong>
+                  <small>{profile?.email}</small>
+                </span>
+              </header>
+
+              <div className="profile-plan">
+                <span><small>{isEnglish ? "Plan" : "요금제"}</small><strong>{planLabel}</strong></span>
+                <span><small>{isEnglish ? "Credits" : "크레딧"}</small><strong>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</strong></span>
+              </div>
+              <Link className="profile-billing-link" href={`${basePath}/billing`}>{isEnglish ? "View plan and billing" : "요금제 및 결제 관리"}<span aria-hidden="true">→</span></Link>
+
+              <section className="profile-model-settings" aria-labelledby="profile-model-title">
+                <div className="profile-model-heading">
+                  <h3 id="profile-model-title">{isEnglish ? "Answer model" : "답변 모델"}</h3>
+                  <span>{activeModelLabel}</span>
+                </div>
+                <fieldset className="settings-choice">
+                  <legend>{isEnglish ? "Provider" : "공급자"}</legend>
+                  <div className="settings-choice-list">
+                    {([
+                      { id: "lecture-live", label: isEnglish ? "Lecue default AI" : "Lecue 기본 AI" },
+                      { id: "openai", label: "OpenAI" },
+                      { id: "anthropic", label: "Anthropic Claude" },
+                      { id: "google", label: "Google Gemini" },
+                    ] as Array<{ id: AiProvider; label: string }>).map((option) => (
+                      <button
+                        type="button"
+                        key={option.id}
+                        className={aiProvider === option.id ? "active" : undefined}
+                        aria-pressed={aiProvider === option.id}
+                        onClick={() => {
+                          const provider = option.id;
+                          setAiProvider(provider);
+                          setPersonalApiKey("");
+                          if (provider !== "lecture-live") setAiModel(personalModelOptions[provider][0].id);
+                        }}
+                      >{option.label}</button>
+                    ))}
+                  </div>
+                </fieldset>
+
+                {aiProvider !== "lecture-live" && (
+                  <>
+                    <fieldset className="settings-choice">
+                      <legend>{isEnglish ? "Model" : "모델"}</legend>
+                      <div className="settings-choice-list settings-model-list">
+                        {personalModelOptions[aiProvider].map((model) => (
+                          <button
+                            type="button"
+                            key={model.id}
+                            className={aiModel === model.id ? "active" : undefined}
+                            aria-pressed={aiModel === model.id}
+                            onClick={() => setAiModel(model.id)}
+                          >{model.label}</button>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <label className="profile-api-key">
+                      <span>{isEnglish ? "Your API key" : "개인 API 키"}</span>
+                      <input
+                        type="password"
+                        value={personalApiKey}
+                        onChange={(event) => setPersonalApiKey(event.target.value)}
+                        placeholder={savedCredential
+                          ? isEnglish ? "A key is saved — enter one to replace it" : "저장됨 — 교체하려면 새 키 입력"
+                          : isEnglish ? "Enter API key" : "API 키 입력"}
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={512}
+                      />
+                    </label>
+                    <div className="credential-actions">
+                      <button type="button" onClick={saveCredential} disabled={credentialPending || !personalApiKey.trim()}>
+                        {credentialPending
+                          ? isEnglish ? "Working…" : "처리 중…"
+                          : savedCredential
+                            ? isEnglish ? "Replace saved key" : "저장된 키 교체"
+                            : isEnglish ? "Save to my account" : "내 계정에 저장"}
+                      </button>
+                      {savedCredential && (
+                        <button type="button" onClick={deleteCredential} disabled={credentialPending}>
+                          {isEnglish ? "Remove saved key" : "저장된 키 삭제"}
+                        </button>
+                      )}
+                    </div>
+                    <p>{isEnglish ? "Provider charges apply to your own account." : "질문 비용은 선택한 공급자 계정에 별도로 청구됩니다."}</p>
+                  </>
+                )}
+              </section>
+
+              <form className="profile-signout" action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
+                <button type="submit">{isEnglish ? "Sign out" : "로그아웃"}</button>
+              </form>
+            </div>
+          </details>
         </div>
       </aside>
 
@@ -802,99 +874,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
             <span>{statusCopy[status]}</span>
             <time>{formatTime(elapsedMs)}</time>
           </div>
-
-          <details className="ai-settings">
-            <summary>
-              <span>{isEnglish ? "Answer model" : "답변 모델"}</span>
-              <b>{activeModelLabel}</b>
-            </summary>
-            <div className="ai-settings-panel">
-              <fieldset className="settings-choice">
-                <legend>{isEnglish ? "Provider" : "공급자"}</legend>
-                <div className="settings-choice-list">
-                  {([
-                    { id: "lecture-live", label: isEnglish ? "Lecue default AI" : "Lecue 기본 AI" },
-                    { id: "openai", label: "OpenAI" },
-                    { id: "anthropic", label: "Anthropic Claude" },
-                    { id: "google", label: "Google Gemini" },
-                  ] as Array<{ id: AiProvider; label: string }>).map((option) => (
-                    <button
-                      type="button"
-                      key={option.id}
-                      className={aiProvider === option.id ? "active" : undefined}
-                      aria-pressed={aiProvider === option.id}
-                      onClick={() => {
-                        const provider = option.id;
-                        setAiProvider(provider);
-                        setPersonalApiKey("");
-                        if (provider !== "lecture-live") setAiModel(personalModelOptions[provider][0].id);
-                      }}
-                    >{option.label}</button>
-                  ))}
-                </div>
-              </fieldset>
-
-              {aiProvider !== "lecture-live" && (
-                <>
-                  <fieldset className="settings-choice">
-                    <legend>{isEnglish ? "Model" : "모델"}</legend>
-                    <div className="settings-choice-list settings-model-list">
-                      {personalModelOptions[aiProvider].map((model) => (
-                        <button
-                          type="button"
-                          key={model.id}
-                          className={aiModel === model.id ? "active" : undefined}
-                          aria-pressed={aiModel === model.id}
-                          onClick={() => setAiModel(model.id)}
-                        >{model.label}</button>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <label>
-                    <span>{isEnglish ? "Your API key" : "개인 API 키"}</span>
-                    <input
-                      type="password"
-                      value={personalApiKey}
-                      onChange={(event) => setPersonalApiKey(event.target.value)}
-                      placeholder={savedCredential
-                        ? isEnglish ? "A key is saved — enter one to replace it" : "저장됨 — 교체하려면 새 키 입력"
-                        : isEnglish ? "Enter API key" : "API 키 입력"}
-                      autoComplete="off"
-                      spellCheck={false}
-                      maxLength={512}
-                    />
-                  </label>
-                  <div className="credential-actions">
-                    <button
-                      type="button"
-                      onClick={saveCredential}
-                      disabled={credentialPending || !personalApiKey.trim()}
-                    >
-                      {credentialPending
-                        ? isEnglish ? "Working…" : "처리 중…"
-                        : savedCredential
-                          ? isEnglish ? "Replace saved key" : "저장된 키 교체"
-                          : isEnglish ? "Save to my account" : "내 계정에 저장"}
-                    </button>
-                    {savedCredential && (
-                      <button type="button" onClick={deleteCredential} disabled={credentialPending}>
-                        {isEnglish ? "Remove saved key" : "저장된 키 삭제"}
-                      </button>
-                    )}
-                  </div>
-                  <p>
-                    {savedCredential
-                      ? isEnglish
-                        ? "This provider's key is encrypted in your account. Its plaintext is never sent back to the browser."
-                        : "이 공급자의 키는 계정에 암호화되어 저장됩니다. 키 원문은 브라우저로 다시 보내지 않습니다."
-                      : isEnglish
-                        ? "Without saving, the key is used only in this tab. Provider charges apply to your own account."
-                        : "저장하지 않으면 이 탭에서만 사용합니다. 질문 비용은 선택한 공급자 계정에 별도로 청구됩니다."}
-                  </p>
-                </>
-              )}
-            </div>
-          </details>
 
           {status === "recording" || status === "connecting" ? (
             <button className="stop-button" type="button" onClick={stopLecture} disabled={status === "connecting"}>
@@ -908,23 +887,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
         </header>
 
         <div className="error-banner" role="alert">{error}</div>
-
-        <section className="lecture-toolbar" aria-label={isEnglish ? "Current lecture" : "현재 수업"}>
-          <span>{activeClassroomLabel}</span>
-          <label className="lecture-title-field">
-            <span className="sr-only">{isEnglish ? "Lecture title" : "수업 이름"}</span>
-            <input
-              value={lectureTitle}
-              onChange={(event) => setLectureTitle(event.target.value)}
-              onBlur={() => void saveLectureTitle()}
-              onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-              placeholder={isEnglish ? "New lecture" : "새 수업"}
-              maxLength={80}
-              disabled={status === "connecting"}
-            />
-          </label>
-          <small>{activeSessions.length}{isEnglish ? " saved lectures" : "개 수업 저장됨"}</small>
-        </section>
 
         <section className="panes">
           <section className="chat-pane" aria-labelledby="chat-title">
