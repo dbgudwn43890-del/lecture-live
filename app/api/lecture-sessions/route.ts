@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-import { getAuthenticatedUserId } from "../../lib/auth";
 import { chunkTranscript, type TranscriptPart } from "../../lib/chunk-transcript";
-import { createAdminClient } from "../../lib/supabase/admin";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -11,12 +9,11 @@ export const runtime = "nodejs";
 type SegmentBody = TranscriptPart & { id?: unknown };
 
 async function context(request: Request) {
-  const userId = await getAuthenticatedUserId();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const isEnglish = request.headers.get("x-site-locale") === "en";
-  if (!userId) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
-  const admin = createAdminClient();
-  if (!admin) return { response: NextResponse.json({ error: isEnglish ? "Lecture storage is not configured." : "수업 저장 기능이 설정되지 않았습니다." }, { status: 503 }) };
-  return { userId, admin, isEnglish };
+  if (!user) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
+  return { userId: user.id, supabase, isEnglish };
 }
 
 function validId(value: unknown): value is string {
@@ -36,12 +33,12 @@ export async function GET(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
   const sessionId = new URL(request.url).searchParams.get("sessionId");
-  if (!validId(sessionId)) return NextResponse.json({ error: "수업 ID를 확인해 주세요." }, { status: 400 });
+  if (!validId(sessionId)) return NextResponse.json({ error: current.isEnglish ? "Check the lecture ID." : "수업 ID를 확인해 주세요." }, { status: 400 });
 
   const [{ data: session, error: sessionError }, { data: segments, error: segmentError }, { data: questions, error: questionError }] = await Promise.all([
-    current.admin.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").eq("id", sessionId).eq("user_id", current.userId).maybeSingle(),
-    current.admin.from("transcript_segments").select("client_id,start_ms,end_ms,text").eq("session_id", sessionId).eq("user_id", current.userId).order("start_ms"),
-    current.admin.from("lecture_questions").select("id,question,answer,provider,model,external_sources,lecture_sources,created_at").eq("session_id", sessionId).eq("user_id", current.userId).order("created_at"),
+    current.supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").eq("id", sessionId).maybeSingle(),
+    current.supabase.from("transcript_segments").select("client_id,start_ms,end_ms,text").eq("session_id", sessionId).order("start_ms"),
+    current.supabase.from("lecture_questions").select("id,question,answer,provider,model,external_sources,lecture_sources,created_at").eq("session_id", sessionId).order("created_at"),
   ]);
 
   if (sessionError || segmentError || questionError || !session) {
@@ -60,30 +57,35 @@ export async function POST(request: Request) {
   try {
     body = await request.json() as typeof body;
   } catch {
-    return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
+    return NextResponse.json({ error: current.isEnglish ? "Invalid request." : "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
 
   if (body.action === "start") {
-    const classroomId = body.classroomId;
+    const classroomId = validId(body.classroomId) ? body.classroomId : null;
     const title = typeof body.title === "string" ? body.title.trim() : "";
-    if (!validId(classroomId) || !title || title.length > 80) return NextResponse.json({ error: current.isEnglish ? "Check the classroom and lecture title." : "강의실과 수업 제목을 확인해 주세요." }, { status: 400 });
-    const { data: classroom } = await current.admin.from("classrooms").select("id").eq("id", classroomId).eq("user_id", current.userId).maybeSingle();
-    if (!classroom) return NextResponse.json({ error: current.isEnglish ? "Classroom not found." : "강의실을 찾지 못했습니다." }, { status: 404 });
+    if (!title || title.length > 80) return NextResponse.json({ error: current.isEnglish ? "Check the lecture title." : "수업 제목을 확인해 주세요." }, { status: 400 });
+    if (body.classroomId !== null && body.classroomId !== undefined && body.classroomId !== "" && !classroomId) {
+      return NextResponse.json({ error: current.isEnglish ? "Check the classroom." : "강의실을 확인해 주세요." }, { status: 400 });
+    }
+    if (classroomId) {
+      const { data: classroom } = await current.supabase.from("classrooms").select("id").eq("id", classroomId).maybeSingle();
+      if (!classroom) return NextResponse.json({ error: current.isEnglish ? "Classroom not found." : "강의실을 찾지 못했습니다." }, { status: 404 });
+    }
 
-    const { data, error } = await current.admin.from("lecture_sessions").insert({ classroom_id: classroomId, user_id: current.userId, title }).select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").single();
+    const { data, error } = await current.supabase.from("lecture_sessions").insert({ classroom_id: classroomId, user_id: current.userId, title }).select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").single();
     if (error) {
       console.error("Lecture start save failed", error.code);
       return NextResponse.json({ error: current.isEnglish ? "Could not create the lecture record." : "수업 기록을 만들지 못했습니다." }, { status: 500 });
     }
-    await current.admin.from("classrooms").update({ updated_at: new Date().toISOString() }).eq("id", classroomId).eq("user_id", current.userId);
+    if (classroomId) await current.supabase.from("classrooms").update({ updated_at: new Date().toISOString() }).eq("id", classroomId);
     return NextResponse.json({ session: data }, { status: 201 });
   }
 
   if (body.action === "segment" && validId(body.sessionId) && validSegment(body.segment)) {
     const segment = body.segment;
-    const { data: session } = await current.admin.from("lecture_sessions").select("classroom_id").eq("id", body.sessionId).eq("user_id", current.userId).maybeSingle();
-    if (!session) return NextResponse.json({ error: "수업을 찾지 못했습니다." }, { status: 404 });
-    const { error } = await current.admin.from("transcript_segments").upsert({
+    const { data: session } = await current.supabase.from("lecture_sessions").select("classroom_id").eq("id", body.sessionId).maybeSingle();
+    if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
+    const { error } = await current.supabase.from("transcript_segments").upsert({
       session_id: body.sessionId,
       classroom_id: session.classroom_id,
       user_id: current.userId,
@@ -94,7 +96,7 @@ export async function POST(request: Request) {
     }, { onConflict: "session_id,client_id" });
     if (error) {
       console.error("Transcript segment save failed", error.code);
-      return NextResponse.json({ error: "스크립트를 저장하지 못했습니다." }, { status: 500 });
+      return NextResponse.json({ error: current.isEnglish ? "Could not save the transcript." : "스크립트를 저장하지 못했습니다." }, { status: 500 });
     }
     return NextResponse.json({ saved: true });
   }
@@ -106,21 +108,41 @@ export async function PATCH(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
 
-  let body: { sessionId?: unknown; durationMs?: unknown; segments?: unknown };
+  let body: { action?: unknown; sessionId?: unknown; classroomId?: unknown; durationMs?: unknown; segments?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
-    return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
+    return NextResponse.json({ error: current.isEnglish ? "Invalid request." : "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
+  if (body.action === "move" && validId(body.sessionId)) {
+    const classroomId = validId(body.classroomId) ? body.classroomId : null;
+    if (body.classroomId !== null && body.classroomId !== "" && body.classroomId !== undefined && !classroomId) {
+      return NextResponse.json({ error: current.isEnglish ? "Check the destination classroom." : "이동할 강의실을 확인해 주세요." }, { status: 400 });
+    }
+    if (classroomId) {
+      const { data: classroom } = await current.supabase.from("classrooms").select("id").eq("id", classroomId).maybeSingle();
+      if (!classroom) return NextResponse.json({ error: current.isEnglish ? "Classroom not found." : "강의실을 찾지 못했습니다." }, { status: 404 });
+    }
+    const { data: moved, error: moveError } = await current.supabase.rpc("move_lecture_session", {
+      p_session_id: body.sessionId,
+      p_classroom_id: classroomId,
+    });
+    if (moveError || !moved) {
+      if (moveError) console.error("Lecture move failed", moveError.code);
+      return NextResponse.json({ error: current.isEnglish ? "Could not move the lecture." : "수업을 이동하지 못했습니다." }, { status: 500 });
+    }
+    return NextResponse.json({ moved: true, classroomId });
+  }
+
   if (!validId(body.sessionId) || typeof body.durationMs !== "number" || !Array.isArray(body.segments)) {
     return NextResponse.json({ error: current.isEnglish ? "Invalid lecture completion data." : "수업 종료 정보를 확인해 주세요." }, { status: 400 });
   }
   const segments = body.segments.filter(validSegment).slice(0, 5_000);
-  const { data: session } = await current.admin.from("lecture_sessions").select("id,classroom_id").eq("id", body.sessionId).eq("user_id", current.userId).maybeSingle();
+  const { data: session } = await current.supabase.from("lecture_sessions").select("id,classroom_id").eq("id", body.sessionId).maybeSingle();
   if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
 
   if (segments.length) {
-    const { error } = await current.admin.from("transcript_segments").upsert(segments.map((segment) => ({
+    const { error } = await current.supabase.from("transcript_segments").upsert(segments.map((segment) => ({
       session_id: body.sessionId,
       classroom_id: session.classroom_id,
       user_id: current.userId,
@@ -134,14 +156,13 @@ export async function PATCH(request: Request) {
 
   const durationSeconds = Math.min(10_800, Math.max(0, Math.ceil(body.durationMs / 1_000)));
   if (durationSeconds > 0) {
-    const supabase = await createClient();
-    const { error: creditError } = await supabase.rpc("consume_lecture_credits", {
+    const { error: creditError } = await current.supabase.rpc("consume_lecture_credits", {
       p_session_id: body.sessionId,
       p_minute_index: Math.min(179, Math.max(0, Math.ceil(durationSeconds / 60) - 1)),
     });
     if (creditError) console.error("Final credit reconciliation failed", creditError.code);
   }
-  const { error: updateError } = await current.admin.from("lecture_sessions").update({ status: "completed", ended_at: new Date().toISOString(), duration_seconds: durationSeconds }).eq("id", body.sessionId).eq("user_id", current.userId);
+  const { error: updateError } = await current.supabase.from("lecture_sessions").update({ status: "completed", ended_at: new Date().toISOString(), duration_seconds: durationSeconds }).eq("id", body.sessionId);
   if (updateError) {
     console.error("Lecture completion failed", updateError.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 500 });
@@ -153,8 +174,8 @@ export async function PATCH(request: Request) {
     try {
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const embeddings = await openai.embeddings.create({ model: "text-embedding-3-small", input: chunks.map((chunk) => chunk.text) });
-      await current.admin.from("lecture_chunks").delete().eq("session_id", body.sessionId).eq("user_id", current.userId);
-      const { error } = await current.admin.from("lecture_chunks").insert(chunks.map((chunk, index) => ({
+      await current.supabase.from("lecture_chunks").delete().eq("session_id", body.sessionId);
+      const { error } = await current.supabase.from("lecture_chunks").insert(chunks.map((chunk, index) => ({
         session_id: body.sessionId,
         classroom_id: session.classroom_id,
         user_id: current.userId,

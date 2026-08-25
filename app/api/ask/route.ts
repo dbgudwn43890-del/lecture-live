@@ -545,8 +545,8 @@ export async function POST(request: Request) {
 
     const provider = personalLlm?.provider ?? "lecture-live";
     const model = personalLlm?.model ?? "gpt-5.6-luna";
-    if (earlier.admin && classroomId && lectureSessionId) {
-      const { error: saveError } = await earlier.admin.from("lecture_questions").insert({
+    if (lectureSessionId) {
+      const { error: saveError } = await supabase.from("lecture_questions").insert({
         session_id: lectureSessionId,
         classroom_id: classroomId,
         user_id: userId,

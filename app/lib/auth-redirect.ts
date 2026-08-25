@@ -5,7 +5,7 @@ export function getOAuthFallbackNext(path: string, country: string | null, hasCo
   return path === "/en" || prefersEnglish ? "/en/classroom" : "/classroom";
 }
 
-const AUTH_DESTINATIONS = new Set(["/classroom", "/billing", "/en/classroom", "/en/billing"]);
+const AUTH_DESTINATIONS = new Set(["/classroom", "/classrooms", "/billing", "/en/classroom", "/en/classrooms", "/en/billing"]);
 
 export function getSafeAuthNext(value: string | null, fallback = "/classroom") {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return fallback;

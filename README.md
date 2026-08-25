@@ -10,6 +10,7 @@
    - `supabase/migrations/20260822000000_user_llm_credentials.sql`
    - `supabase/migrations/20260822010000_classrooms.sql`
    - `supabase/migrations/20260823000000_billing_credits.sql`
+   - `supabase/migrations/20260825000000_optional_classrooms.sql`
 4. **Settings → API Keys**의 backend-only Secret Key를 `.env.local`의
    `SUPABASE_SECRET_KEY`에 입력합니다. 이 키에는 `NEXT_PUBLIC_`을 붙이지 않습니다.
 5. 다음 명령을 실행합니다.
@@ -62,7 +63,7 @@ URL 또는 채팅에 넣지 않습니다. 개인 AI 키 원문은 Vault에서 �
 - Supabase 이메일·비밀번호 회원가입, 최초 이메일 확인, 쿠키 기반 세션
 - Google 로그인과 한국어·영어 로그인 복귀 경로
 - OpenAI, Anthropic Claude, Google Gemini 개인 API 키의 일회성 사용 또는 Vault 암호화 저장
-- 과목별 강의실, 수업 스크립트·질문 저장과 지난 수업 다시 열기
+- 강의실별 수업 관리, 미분류 수업, 스크립트·질문 저장과 지난 수업 다시 열기
 - 같은 강의실의 관련 이전 수업만 검색해 답변에 보조 맥락으로 반영
 - 수업 1회 최대 3시간 자동 종료·저장
 - Paddle 간편결제, 7일 첫 수업 체험, 월간 구독과 한 학기권

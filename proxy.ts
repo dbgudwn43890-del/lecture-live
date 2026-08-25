@@ -19,7 +19,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
-  const localizablePaths = ["/", "/preview", "/login", "/classroom", "/billing", "/privacy", "/terms"];
+  const localizablePaths = ["/", "/preview", "/login", "/classroom", "/classrooms", "/billing", "/privacy", "/terms"];
   if (
     prefersEnglish &&
     path !== "/" &&
@@ -32,7 +32,8 @@ export async function proxy(request: NextRequest) {
   }
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-site-locale", usesEnglishHomepage || path === "/en" || path.startsWith("/en/") ? "en" : "ko");
+  const explicitlyEnglish = request.headers.get("x-site-locale") === "en";
+  requestHeaders.set("x-site-locale", explicitlyEnglish || usesEnglishHomepage || path === "/en" || path.startsWith("/en/") ? "en" : "ko");
   let response = NextResponse.next({ request: { headers: requestHeaders } });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

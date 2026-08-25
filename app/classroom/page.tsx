@@ -18,7 +18,7 @@ type Source = { title: string; url: string };
 type LectureSource = { sessionId: string; title: string; startMs: number; endMs: number };
 type SessionSummary = {
   id: string;
-  classroom_id: string;
+  classroom_id: string | null;
   title: string;
   status: "recording" | "completed";
   started_at: string;
@@ -95,9 +95,9 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const [savedCredentials, setSavedCredentials] = useState<SavedCredential[]>([]);
   const [credentialPending, setCredentialPending] = useState(false);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [unassignedSessions, setUnassignedSessions] = useState<SessionSummary[]>([]);
   const [activeClassroomId, setActiveClassroomId] = useState("");
   const [activeSessionId, setActiveSessionId] = useState("");
-  const [newClassroomName, setNewClassroomName] = useState("");
   const [classroomPending, setClassroomPending] = useState(false);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(null);
 
@@ -112,6 +112,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const finishingRef = useRef(false);
   const chargedMinuteRef = useRef(-1);
   const creditChargePendingRef = useRef(false);
+  const initialRouteRef = useRef(false);
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -202,37 +203,25 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
 
   async function loadClassrooms(preferredId?: string) {
     try {
-      const response = await fetch("/api/classrooms", { headers: { "X-Site-Locale": locale } });
-      if (!response.ok) return;
-      const data = await response.json() as { classrooms?: Classroom[] };
+      const response = await fetch("/api/classrooms", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
+      const data = await response.json() as { classrooms?: Classroom[]; unassignedSessions?: SessionSummary[]; error?: string };
+      if (!response.ok) throw new Error(data.error);
       const next = data.classrooms ?? [];
       setClassrooms(next);
-      setActiveClassroomId((current) => preferredId ?? (current || next[0]?.id || ""));
-    } catch {
-      // The live workspace still works without persistence while storage is being configured.
-    }
-  }
-
-  async function createClassroom(event: FormEvent) {
-    event.preventDefault();
-    const title = newClassroomName.trim();
-    if (!title) return;
-    setClassroomPending(true);
-    setError("");
-    try {
-      const response = await fetch("/api/classrooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ title, locale }),
-      });
-      const data = await response.json() as { classroom?: Classroom; error?: string };
-      if (!response.ok || !data.classroom) throw new Error(data.error);
-      setNewClassroomName("");
-      await loadClassrooms(data.classroom.id);
+      setUnassignedSessions(data.unassignedSessions ?? []);
+      if (preferredId !== undefined) setActiveClassroomId(preferredId);
+      if (!initialRouteRef.current) {
+        initialRouteRef.current = true;
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get("session");
+        const classroomId = params.get("classroom");
+        if (sessionId) void openSession(sessionId);
+        else if (classroomId && next.some((classroom) => classroom.id === classroomId)) setActiveClassroomId(classroomId);
+      }
     } catch (caught) {
-      setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not create the classroom." : "강의실을 만들지 못했습니다.");
-    } finally {
-      setClassroomPending(false);
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not load your classrooms." : "강의실을 불러오지 못했습니다.");
     }
   }
 
@@ -250,7 +239,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       };
       if (!response.ok || !data.session) throw new Error(data.error);
       const restoredSegments = data.segments ?? [];
-      setActiveClassroomId(data.session.classroom_id);
+      setActiveClassroomId(data.session.classroom_id ?? "");
       setActiveSessionId(data.session.id);
       setLectureTitle(data.session.title);
       setSegments(restoredSegments);
@@ -335,10 +324,6 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   }
 
   async function startLecture() {
-    if (!activeClassroomId) {
-      setError(isEnglish ? "Create or select a classroom first." : "먼저 강의실을 만들거나 선택해 주세요.");
-      return;
-    }
     setError("");
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
@@ -362,7 +347,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
         body: JSON.stringify({
           action: "start",
-          classroomId: activeClassroomId,
+          classroomId: activeClassroomId || null,
           title: lectureTitle.trim() || (isEnglish ? `Lecture ${new Date().toLocaleDateString("en-US")}` : `${new Date().toLocaleDateString("ko-KR")} 수업`),
         }),
       });
@@ -633,6 +618,9 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
       ? isEnglish ? "Default AI" : "기본 AI"
       : personalModelOptions[aiProvider].find((model) => model.id === aiModel)?.label ??
         personalModelOptions[aiProvider][0].label;
+  const activeClassroom = classrooms.find((classroom) => classroom.id === activeClassroomId);
+  const activeClassroomLabel = activeClassroom?.title ?? (isEnglish ? "Unassigned" : "미분류 수업");
+  const activeSessions = activeClassroomId ? (activeClassroom?.sessions ?? []) : unassignedSessions;
 
   return (
     <main className="workspace">
@@ -668,34 +656,47 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
             <b>{activeModelLabel}</b>
           </summary>
           <div className="ai-settings-panel">
-            <label>
-              <span>{isEnglish ? "Provider" : "공급자"}</span>
-              <select
-                value={aiProvider}
-                onChange={(event) => {
-                  const provider = event.target.value as AiProvider;
-                  setAiProvider(provider);
-                  setPersonalApiKey("");
-                  if (provider !== "lecture-live") setAiModel(personalModelOptions[provider][0].id);
-                }}
-              >
-                <option value="lecture-live">{isEnglish ? "Lecue default AI" : "Lecue 기본 AI"}</option>
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic Claude</option>
-                <option value="google">Google Gemini</option>
-              </select>
-            </label>
+            <fieldset className="settings-choice">
+              <legend>{isEnglish ? "Provider" : "공급자"}</legend>
+              <div className="settings-choice-list">
+                {([
+                  { id: "lecture-live", label: isEnglish ? "Lecue default AI" : "Lecue 기본 AI" },
+                  { id: "openai", label: "OpenAI" },
+                  { id: "anthropic", label: "Anthropic Claude" },
+                  { id: "google", label: "Google Gemini" },
+                ] as Array<{ id: AiProvider; label: string }>).map((option) => (
+                  <button
+                    type="button"
+                    key={option.id}
+                    className={aiProvider === option.id ? "active" : undefined}
+                    aria-pressed={aiProvider === option.id}
+                    onClick={() => {
+                      const provider = option.id;
+                      setAiProvider(provider);
+                      setPersonalApiKey("");
+                      if (provider !== "lecture-live") setAiModel(personalModelOptions[provider][0].id);
+                    }}
+                  >{option.label}</button>
+                ))}
+              </div>
+            </fieldset>
 
             {aiProvider !== "lecture-live" && (
               <>
-                <label>
-                  <span>{isEnglish ? "Model" : "모델"}</span>
-                  <select value={aiModel} onChange={(event) => setAiModel(event.target.value)}>
+                <fieldset className="settings-choice">
+                  <legend>{isEnglish ? "Model" : "모델"}</legend>
+                  <div className="settings-choice-list settings-model-list">
                     {personalModelOptions[aiProvider].map((model) => (
-                      <option key={model.id} value={model.id}>{model.label}</option>
+                      <button
+                        type="button"
+                        key={model.id}
+                        className={aiModel === model.id ? "active" : undefined}
+                        aria-pressed={aiModel === model.id}
+                        onClick={() => setAiModel(model.id)}
+                      >{model.label}</button>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </fieldset>
                 <label>
                   <span>{isEnglish ? "Your API key" : "개인 API 키"}</span>
                   <input
@@ -759,52 +760,84 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
 
       <div className="error-banner" role="alert">{error}</div>
 
-      <section className="classroom-bar" aria-label={isEnglish ? "Classrooms and saved lectures" : "강의실과 저장된 수업"}>
-        <div className="classroom-picker">
-          <label>
-            <span>{isEnglish ? "Classroom" : "강의실"}</span>
-            <select
-              value={activeClassroomId}
-              onChange={(event) => {
-                setActiveClassroomId(event.target.value);
-                prepareNewLecture();
-              }}
-              disabled={status === "recording" || status === "connecting"}
-            >
-              <option value="">{isEnglish ? "Select a classroom" : "강의실 선택"}</option>
-              {classrooms.map((classroom) => <option key={classroom.id} value={classroom.id}>{classroom.title}</option>)}
-            </select>
-          </label>
-          <form onSubmit={createClassroom}>
-            <input
-              value={newClassroomName}
-              onChange={(event) => setNewClassroomName(event.target.value)}
-              placeholder={isEnglish ? "New classroom name" : "새 강의실 이름"}
-              maxLength={80}
-            />
-            <button type="submit" disabled={classroomPending || !newClassroomName.trim()}>{isEnglish ? "Create" : "만들기"}</button>
-          </form>
-          <button type="button" className="new-lecture-button" onClick={prepareNewLecture} disabled={!activeClassroomId || status === "recording" || status === "connecting"}>
-            {isEnglish ? "New lecture" : "새 수업"}
-          </button>
+      <section className="classroom-bar" aria-label={isEnglish ? "Classroom and lecture" : "강의실과 수업"}>
+        <div className="lecture-hierarchy" aria-label={isEnglish ? "Current lecture location" : "현재 수업 위치"}>
+          <span>{isEnglish ? "Classroom" : "강의실"}</span>
+          <strong>{activeClassroomLabel}</strong>
+          <i aria-hidden="true">›</i>
+          <span>{isEnglish ? "Lecture" : "수업"}</span>
+          <strong>{lectureTitle.trim() || (isEnglish ? "New lecture" : "새 수업")}</strong>
         </div>
-        <div className="session-list">
-          {(classrooms.find((classroom) => classroom.id === activeClassroomId)?.sessions ?? []).length === 0 ? (
-            <span>{isEnglish ? "Saved lectures in this classroom will appear here." : "이 강의실에서 저장한 수업이 여기에 쌓입니다."}</span>
-          ) : (
-            classrooms.find((classroom) => classroom.id === activeClassroomId)?.sessions.map((session) => (
+
+        <div className="classroom-controls">
+          <details className="context-menu">
+            <summary>
+              <span>{isEnglish ? "Classroom" : "강의실"}</span>
+              <b>{activeClassroomLabel}</b>
+            </summary>
+            <div className="context-menu-panel">
+              <p>{isEnglish ? "Recording without a classroom is allowed." : "강의실을 고르지 않아도 녹음할 수 있습니다."}</p>
               <button
                 type="button"
-                key={session.id}
-                className={session.id === activeSessionId ? "active" : undefined}
-                onClick={() => void openSession(session.id)}
-                disabled={classroomPending || status === "recording" || status === "connecting"}
+                className={!activeClassroomId ? "active" : undefined}
+                disabled={status === "recording" || status === "connecting"}
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  setActiveClassroomId("");
+                  prepareNewLecture();
+                }}
               >
-                <b>{session.title}</b>
-                <span>{formatTime(session.duration_seconds * 1_000)} · {session.question_count}{isEnglish ? " Q" : "개 질문"}</span>
+                <span>{isEnglish ? "Unassigned" : "미분류 수업"}</span>
+                <small>{isEnglish ? "Organize it later" : "나중에 강의실로 이동"}</small>
               </button>
-            ))
-          )}
+              {classrooms.map((classroom) => (
+                <button
+                  type="button"
+                  key={classroom.id}
+                  className={classroom.id === activeClassroomId ? "active" : undefined}
+                  disabled={status === "recording" || status === "connecting"}
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    setActiveClassroomId(classroom.id);
+                    prepareNewLecture();
+                  }}
+                >
+                  <span>{classroom.title}</span>
+                  <small>{classroom.sessions.length}{isEnglish ? " lectures" : "개 수업"}</small>
+                </button>
+              ))}
+              <Link href={`${basePath}/classrooms`}>{isEnglish ? "Manage classrooms" : "강의실 관리"}</Link>
+            </div>
+          </details>
+
+          <details className="context-menu session-menu">
+            <summary>
+              <span>{isEnglish ? "Saved lectures" : "저장된 수업"}</span>
+              <b>{activeSessions.length}{isEnglish ? " lectures" : "개"}</b>
+            </summary>
+            <div className="context-menu-panel">
+              {activeSessions.length ? activeSessions.map((session) => (
+                <button
+                  type="button"
+                  key={session.id}
+                  className={session.id === activeSessionId ? "active" : undefined}
+                  disabled={classroomPending || status === "recording" || status === "connecting"}
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    void openSession(session.id);
+                  }}
+                >
+                  <span>{session.title}</span>
+                  <small>{formatTime(session.duration_seconds * 1_000)} · {session.question_count}{isEnglish ? " questions" : "개 질문"}</small>
+                </button>
+              )) : <p>{isEnglish ? "No saved lectures here yet." : "아직 저장된 수업이 없습니다."}</p>}
+            </div>
+          </details>
+
+          <button type="button" className="new-lecture-button" onClick={prepareNewLecture} disabled={status === "recording" || status === "connecting"}>
+            {isEnglish ? "New lecture" : "새 수업"}
+          </button>
+          <Link className="manage-classrooms-link" href={`${basePath}/classrooms`}>{isEnglish ? "Library" : "강의실 관리"}</Link>
         </div>
       </section>
 
@@ -876,7 +909,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
               disabled={!canAsk}
               rows={2}
             />
-            <button type="submit" disabled={!canAsk || !question.trim()} aria-label="질문 보내기">
+            <button type="submit" disabled={!canAsk || !question.trim()} aria-label={isEnglish ? "Send question" : "질문 보내기"}>
               {isEnglish ? "Send" : "보내기"}
             </button>
           </form>
