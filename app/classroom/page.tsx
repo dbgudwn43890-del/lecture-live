@@ -762,7 +762,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
 
       <section className="classroom-bar" aria-label={isEnglish ? "Classroom and lecture" : "강의실과 수업"}>
         <div className="lecture-hierarchy" aria-label={isEnglish ? "Current lecture location" : "현재 수업 위치"}>
-          <span>{isEnglish ? "Classroom" : "강의실"}</span>
+          <Link href={`${basePath}/classrooms`}>{isEnglish ? "Classroom" : "강의실"}</Link>
           <strong>{activeClassroomLabel}</strong>
           <i aria-hidden="true">›</i>
           <span>{isEnglish ? "Lecture" : "수업"}</span>

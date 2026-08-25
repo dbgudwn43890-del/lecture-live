@@ -312,13 +312,23 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   min-width: 0;
 }
 
-.lecture-hierarchy span {
+.lecture-hierarchy span,
+.lecture-hierarchy > a {
   color: var(--muted);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .06em;
   text-transform: uppercase;
 }
+
+.lecture-hierarchy > a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.lecture-hierarchy > a:hover,
+.lecture-hierarchy > a:focus-visible { color: var(--focus); }
 
 .lecture-hierarchy strong {
   min-width: 0;
@@ -1407,6 +1417,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 .lecture-hierarchy span,
+.lecture-hierarchy > a,
 .context-menu summary span,
 .settings-choice legend,
 .classroom-unit header span,
