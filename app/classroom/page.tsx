@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
+import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 
 type Status = "idle" | "connecting" | "recording" | "ended" | "error";
@@ -67,14 +68,6 @@ function formatTime(milliseconds: number) {
     : `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function renderAnswerText(text: string) {
-  return cleanAnswerText(text).split(/(\*\*[^*\n]+\*\*)/g).map((part, index) =>
-    part.startsWith("**") && part.endsWith("**")
-      ? <strong key={index}>{part.slice(2, -2)}</strong>
-      : part.replace(/\*\*/g, ""),
-  );
-}
-
 export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "en" }) {
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
@@ -100,6 +93,8 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
   const [activeSessionId, setActiveSessionId] = useState("");
   const [classroomPending, setClassroomPending] = useState(false);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(null);
+  const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
+  const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
 
   const socketRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -899,23 +894,23 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
                     <span className="message-label">{message.assistantLabel ?? (isEnglish ? "Lecture assistant · AI" : "강의 조교 · AI")}</span>
                   )}
                   <p className={message.pending ? "pending" : undefined}>
-                    {message.role === "assistant" ? renderAnswerText(message.text) : message.text}
+                    {message.role === "assistant" ? cleanAnswerText(message.text) : message.text}
                   </p>
                   {message.sources && message.sources.length > 0 && (
                     <div className="sources">
                       <span>{isEnglish ? "External search used" : "외부 검색 사용"}</span>
-                      {message.sources.slice(0, 5).map((source) => (
+                      {message.sources.slice(0, 3).map((source) => (
                         <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
-                          {source.title || new URL(source.url).hostname}
+                          {new URL(source.url).hostname.replace(/^www\./, "")}
                         </a>
                       ))}
-                      {message.sources.length > 5 && (
+                      {message.sources.length > 3 && (
                         <details className="source-more">
-                          <summary>{isEnglish ? `Show ${message.sources.length - 5} more sources` : `출처 ${message.sources.length - 5}개 더 보기`}</summary>
+                          <summary>{isEnglish ? `Show ${message.sources.length - 3} more sources` : `출처 ${message.sources.length - 3}개 더 보기`}</summary>
                           <div>
-                            {message.sources.slice(5).map((source) => (
+                            {message.sources.slice(3).map((source) => (
                               <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
-                                {source.title || new URL(source.url).hostname}
+                                {new URL(source.url).hostname.replace(/^www\./, "")}
                               </a>
                             ))}
                           </div>
@@ -968,7 +963,7 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
             <div>
               <h2 id="transcript-title">{isEnglish ? "Live transcript" : "실시간 스크립트"}</h2>
             </div>
-            <span className="count">{segments.length}{isEnglish ? " paragraphs" : "개 문단"}</span>
+            <span className="count">{sentenceCount}{isEnglish ? " sentences" : "개 문장"}</span>
           </div>
 
           <div className="transcript" aria-live="polite" ref={transcriptScrollRef}>
@@ -983,8 +978,8 @@ export default function LectureWorkspace({ locale = "ko" }: { locale?: "ko" | "e
               </div>
             ) : (
               <div className="transcript-copy">
-                {segments.map((segment) => (
-                  <p key={segment.id}>{segment.text}</p>
+                {transcriptParagraphs.map((paragraph) => (
+                  <p key={`${paragraph.startMs}-${paragraph.endMs}`}>{paragraph.text}</p>
                 ))}
                 {interim && <p className="interim-line">{interim}</p>}
               </div>

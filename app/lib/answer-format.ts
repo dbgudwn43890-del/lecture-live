@@ -8,13 +8,14 @@ export function cleanAnswerText(text: string) {
     .replace(/\s*\(\s*https?:\/\/[^)\n]+\)/gi, "")
     .replace(/\s*https?:\/\/[^\s<]+/gi, "")
     .replace(/\(\s*\)/g, "")
+    .replace(/\*\*/g, "")
     .replace(/[ \t]+([,.!?;:])/g, "$1")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-export function cleanSources(sources: AnswerSource[], limit = 12) {
+export function cleanSources(sources: AnswerSource[], limit = 5) {
   const unique = new Map<string, AnswerSource>();
 
   for (const source of sources) {
