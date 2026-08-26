@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getClassroomData } from "../../lib/classroom-data";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -18,40 +19,13 @@ export async function GET(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
 
-  const [{ data: classrooms, error: classroomError }, { data: sessions, error: sessionError }, { data: questions, error: questionError }] = await Promise.all([
-    current.supabase.from("classrooms").select("id,title,locale,created_at,updated_at").order("updated_at", { ascending: false }),
-    current.supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").order("started_at", { ascending: false }),
-    current.supabase.from("lecture_questions").select("session_id"),
-  ]);
-
-  if (classroomError || sessionError || questionError) {
-    console.error("Classroom read failed", classroomError?.code ?? sessionError?.code ?? questionError?.code);
+  const data = await getClassroomData(current.supabase, current.user);
+  if ("error" in data) {
+    console.error("Classroom read failed", data.error);
     return NextResponse.json({ error: current.isEnglish ? "Could not load classrooms." : "강의실을 불러오지 못했습니다." }, { status: 500 });
   }
 
-  const questionCounts = new Map<string, number>();
-  for (const question of questions ?? []) {
-    questionCounts.set(question.session_id, (questionCounts.get(question.session_id) ?? 0) + 1);
-  }
-
-  const withQuestionCounts = (sessions ?? []).map((session) => ({
-    ...session,
-    question_count: questionCounts.get(session.id) ?? 0,
-  }));
-
-  return NextResponse.json({
-    profile: {
-      displayName: typeof current.user.user_metadata.full_name === "string"
-        ? current.user.user_metadata.full_name
-        : current.user.email?.split("@")[0] ?? "Lecue",
-      email: current.user.email ?? "",
-    },
-    classrooms: (classrooms ?? []).map((classroom) => ({
-      ...classroom,
-      sessions: withQuestionCounts.filter((session) => session.classroom_id === classroom.id),
-    })),
-    unassignedSessions: withQuestionCounts.filter((session) => session.classroom_id === null),
-  });
+  return NextResponse.json(data);
 }
 
 export async function POST(request: Request) {

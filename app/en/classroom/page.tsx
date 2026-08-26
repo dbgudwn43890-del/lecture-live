@@ -1,5 +1,27 @@
-import LectureWorkspace from "../../classroom/page";
+import LectureWorkspace from "../../classroom/workspace-client";
+import { getClassroomData } from "../../lib/classroom-data";
+import { getCreditStatus } from "../../lib/credit-status";
+import { createClient } from "../../lib/supabase/server";
 
-export default function EnglishClassroomPage() {
-  return <LectureWorkspace locale="en" />;
+export default async function EnglishClassroomPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return <LectureWorkspace locale="en" />;
+
+  const [data, creditStatus] = await Promise.all([
+    getClassroomData(supabase, user),
+    getCreditStatus(supabase),
+  ]);
+
+  return (
+    <LectureWorkspace
+      locale="en"
+      initial={{
+        profile: "error" in data ? null : data.profile,
+        classrooms: "error" in data ? [] : data.classrooms,
+        unassignedSessions: "error" in data ? [] : data.unassignedSessions,
+        creditStatus: "error" in creditStatus ? null : creditStatus,
+      }}
+    />
+  );
 }

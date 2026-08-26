@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isUuid } from "../../lib/billing";
+import { getCreditStatus } from "../../lib/credit-status";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -21,31 +22,12 @@ async function current(request: Request) {
 export async function GET(request: Request) {
   const context = await current(request);
   if ("response" in context) return context.response;
-  const [{ data, error }, { data: grants, error: grantError }] = await Promise.all([
-    context.supabase.rpc("get_credit_status"),
-    context.supabase
-      .from("credit_grants")
-      .select("plan_code")
-      .gt("remaining_credits", 0)
-      .lte("starts_at", new Date().toISOString())
-      .gt("expires_at", new Date().toISOString())
-      .is("revoked_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1),
-  ]);
-  if (error) {
-    console.error("Credit status failed", error.code);
+  const status = await getCreditStatus(context.supabase);
+  if ("error" in status) {
+    console.error("Credit status failed", status.error);
     return NextResponse.json({ error: message(request, "크레딧 기능이 아직 설정되지 않았습니다.", "Credits are not configured yet.") }, { status: 503 });
   }
-  const row = Array.isArray(data) ? data[0] : data;
-  return NextResponse.json({
-    credits: Number(row?.credits ?? 0),
-    nextExpiry: row?.next_expiry ?? null,
-    latestGrantAt: row?.latest_grant_at ?? null,
-    subscriptionStatus: row?.subscription_status ?? null,
-    trialUsed: Boolean(row?.trial_used),
-    planCode: grantError ? null : grants?.[0]?.plan_code ?? null,
-  }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(status, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
