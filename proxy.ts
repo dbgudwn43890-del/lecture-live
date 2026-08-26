@@ -19,7 +19,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
-  const localizablePaths = ["/", "/preview", "/login", "/classroom", "/classrooms", "/billing", "/privacy", "/terms"];
+  const localizablePaths = ["/", "/login", "/classroom", "/classrooms", "/billing", "/privacy", "/terms"];
   if (
     prefersEnglish &&
     path !== "/" &&
@@ -55,8 +55,8 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const isPublic = path === "/" || path === "/en" || [
-    "/preview", "/login", "/auth", "/api", "/privacy", "/terms", "/stt-lab",
-    "/en/preview", "/en/login", "/en/privacy", "/en/terms",
+    "/login", "/auth", "/api", "/privacy", "/terms",
+    "/en/login", "/en/privacy", "/en/terms",
   ].some((prefix) => path.startsWith(prefix));
 
   if (!data?.claims && !isPublic) {

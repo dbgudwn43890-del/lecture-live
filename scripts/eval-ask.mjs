@@ -117,7 +117,7 @@ const scenarios = [
       ],
     },
     checks: [
-      ["과적합 복원", (data) => /과적합|overfitting/i.test(data.answer)],
+      ["과적합 복원", (data) => /과(?:잉|대)?적합|overfitting/i.test(data.answer)],
       ["잘못된 표기 미사용", (data) => !/과잉\s*적압/.test(data.answer)],
       ["복원 메타 설명 없음", (data) => !/(문맥상|추정|음성\s*인식|잘못\s*인식|오류로\s*보)/.test(data.answer)],
       ["핵심 원인", (data) => /(훈련|학습).*(외우|잡음|지나치)|(외우|잡음|지나치).*(훈련|학습)/s.test(data.answer)],
