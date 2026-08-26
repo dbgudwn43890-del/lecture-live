@@ -17,7 +17,7 @@ type Result = {
   verdict?: "good" | "bad";
 };
 
-const WINDOW_SECONDS = 10;
+const WINDOW_SECONDS = 6;
 const UPDATE_SECONDS = 5;
 
 function formatSeconds(value: number) {
@@ -211,7 +211,7 @@ export default function KoreanSttLab() {
           <p>WHISPER LARGE V3 TURBO · 5초 갱신 실험</p>
           <h1>한국어 강의,<br />직접 검증하기.</h1>
         </div>
-        <p>10초 음성을 겹쳐 보내 5초마다 새 결과를 받습니다. 이 화면은 기존 Deepgram 강의실과 분리된 비용·품질 검증용이며, 음성 원본을 Lecue에 저장하지 않습니다.</p>
+        <p>6초 음성을 5초마다 보내 새 결과를 받습니다(겹침 1초). 이 화면은 기존 Deepgram 강의실과 분리된 비용·품질 검증용이며, 음성 원본을 Lecue에 저장하지 않습니다.</p>
       </section>
 
       <section className={styles.setup} aria-live="polite">
