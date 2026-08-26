@@ -98,6 +98,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [lectureTitle, setLectureTitle] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
@@ -233,6 +234,45 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       }
     })();
   }, [locale]);
+
+  /**
+   * Microphone failures arrive as DOMExceptions whose message is written by
+   * the browser, in the browser's language, and says nothing about how to
+   * recover. Translate the two that actually happen.
+   */
+  function microphoneMessage(caught: unknown) {
+    const name = caught instanceof DOMException ? caught.name : "";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return isEnglish
+        ? "Microphone access is blocked. Allow it for this site in your browser's address bar, then start again."
+        : "마이크 사용이 차단돼 있습니다. 브라우저 주소창에서 이 사이트의 마이크를 허용한 뒤 다시 시작해 주세요.";
+    }
+    if (name === "NotFoundError" || name === "NotReadableError") {
+      return isEnglish
+        ? "No microphone is available. Connect one, close apps that may be using it, and start again."
+        : "사용할 수 있는 마이크가 없습니다. 마이크를 연결하고 마이크를 쓰는 다른 앱을 닫은 뒤 다시 시작해 주세요.";
+    }
+    return caught instanceof Error && caught.message
+      ? caught.message
+      : isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.";
+  }
+
+  /** Persists an edited title to the lecture that is open, if any. */
+  async function renameActiveLecture() {
+    const title = lectureTitle.trim();
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId || !title) return;
+    try {
+      const response = await fetch("/api/lecture-sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ action: "rename", sessionId, title }),
+      });
+      if (response.ok) await loadClassrooms();
+    } catch {
+      // The title stays in the field; the next blur retries.
+    }
+  }
 
   async function loadCredits() {
     try {
@@ -596,10 +636,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
         });
       }
-      const message = caught instanceof Error
-        ? caught.message
-        : isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.";
-      setError(message);
+      setError(microphoneMessage(caught));
       setStatus("error");
     }
   }
@@ -759,10 +796,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
         });
       }
-      const message = caught instanceof Error
-        ? caught.message
-        : isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.";
-      setError(message);
+      setError(microphoneMessage(caught));
       setStatus("error");
     }
   }
@@ -793,7 +827,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         await loadClassrooms(activeClassroomId);
         await loadCredits();
         if (Date.now() - startedAtRef.current >= MAX_LECTURE_MS) {
-          setError(isEnglish ? "This lecture reached the 3-hour session limit and was saved." : "수업 1회 최대 3시간에 도달해 자동으로 저장·종료했습니다.");
+          // Hitting the cap saved the lecture, so this is a notice, not the
+          // red alert banner it used to be rendered in.
+          setNotice(isEnglish ? "This lecture reached the 3-hour session limit and was saved." : "수업 1회 최대 3시간에 도달해 자동으로 저장·종료했습니다.");
         }
       } catch (caught) {
         setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "The lecture ended, but saving did not finish." : "강의는 종료됐지만 저장을 마치지 못했습니다.");
@@ -1130,6 +1166,21 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
       <div className="workspace-main">
         <header className="topbar">
+          {/* Without this every lecture took the auto-generated date name, so
+              two lectures in one day were indistinguishable in the sidebar and
+              the rename endpoint had no way to be reached. */}
+          <label className="lecture-title-field">
+            <span className="sr-only">{isEnglish ? "Lecture title" : "수업 제목"}</span>
+            <input
+              type="text"
+              value={lectureTitle}
+              onChange={(event) => setLectureTitle(event.target.value)}
+              onBlur={() => void renameActiveLecture()}
+              placeholder={isEnglish ? "Untitled lecture" : "제목 없는 수업"}
+              maxLength={80}
+            />
+          </label>
+
           <div className="session-state" aria-live="polite">
             <span className={`state-dot state-${status}`} />
             <span>{statusCopy[status]}</span>
@@ -1148,6 +1199,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         </header>
 
         <div className="error-banner" role="alert">{error}</div>
+        <div className="notice-banner" role="status">{notice}</div>
 
         <section className="panes">
           <section className="chat-pane" aria-labelledby="chat-title">

@@ -63,7 +63,7 @@ a, button, summary, input, textarea, select {
 
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 22px;
   padding: 0 20px;
@@ -71,6 +71,22 @@ a, button, summary, input, textarea, select {
   color: white;
   border-bottom: 1px solid #000;
 }
+
+/* The title field lives in the dark topbar, so it cannot inherit the
+   light-surface styling written for the old toolbar. */
+.topbar .lecture-title-field { max-width: none; }
+.topbar .lecture-title-field input {
+  padding: 7px 10px;
+  color: white;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 750;
+}
+.topbar .lecture-title-field input::placeholder { color: #8b9497; }
+.topbar .lecture-title-field input:hover { border-color: #596064; }
+.topbar .lecture-title-field input:focus { border-color: #aeb7b9; }
 
 .brand {
   font-size: 15px;
@@ -297,6 +313,21 @@ a, button, summary, input, textarea, select {
 }
 
 .error-banner:empty {
+  padding: 0;
+  border: 0;
+}
+
+/* Neutral counterpart to .error-banner, for outcomes that succeeded — hitting
+   the 3-hour cap saves the lecture, and used to be announced in red. */
+.notice-banner {
+  padding: 10px 22px;
+  color: #14424f;
+  background: var(--soft-blue);
+  border-bottom: 1px solid #b7ccd2;
+  font-size: 13px;
+}
+
+.notice-banner:empty {
   padding: 0;
   border: 0;
 }
