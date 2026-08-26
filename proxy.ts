@@ -35,6 +35,13 @@ export async function proxy(request: NextRequest) {
   const explicitlyEnglish = request.headers.get("x-site-locale") === "en";
   requestHeaders.set("x-site-locale", explicitlyEnglish || usesEnglishHomepage || path === "/en" || path.startsWith("/en/") ? "en" : "ko");
   let response = NextResponse.next({ request: { headers: requestHeaders } });
+
+  // /auth routes (signout, OAuth callback) manage their own Supabase session
+  // lifecycle. Refreshing the session here races their cookie writes — e.g.
+  // signOut() clears cookies while this client's getClaims() call can
+  // reissue a still-valid session cookie for the same response.
+  if (path.startsWith("/auth")) return response;
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
@@ -55,7 +62,7 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const isPublic = path === "/" || path === "/en" || [
-    "/login", "/auth", "/api", "/privacy", "/terms",
+    "/login", "/api", "/privacy", "/terms",
     "/en/login", "/en/privacy", "/en/terms",
   ].some((prefix) => path.startsWith(prefix));
 
