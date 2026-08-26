@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
-import { checkRateLimit } from "../../lib/rate-limit";
+import { canUseSttLab } from "../../lib/lab-access";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { isWhisperConfigured, transcribeWithWhisper } from "../../lib/whisper";
 
 export const runtime = "nodejs";
@@ -18,8 +19,8 @@ function isWav(bytes: Uint8Array) {
 
 export async function GET() {
   const userId = await getAuthenticatedUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  if (!canUseSttLab(userId)) {
+    return NextResponse.json({ error: "찾을 수 없는 페이지입니다." }, { status: 404 });
   }
 
   return NextResponse.json(
@@ -30,8 +31,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const userId = await getAuthenticatedUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  if (!canUseSttLab(userId)) {
+    return NextResponse.json({ error: "찾을 수 없는 페이지입니다." }, { status: 404 });
   }
 
   if (!isWhisperConfigured()) {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit(`transcribe-lab:${userId}`, 18, 60_000);
+  const rateLimit = await checkSharedRateLimit(`transcribe-lab:${userId}`, 18, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "음성 인식 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },

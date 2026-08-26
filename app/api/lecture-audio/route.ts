@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
-import { checkRateLimit } from "../../lib/rate-limit";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
 import { transcribeWithWhisper } from "../../lib/whisper";
 
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const isEnglish = request.headers.get("x-site-locale") === "en";
   if (!userId) return NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 });
 
-  const rateLimit = checkRateLimit(`lecture-audio:${userId}`, 30, 60_000);
+  const rateLimit = await checkSharedRateLimit(`lecture-audio:${userId}`, 30, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: isEnglish ? "Too many transcription requests. Try again shortly." : "음성 인식 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
@@ -54,16 +54,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "WAV audio is required." : "WAV 형식의 음성이 필요합니다." }, { status: 400 });
   }
 
+  // Charge before transcribing, from the session's own elapsed time rather
+  // than anything the client sent. Consumption is idempotent per minute, so
+  // the repeated chunk uploads inside one minute only ever bill it once.
   const supabase = await createClient();
-  const { data: statusData, error: statusError } = await supabase.rpc("get_credit_status");
-  const creditStatus = Array.isArray(statusData) ? statusData[0] : statusData;
-  if (statusError) {
-    console.error("Credit preflight failed", statusError.code);
-    return NextResponse.json({ error: isEnglish ? "Credits are not configured yet." : "크레딧 기능이 아직 설정되지 않았습니다." }, { status: 503 });
+  const { data: creditData, error: creditError } = await supabase.rpc("consume_lecture_credits_elapsed", {
+    p_session_id: sessionId,
+  });
+  if (creditError) {
+    console.error("Credit consumption failed", creditError.code);
+    return NextResponse.json({ error: isEnglish ? "Could not use credits for this lecture." : "이 수업의 크레딧을 차감하지 못했습니다." }, { status: 409 });
   }
-  if (Number(creditStatus?.credits ?? 0) < 1) {
+  const credit = Array.isArray(creditData) ? creditData[0] : creditData;
+  if (!credit?.allowed) {
     return NextResponse.json({
       error: isEnglish ? "You are out of credits. Choose a plan to continue." : "남은 크레딧이 없습니다. 요금제를 선택해 주세요.",
+      credits: Number(credit?.remaining_credits ?? 0),
     }, { status: 402 });
   }
 

@@ -54,9 +54,12 @@ export async function POST(request: Request) {
     }, { status: 402 });
   }
 
+  // Ask for the narrowest grant Deepgram offers: the browser only ever opens a
+  // listen socket, so an unscoped project token would hand it far more.
   const response = await fetch("https://api.deepgram.com/v1/auth/grant", {
     method: "POST",
-    headers: { Authorization: `Token ${apiKey}` },
+    headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
     cache: "no-store",
   });
 

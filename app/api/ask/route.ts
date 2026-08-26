@@ -10,7 +10,7 @@ import {
   isPersonalProvider,
   type PersonalProvider,
 } from "../../lib/llm-models";
-import { checkRateLimit } from "../../lib/rate-limit";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createAdminClient } from "../../lib/supabase/admin";
 import { createClient } from "../../lib/supabase/server";
 
@@ -418,7 +418,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const rateLimit = checkRateLimit(`ask:${userId}`, 20, 60_000);
+  const rateLimit = await checkSharedRateLimit(`ask:${userId}`, 20, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "질문 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
@@ -486,6 +486,22 @@ export async function POST(request: Request) {
       { error: "OPENAI_API_KEY가 설정되지 않았습니다." },
       { status: 503 },
     );
+  }
+
+  // Credits meter recorded minutes, not questions, so holding a single credit
+  // otherwise buys unlimited answers on the platform key. Cap the daily volume
+  // on that key only; questions on the learner's own key cost us nothing.
+  // ponytail: 하루 상한 고정값. 실제 사용 분포를 보고 요금제별로 나눈다.
+  if (!personalLlm) {
+    const dailyLimit = await checkSharedRateLimit(`ask-platform-daily:${userId}`, 300, 86_400_000);
+    if (!dailyLimit.allowed) {
+      return NextResponse.json(
+        { error: isEnglish
+          ? "You have reached today's question limit for the built-in AI. Add your own API key to keep going."
+          : "오늘 기본 AI로 질문할 수 있는 횟수를 모두 사용했습니다. 개인 API 키를 등록하면 계속 질문할 수 있습니다." },
+        { status: 429, headers: { "Retry-After": String(dailyLimit.retryAfterSeconds) } },
+      );
+    }
   }
 
   const question = body.question?.trim() ?? "";

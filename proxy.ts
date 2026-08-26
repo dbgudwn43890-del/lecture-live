@@ -3,6 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getOAuthFallbackNext } from "./app/lib/auth-redirect";
 
+// Matches a path against a route prefix on segment boundaries, so a future
+// /authors or /loginhelp cannot inherit /auth's or /login's public status.
+function isUnder(path: string, prefix: string) {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const country = request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
@@ -40,7 +46,7 @@ export async function proxy(request: NextRequest) {
   // lifecycle. Refreshing the session here races their cookie writes — e.g.
   // signOut() clears cookies while this client's getClaims() call can
   // reissue a still-valid session cookie for the same response.
-  if (path.startsWith("/auth")) return response;
+  if (isUnder(path, "/auth")) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,7 +70,7 @@ export async function proxy(request: NextRequest) {
   const isPublic = path === "/" || path === "/en" || [
     "/login", "/api", "/privacy", "/terms",
     "/en/login", "/en/privacy", "/en/terms",
-  ].some((prefix) => path.startsWith(prefix));
+  ].some((prefix) => isUnder(path, prefix));
 
   if (!data?.claims && !isPublic) {
     const loginUrl = request.nextUrl.clone();

@@ -58,4 +58,41 @@ export function checkRateLimit(
   };
 }
 
-// ponytail: 프로세스 단위 제한이다. 다중 인스턴스 출시 전 공유 저장소 기반으로 교체한다.
+/**
+ * Shared-store rate limit for the routes that spend real money on a provider
+ * key. The in-process limiter above only bounds a single serverless instance,
+ * so a caller fanning out across instances multiplies every limit by the
+ * instance count. This one counts in Postgres, where all instances agree.
+ *
+ * Falls back to the in-process limiter when the admin client is unavailable,
+ * so a missing service key degrades the limit rather than removing it.
+ */
+export async function checkSharedRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<RateLimitResult> {
+  // Imported lazily so the in-process limiter above stays dependency-free for
+  // the node --test runner, which cannot resolve extensionless module paths.
+  const { createAdminClient } = await import("./supabase/admin");
+  const admin = createAdminClient();
+  if (!admin) return checkRateLimit(key, limit, windowMs);
+
+  const { data, error } = await admin.rpc("consume_rate_limit", {
+    p_key: key,
+    p_limit: limit,
+    p_window_seconds: Math.max(1, Math.round(windowMs / 1_000)),
+  });
+  if (error) {
+    console.error("Shared rate limit failed", error.code);
+    return checkRateLimit(key, limit, windowMs);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  const allowed = Boolean(row?.allowed);
+  return {
+    allowed,
+    remaining: 0,
+    retryAfterSeconds: allowed ? 0 : Math.max(1, Number(row?.retry_after_seconds ?? 60)),
+  };
+}
