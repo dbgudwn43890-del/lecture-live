@@ -28,6 +28,8 @@ export default function ProfileMenu({
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const isEnglish = locale === "en";
 
   useEffect(() => {
@@ -36,8 +38,13 @@ export default function ProfileMenu({
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      // Escape must not strand focus on a panel that no longer exists.
+      triggerRef.current?.focus();
     }
+    // Keyboard users landed nowhere when the panel opened; move them into it.
+    panelRef.current?.querySelector<HTMLElement>("a, button")?.focus();
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -50,8 +57,9 @@ export default function ProfileMenu({
     <div className={styles.profileMenu} ref={containerRef}>
       <button
         type="button"
+        ref={triggerRef}
         className={styles.headerAvatar}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={isEnglish ? "Account menu" : "계정 메뉴"}
         onClick={() => setOpen((current) => !current)}
@@ -60,7 +68,7 @@ export default function ProfileMenu({
       </button>
 
       {open && (
-        <div className={styles.profilePanel} role="menu">
+        <div className={styles.profilePanel} ref={panelRef}>
           <div className={styles.profilePanelHeader}>
             <span className={styles.headerAvatar}><AvatarMark avatarUrl={profile?.avatarUrl ?? null} /></span>
             <span>

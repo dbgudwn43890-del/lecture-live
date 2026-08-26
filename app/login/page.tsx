@@ -54,6 +54,17 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
     }
   }, [isEnglish]);
 
+  useEffect(() => {
+    // Cancelling at Google and pressing Back restores this page from bfcache
+    // with pendingAction still set, which leaves every control disabled under
+    // "opening Google sign-in…" until a manual reload.
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) setPendingAction(null);
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   function changeMode(nextMode: Mode) {
     setMode(nextMode);
     setPassword("");

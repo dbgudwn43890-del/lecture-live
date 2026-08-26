@@ -1,14 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function getCreditStatus(supabase: SupabaseClient) {
+  // One instant for both bounds; two calls could straddle a millisecond.
+  const now = new Date().toISOString();
   const [{ data, error }, { data: grants, error: grantError }] = await Promise.all([
     supabase.rpc("get_credit_status"),
     supabase
       .from("credit_grants")
       .select("plan_code")
       .gt("remaining_credits", 0)
-      .lte("starts_at", new Date().toISOString())
-      .gt("expires_at", new Date().toISOString())
+      .lte("starts_at", now)
+      .gt("expires_at", now)
       .is("revoked_at", null)
       .order("created_at", { ascending: false })
       .limit(1),

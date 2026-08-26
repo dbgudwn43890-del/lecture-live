@@ -162,7 +162,7 @@ const content = {
 } as const;
 
 type Profile = { displayName: string; email: string; avatarUrl: string | null };
-type LandingCreditStatus = { credits: number; planCode: string | null };
+type LandingCreditStatus = { credits: number; planCode: string | null; trialUsed?: boolean };
 
 export default function LandingPage({
   locale, isAuthenticated = false, profile, creditStatus,
@@ -244,15 +244,22 @@ export default function LandingPage({
         <PricingCheckoutProvider locale={locale} basePath={base}>
           <div className={`${styles.planGrid} ${styles.reveal}`}>
             {copy.plans.map((plan) => {
-              const ctaLabel = plan.price === "무료" || plan.price === "Free" ? copy.heroCta : copy.open;
+              const isTrialCard = plan.price === "무료" || plan.price === "Free";
+              // A learner who has already used their trial was still shown a
+              // free-trial card, and clicking it opened a paid monthly
+              // checkout — the server picks the non-trial price once
+              // trial_used_at is set. Show them the monthly card instead.
+              const trialSpent = isTrialCard && creditStatus?.trialUsed === true;
+              const monthly = copy.plans[1];
+              const ctaLabel = isTrialCard && !trialSpent ? copy.heroCta : copy.open;
               return (
                 <article className={"featured" in plan ? styles.featuredPlan : undefined} key={plan.name}>
-                  <div><span>{plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
-                  <h3>{plan.time}</h3>
+                  <div><span>{trialSpent ? monthly.name : plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
+                  <h3>{trialSpent ? monthly.time : plan.time}</h3>
                   {/* deslop-ignore-next-line 09 -- 프로모션가와 종료 후 예정가를 명시적으로 비교 */}
                   {"comparePrice" in plan && <div className={styles.comparePrice}><span>{plan.compareLabel}</span><del>{plan.comparePrice}</del></div>}
-                  <div className={styles.planPrice}><strong>{plan.price}</strong>{"priceNote" in plan && <span>{plan.priceNote}</span>}</div>
-                  <p>{plan.unit}</p><small>{plan.detail}</small>
+                  <div className={styles.planPrice}><strong>{trialSpent ? monthly.price : plan.price}</strong>{trialSpent ? <span>{monthly.priceNote}</span> : "priceNote" in plan && <span>{plan.priceNote}</span>}</div>
+                  <p>{trialSpent ? monthly.unit : plan.unit}</p><small>{trialSpent ? monthly.detail : plan.detail}</small>
                   {isAuthenticated ? (
                     <PricingCheckoutButton plan={plan.billingPlan as BillingPlan} pendingLabel={copy.checkoutOpening} label={<>{ctaLabel}<span>→</span></>} />
                   ) : (

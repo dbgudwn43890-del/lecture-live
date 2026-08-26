@@ -326,6 +326,13 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         const classroomId = params.get("classroom");
         if (sessionId) void openSession(sessionId);
         else if (classroomId && next.some((classroom) => classroom.id === classroomId)) setActiveClassroomId(classroomId);
+        // Checkout sends the buyer here with ?payment=success and nothing used
+        // to read it, so a completed purchase was confirmed by nothing at all.
+        if (params.get("payment") === "success") {
+          setNotice(isEnglish
+            ? "Payment complete. Your credits have been added."
+            : "결제가 완료됐습니다. 크레딧이 추가되었습니다.");
+        }
       }
     } catch (caught) {
       setError(caught instanceof Error && caught.message
@@ -1210,7 +1217,12 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
             <span className="count">{messages.filter((message) => message.role === "user").length}{isEnglish ? " questions" : "개 질문"}</span>
           </div>
 
-          <div className="messages" aria-live="polite">
+          {/* Likewise: announce the newest answer, not the whole thread. */}
+          <p className="sr-only" aria-live="polite">
+            {messages.at(-1)?.role === "assistant" && !messages.at(-1)?.pending ? messages.at(-1)!.text : ""}
+          </p>
+
+          <div className="messages">
             {messages.length === 0 ? (
               <div className="empty-chat">
                 <p>{isEnglish ? "Ask as soon as the lecture starts." : "강의가 시작되면 바로 물어보세요."}</p>
@@ -1297,7 +1309,14 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
             <span className="count">{sentenceCount}{isEnglish ? " sentences" : "개 문장"}</span>
           </div>
 
-          <div className="transcript" aria-live="polite" ref={transcriptScrollRef}>
+          {/* The live region is the newest line only. On the scrollback
+              container a screen reader re-read the entire lecture every time a
+              segment arrived, roughly every five seconds. */}
+          <p className="sr-only" aria-live="polite">
+            {interim || transcriptParagraphs.at(-1)?.text || ""}
+          </p>
+
+          <div className="transcript" ref={transcriptScrollRef}>
             {segments.length === 0 && !interim ? (
               <div className="empty-transcript">
                 <p>{status === "connecting"
