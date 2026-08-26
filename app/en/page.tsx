@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import LandingPage from "../landing-page";
+import { getLandingProfile } from "../lib/landing-profile";
 import { createClient } from "../lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -10,6 +11,6 @@ export const metadata: Metadata = {
 
 export default async function EnglishLandingPage() {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  return <LandingPage locale="en" isAuthenticated={Boolean(data?.claims)} />;
+  const { data: { user } } = await supabase.auth.getUser();
+  return <LandingPage locale="en" isAuthenticated={Boolean(user)} profile={getLandingProfile(user)} />;
 }

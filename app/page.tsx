@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import LandingPage from "./landing-page";
+import { getLandingProfile } from "./lib/landing-profile";
 import { createClient } from "./lib/supabase/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -20,6 +21,6 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function HomePage() {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  return <LandingPage locale={locale} isAuthenticated={Boolean(data?.claims)} />;
+  const { data: { user } } = await supabase.auth.getUser();
+  return <LandingPage locale={locale} isAuthenticated={Boolean(user)} profile={getLandingProfile(user)} />;
 }

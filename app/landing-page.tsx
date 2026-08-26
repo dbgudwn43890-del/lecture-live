@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import styles from "./landing.module.css";
+import { PricingCheckoutButton, PricingCheckoutProvider } from "./pricing-checkout";
+import type { BillingPlan } from "./lib/use-paddle-checkout";
 
 type Locale = "ko" | "en";
 
@@ -75,6 +77,7 @@ const content = {
     ],
     finalTitle: ["다음 설명은,", "놓치지 않게."],
     finalCta: "첫 강의실 열기",
+    checkoutOpening: "결제창 여는 중…",
     footerDescription: "현장 강의를 따라가며 바로 이해하는 실시간 조교",
     privacy: "개인정보처리방침",
     terms: "이용약관",
@@ -151,6 +154,7 @@ const content = {
     ],
     finalTitle: ["Stay with the next explanation", "from start to finish."],
     finalCta: "Open my first classroom",
+    checkoutOpening: "Opening checkout…",
     footerDescription: "A live assistant that helps you follow and understand in-person lectures",
     privacy: "Privacy Policy",
     terms: "Terms of Service",
@@ -159,7 +163,9 @@ const content = {
   },
 } as const;
 
-export default function LandingPage({ locale, isAuthenticated = false }: { locale: Locale; isAuthenticated?: boolean }) {
+type Profile = { displayName: string; avatarUrl: string | null };
+
+export default function LandingPage({ locale, isAuthenticated = false, profile }: { locale: Locale; isAuthenticated?: boolean; profile?: Profile | null }) {
   const copy = content[locale];
   const base = locale === "en" ? "/en" : "";
   const classroomPath = `${base}/classroom`;
@@ -177,7 +183,16 @@ export default function LandingPage({ locale, isAuthenticated = false }: { local
         <div className={styles.headerActions}>
           <Link className={styles.languageLink} href={locale === "en" ? "/" : "/en"}>{copy.language}</Link>
           {isAuthenticated ? (
-            <Link className={styles.headerCta} href={classroomPath}>{copy.classroom}</Link>
+            <>
+              <Link className={styles.headerAvatar} href={classroomPath} aria-label={copy.classroom}>
+                {profile?.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" />
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="4" /><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>
+                )}
+              </Link>
+              <Link className={styles.headerCta} href={classroomPath}>{copy.classroom}</Link>
+            </>
           ) : (
             <>
               <Link className={styles.loginLink} href={`${base}/login`}>{copy.signIn}</Link>
@@ -225,20 +240,35 @@ export default function LandingPage({ locale, isAuthenticated = false }: { local
 
       <section className={styles.pricing} id="pricing" aria-labelledby={`pricing-title-${locale}`}>
         <header className={`${styles.pricingIntro} ${styles.reveal}`}><p>{copy.pricingLabel}</p><h2 id={`pricing-title-${locale}`}>{copy.pricingTitle[0]}<br />{copy.pricingTitle[1]}</h2><span>{copy.pricingDescription}</span></header>
-        <div className={`${styles.planGrid} ${styles.reveal}`}>
-          {copy.plans.map((plan) => <article className={"featured" in plan ? styles.featuredPlan : undefined} key={plan.name}>
-            <div><span>{plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
-            <h3>{plan.time}</h3>
-            {/* deslop-ignore-next-line 09 -- 프로모션가와 종료 후 예정가를 명시적으로 비교 */}
-            {"comparePrice" in plan && <div className={styles.comparePrice}><span>{plan.compareLabel}</span><del>{plan.comparePrice}</del></div>}
-            <div className={styles.planPrice}><strong>{plan.price}</strong>{"priceNote" in plan && <span>{plan.priceNote}</span>}</div>
-            <p>{plan.unit}</p><small>{plan.detail}</small>
-            <Link href={`${base}/billing?plan=${plan.billingPlan}`}>{plan.price === "무료" || plan.price === "Free" ? copy.heroCta : copy.open}<span>→</span></Link>
-          </article>)}
-        </div>
-        <p className={styles.pricingFootnote}>{copy.pricingFootnote}</p>
-        <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingPerSecond}</span><span>{copy.pricingIncluded}</span></div>
-        <Link className={styles.pricingCta} href={`${base}/billing?plan=monthly`}>{copy.pricingCta}<span>→</span></Link>
+        <PricingCheckoutProvider locale={locale} basePath={base}>
+          <div className={`${styles.planGrid} ${styles.reveal}`}>
+            {copy.plans.map((plan) => {
+              const ctaLabel = plan.price === "무료" || plan.price === "Free" ? copy.heroCta : copy.open;
+              return (
+                <article className={"featured" in plan ? styles.featuredPlan : undefined} key={plan.name}>
+                  <div><span>{plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
+                  <h3>{plan.time}</h3>
+                  {/* deslop-ignore-next-line 09 -- 프로모션가와 종료 후 예정가를 명시적으로 비교 */}
+                  {"comparePrice" in plan && <div className={styles.comparePrice}><span>{plan.compareLabel}</span><del>{plan.comparePrice}</del></div>}
+                  <div className={styles.planPrice}><strong>{plan.price}</strong>{"priceNote" in plan && <span>{plan.priceNote}</span>}</div>
+                  <p>{plan.unit}</p><small>{plan.detail}</small>
+                  {isAuthenticated ? (
+                    <PricingCheckoutButton plan={plan.billingPlan as BillingPlan} pendingLabel={copy.checkoutOpening} label={<>{ctaLabel}<span>→</span></>} />
+                  ) : (
+                    <Link href={`${base}/billing?plan=${plan.billingPlan}`}>{ctaLabel}<span>→</span></Link>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          <p className={styles.pricingFootnote}>{copy.pricingFootnote}</p>
+          <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingPerSecond}</span><span>{copy.pricingIncluded}</span></div>
+          {isAuthenticated ? (
+            <PricingCheckoutButton plan="monthly" className={styles.pricingCta} pendingLabel={copy.checkoutOpening} label={<>{copy.pricingCta}<span>→</span></>} />
+          ) : (
+            <Link className={styles.pricingCta} href={`${base}/billing?plan=monthly`}>{copy.pricingCta}<span>→</span></Link>
+          )}
+        </PricingCheckoutProvider>
       </section>
 
       <section className={`${styles.faq} ${styles.reveal}`} id="faq" aria-labelledby={`faq-title-${locale}`}>
