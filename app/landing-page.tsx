@@ -81,7 +81,8 @@ const content = {
     footerDescription: "현장 강의를 따라가며 바로 이해하는 실시간 조교",
     privacy: "개인정보처리방침",
     terms: "이용약관",
-    support: "문의 채널 준비 중",
+    refund: "환불 정책",
+    support: "dbgudwn43890@gmail.com",
     recordingNotice: "강의자와 기관의 녹음 정책을 확인한 뒤 사용하세요.",
   },
   en: {
@@ -156,7 +157,8 @@ const content = {
     footerDescription: "A live assistant that helps you follow and understand in-person lectures",
     privacy: "Privacy Policy",
     terms: "Terms of Service",
-    support: "Support channel coming soon",
+    refund: "Refund Policy",
+    support: "dbgudwn43890@gmail.com",
     recordingNotice: "Check the lecturer's and institution's recording rules before use.",
   },
 } as const;
@@ -281,7 +283,7 @@ export default function LandingPage({
       </section>
 
       <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={isAuthenticated ? classroomPath : `${base}/login?mode=signup`}>{isAuthenticated ? copy.openClassroom : copy.finalCta}<span>→</span></Link></section>
-      <footer className={styles.footer}><strong>Lecue</strong><p>{copy.footerDescription}</p><div><Link href={`${base}/privacy`}>{copy.privacy}</Link><Link href={`${base}/terms`}>{copy.terms}</Link><span>{copy.support}</span></div><small>{copy.recordingNotice}</small></footer>
+      <footer className={styles.footer}><strong>Lecue</strong><p>{copy.footerDescription}</p><div><Link href={`${base}/privacy`}>{copy.privacy}</Link><Link href={`${base}/terms`}>{copy.terms}</Link><Link href={`${base}/refund-policy`}>{copy.refund}</Link><a href={`mailto:${copy.support}`}>{copy.support}</a></div><small>{copy.recordingNotice}</small></footer>
     </main>
   );
 }
