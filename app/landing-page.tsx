@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 import styles from "./landing.module.css";
-import { PricingCheckoutButton, PricingCheckoutProvider } from "./pricing-checkout";
+import { getPlanLabel } from "./lib/plan-label";
 import type { BillingPlan } from "./lib/use-paddle-checkout";
+import { PricingCheckoutButton, PricingCheckoutProvider } from "./pricing-checkout";
+import ProfileMenu from "./profile-menu";
 
 type Locale = "ko" | "en";
 
@@ -10,7 +12,7 @@ const content = {
   ko: {
     homeLabel: "Lecue 홈",
     navLabel: "주요 메뉴",
-    nav: ["제품 화면", "내 강의실", "요금", "자주 묻는 질문"],
+    nav: ["요금", "자주 묻는 질문"],
     signIn: "로그인",
     signUp: "회원가입",
     classroom: "내 강의실",
@@ -21,7 +23,6 @@ const content = {
     heroTitle: ["놓친 설명을,", "수업이 끝나기 전에."],
     heroDescription: "Lecue는 현장 강의를 실시간으로 기록하고, 방금까지의 수업 흐름을 바탕으로 질문에 답하는 학습 서비스입니다. 답변을 읽는 동안에도 기록은 계속됩니다.",
     heroCta: "7일 무료로 시작하기",
-    heroSecondary: "실제 화면 보기",
     heroNote: "무료 체험 180크레딧 · 여러 수업 사용 가능",
     demoTitle: "질문과 강의가 나란히 흐릅니다",
     demoQuestionTitle: "강의에 질문하기",
@@ -54,7 +55,6 @@ const content = {
     pricingNoCard: "카카오페이·네이버페이·국내 카드",
     pricingPerSecond: "1분 기록 = 1크레딧",
     pricingIncluded: "기록·질문·강의실 맥락 포함",
-    pricingCta: "프로모션 가격으로 시작하기",
     plans: [
       { name: "무료 체험", time: "7일", price: "무료", unit: "180크레딧 · 여러 수업", detail: "계정당 한 번 · 모든 기능 포함", billingPlan: "monthly" },
       { name: "월간", time: "1개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "23,200원", price: "13,900원", priceNote: "/월", unit: "4,800크레딧 · 약 80시간", detail: "40% 프로모션 · 모든 기능 포함", billingPlan: "monthly" },
@@ -87,7 +87,7 @@ const content = {
   en: {
     homeLabel: "Lecue home",
     navLabel: "Main navigation",
-    nav: ["Product", "My classrooms", "Pricing", "FAQ"],
+    nav: ["Pricing", "FAQ"],
     signIn: "Sign in",
     signUp: "Sign up",
     classroom: "My classrooms",
@@ -98,7 +98,6 @@ const content = {
     heroTitle: ["Catch the explanation", "before class moves on."],
     heroDescription: "Lecue is a learning service that transcribes in-person lectures in real time and answers from everything said up to the moment you ask. Recording continues while you read the answer.",
     heroCta: "Start free",
-    heroSecondary: "See the product",
     heroNote: "180 trial credits · use them across multiple lectures",
     demoTitle: "Questions and the lecture move side by side",
     demoQuestionTitle: "Ask about the lecture",
@@ -131,7 +130,6 @@ const content = {
     pricingNoCard: "Cards, Apple Pay, Google Pay, PayPal, and local options",
     pricingPerSecond: "1 recording minute = 1 credit",
     pricingIncluded: "Transcription, questions, and classroom context included",
-    pricingCta: "Start with promotional pricing",
     plans: [
       { name: "Free trial", time: "7 days", price: "Free", unit: "180 credits · multiple lectures", detail: "Once per account · every feature included", billingPlan: "monthly" },
       { name: "Monthly", time: "1 month", compareLabel: "Planned post-promotion price", comparePrice: "$16.65", price: "$9.99", priceNote: "/month", unit: "4,800 credits · about 80 hours", detail: "40% promotion · every feature included", billingPlan: "monthly" },
@@ -163,9 +161,12 @@ const content = {
   },
 } as const;
 
-type Profile = { displayName: string; avatarUrl: string | null };
+type Profile = { displayName: string; email: string; avatarUrl: string | null };
+type LandingCreditStatus = { credits: number; planCode: string | null };
 
-export default function LandingPage({ locale, isAuthenticated = false, profile }: { locale: Locale; isAuthenticated?: boolean; profile?: Profile | null }) {
+export default function LandingPage({
+  locale, isAuthenticated = false, profile, creditStatus,
+}: { locale: Locale; isAuthenticated?: boolean; profile?: Profile | null; creditStatus?: LandingCreditStatus | null }) {
   const copy = content[locale];
   const base = locale === "en" ? "/en" : "";
   const classroomPath = `${base}/classroom`;
@@ -175,22 +176,21 @@ export default function LandingPage({ locale, isAuthenticated = false, profile }
       <header className={styles.header}>
         <Link className={styles.brand} href={base || "/"} aria-label={copy.homeLabel}>Lecue</Link>
         <nav className={styles.nav} aria-label={copy.navLabel}>
-          <a href="#product">{copy.nav[0]}</a>
-          <a href="#rooms">{copy.nav[1]}</a>
-          <a href="#pricing">{copy.nav[2]}</a>
-          <a href="#faq">{copy.nav[3]}</a>
+          <a href="#pricing">{copy.nav[0]}</a>
+          <a href="#faq">{copy.nav[1]}</a>
         </nav>
         <div className={styles.headerActions}>
           <Link className={styles.languageLink} href={locale === "en" ? "/" : "/en"}>{copy.language}</Link>
           {isAuthenticated ? (
             <>
-              <Link className={styles.headerAvatar} href={classroomPath} aria-label={copy.classroom}>
-                {profile?.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" />
-                ) : (
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="4" /><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>
-                )}
-              </Link>
+              <ProfileMenu
+                locale={locale}
+                basePath={base}
+                classroomPath={classroomPath}
+                profile={profile ?? null}
+                planLabel={getPlanLabel(creditStatus?.planCode, locale)}
+                credits={creditStatus?.credits ?? null}
+              />
               <Link className={styles.headerCta} href={classroomPath}>{copy.classroom}</Link>
             </>
           ) : (
@@ -209,7 +209,6 @@ export default function LandingPage({ locale, isAuthenticated = false, profile }
           <p className={styles.heroDescription}>{copy.heroDescription}</p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryCta} href={isAuthenticated ? classroomPath : `${base}/billing?plan=monthly`}>{isAuthenticated ? copy.openClassroom : copy.heroCta}<span aria-hidden>→</span></Link>
-            <a className={styles.secondaryCta} href="#product">{copy.heroSecondary}</a>
           </div>
           <p className={styles.heroNote}>{copy.heroNote}</p>
         </div>
@@ -263,11 +262,6 @@ export default function LandingPage({ locale, isAuthenticated = false, profile }
           </div>
           <p className={styles.pricingFootnote}>{copy.pricingFootnote}</p>
           <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingPerSecond}</span><span>{copy.pricingIncluded}</span></div>
-          {isAuthenticated ? (
-            <PricingCheckoutButton plan="monthly" className={styles.pricingCta} pendingLabel={copy.checkoutOpening} label={<>{copy.pricingCta}<span>→</span></>} />
-          ) : (
-            <Link className={styles.pricingCta} href={`${base}/billing?plan=monthly`}>{copy.pricingCta}<span>→</span></Link>
-          )}
         </PricingCheckoutProvider>
       </section>
 

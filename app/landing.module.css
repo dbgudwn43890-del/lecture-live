@@ -73,13 +73,56 @@
   justify-content: center;
   width: 30px;
   height: 30px;
+  padding: 0;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 50%;
+  font-family: inherit;
+  cursor: pointer;
 }
 .headerAvatar img { width: 100%; height: 100%; object-fit: cover; }
 .headerAvatar svg { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 1.6; }
+
+.profileMenu { position: relative; }
+.profilePanel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .12);
+}
+.profilePanelHeader { display: flex; align-items: center; gap: 10px; }
+.profilePanelHeader > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.profilePanelHeader strong { font-size: 13px; font-weight: 800; }
+.profilePanelHeader small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profilePlanRow { display: flex; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.profilePlanRow span { display: flex; flex-direction: column; gap: 3px; }
+.profilePlanRow small { color: var(--muted); font-size: 10px; }
+.profilePlanRow strong { font-size: 13px; font-weight: 800; }
+.profileLink { color: var(--ink); font-size: 12px; font-weight: 750; }
+.profileLink:hover { color: var(--focus); }
+.profileSignout button {
+  width: 100%;
+  padding: 9px 0;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  font-family: inherit;
+  cursor: pointer;
+}
+.profileSignout button:hover { color: var(--ink); border-color: var(--ink); }
 
 .hero {
   width: min(1240px, calc(100% - 60px));
@@ -136,9 +179,7 @@
   animation: heroEnter .8s .28s both;
 }
 
-.primaryCta,
-.secondaryCta,
-.pricingCta {
+.primaryCta {
   min-height: 52px;
   display: inline-flex;
   align-items: center;
@@ -148,29 +189,22 @@
   border: none;
   font-family: inherit;
   cursor: pointer;
-}
-
-.pricingCta:disabled,
-.planGrid article > button:disabled { cursor: not-allowed; opacity: .6; }
-
-.primaryCta {
   gap: 34px;
   padding: 0 18px 0 22px;
   color: white !important;
   background: var(--focus);
 }
 
+.planGrid article > button:disabled { cursor: not-allowed; opacity: .6; }
+
 .primaryCta span,
-.pricingCta span,
 .finalCta a span,
 .planGrid a span,
 .planGrid button span { transition: transform .3s cubic-bezier(.16, 1, .3, 1); }
 .primaryCta:hover span,
-.pricingCta:hover span,
 .finalCta a:hover span,
 .planGrid a:hover span,
 .planGrid button:hover span { transform: translateX(4px); }
-.secondaryCta { border-bottom: 1px solid var(--ink); }
 .heroNote { margin: 14px 0 0; color: #818b8e; font-size: 11px; animation: heroEnter .8s .32s both; }
 
 .productFrame {
@@ -292,7 +326,6 @@
 .pricingFacts { gap: 28px; margin-top: 42px; color: var(--muted); font-size: 11px; }
 .pricingFacts span { display: flex; align-items: center; gap: 8px; }
 .pricingFacts span::before { content: "✓"; color: var(--focus); font-weight: 900; }
-.pricingCta { gap: 56px; margin-top: 34px; padding: 0 18px 0 22px; color: white !important; background: var(--focus); }
 
 .faq {
   width: min(1180px, calc(100% - 60px));
@@ -411,7 +444,6 @@
   .hero h1 { font-size: clamp(47px, 13.7vw, 69px); line-height: 1.02; }
   .heroDescription { margin-top: 25px; font-size: 15px; line-height: 1.75; }
   .heroActions { align-items: stretch; flex-direction: column; gap: 12px; }
-  .secondaryCta { align-self: center; min-height: 38px; }
   .productTopbar { grid-template-columns: 1fr auto; padding: 0 16px; }
   .productTopbar > span { display: none; }
   .productPanes { min-height: 900px; grid-template-columns: 1fr; }
@@ -459,7 +491,6 @@
 
 @media (hover: hover) {
   .primaryCta:hover,
-  .pricingCta:hover,
   .finalCta a:hover {
     filter: brightness(.92);
   }

@@ -7,6 +7,7 @@ import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
+import { getPlanLabel } from "../lib/plan-label";
 
 type Status = "idle" | "connecting" | "recording" | "ended" | "error";
 
@@ -835,17 +836,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       ? isEnglish ? "Default AI" : "기본 AI"
       : personalModelOptions[aiProvider].find((model) => model.id === aiModel)?.label ??
         personalModelOptions[aiProvider][0].label;
-  const planLabel = creditStatus?.planCode === "monthly"
-    ? isEnglish ? "Monthly" : "월간"
-    : creditStatus?.planCode === "term"
-      ? isEnglish ? "4-month pass" : "4개월권"
-    : creditStatus?.planCode === "semester"
-      ? isEnglish ? "Semester" : "한 학기"
-      : creditStatus?.planCode === "trial"
-        ? isEnglish ? "Free trial" : "무료 체험"
-        : creditStatus?.planCode === "service_credit"
-          ? isEnglish ? "Service credit" : "서비스 크레딧"
-          : isEnglish ? "No plan" : "요금제 없음";
+  const planLabel = getPlanLabel(creditStatus?.planCode, locale);
 
   return (
     <main className="workspace">

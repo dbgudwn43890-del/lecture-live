@@ -7,6 +7,7 @@ export function getLandingProfile(user: User | null) {
     displayName: typeof metadata.full_name === "string"
       ? metadata.full_name
       : typeof metadata.name === "string" ? metadata.name : user.email?.split("@")[0] ?? "",
+    email: user.email ?? "",
     avatarUrl: typeof metadata.avatar_url === "string"
       ? metadata.avatar_url
       : typeof metadata.picture === "string" ? metadata.picture : null,
