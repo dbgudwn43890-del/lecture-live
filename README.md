@@ -58,8 +58,10 @@ URL 또는 채팅에 넣지 않습니다. 개인 AI 키 원문은 Vault에서 �
 
 ## 현재 구현
 
-- Deepgram Nova-3 한국어·영어 실시간 스크립트
-- 브라우저에 장기 Deepgram 키를 노출하지 않는 임시 토큰 발급
+- 강의실 실시간 스크립트는 기본값이 Cloudflare Workers AI Whisper large-v3-turbo(5초 청크,
+  원가 우위). `STT_PROVIDER=deepgram`으로 Nova-3 실시간 스트리밍으로 되돌릴 수 있게 코드는
+  그대로 남겨 두었습니다.
+- 브라우저에 장기 Deepgram·Cloudflare 키를 노출하지 않는 서버 전용 요청
 - 질문 순간의 확정 스크립트와 임시 문장을 GPT-5.6 Luna에 전달
 - 모델이 필요할 때만 사용하는 웹 검색과 출처 링크
 - 답변 생성과 독립적으로 계속되는 음성 전송

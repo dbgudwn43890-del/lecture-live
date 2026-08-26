@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
+import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 
@@ -58,6 +59,7 @@ const providerNames: Record<PersonalProvider, string> = {
 };
 
 const MAX_LECTURE_MS = 10_800_000;
+const WHISPER_CHUNK_MS = 5_000;
 
 function formatTime(milliseconds: number) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -76,7 +78,7 @@ type InitialData = {
   creditStatus: CreditStatus | null;
 };
 
-export default function LectureWorkspace({ locale = "ko", initial }: { locale?: "ko" | "en"; initial?: InitialData }) {
+export default function LectureWorkspace({ locale = "ko", initial, sttProvider = "whisper" }: { locale?: "ko" | "en"; initial?: InitialData; sttProvider?: "deepgram" | "whisper" }) {
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
   const statusCopy: Record<Status, string> = isEnglish
@@ -118,6 +120,17 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const chargedMinuteRef = useRef(-1);
   const creditChargePendingRef = useRef(false);
   const initialRouteRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioSinkRef = useRef<GainNode | null>(null);
+  const whisperChunksRef = useRef<Float32Array[]>([]);
+  const whisperSamplesRef = useRef(0);
+  const whisperSampleRateRef = useRef(16_000);
+  const whisperCursorMsRef = useRef(0);
+  const whisperPreviousTextRef = useRef("");
+  const whisperFlushTimerRef = useRef<number | null>(null);
+  const whisperPendingRef = useRef(false);
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -147,6 +160,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       recorderRef.current?.stop();
       socketRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      stopWhisperNodes();
     },
     [],
   );
@@ -357,7 +371,172 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }
   }
 
+  function stopWhisperNodes() {
+    if (whisperFlushTimerRef.current !== null) window.clearInterval(whisperFlushTimerRef.current);
+    whisperFlushTimerRef.current = null;
+    workletNodeRef.current?.disconnect();
+    audioSourceRef.current?.disconnect();
+    audioSinkRef.current?.disconnect();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    void audioContextRef.current?.close();
+    workletNodeRef.current = null;
+    audioSourceRef.current = null;
+    audioSinkRef.current = null;
+    streamRef.current = null;
+    audioContextRef.current = null;
+  }
+
+  async function flushWhisperChunk() {
+    if (whisperPendingRef.current) return;
+    const sampleCount = whisperSamplesRef.current;
+    if (sampleCount < whisperSampleRateRef.current * 0.5) return;
+    whisperPendingRef.current = true;
+
+    const merged = new Float32Array(sampleCount);
+    let offset = 0;
+    for (const chunk of whisperChunksRef.current) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    whisperChunksRef.current = [];
+    whisperSamplesRef.current = 0;
+    const chunkStartMs = whisperCursorMsRef.current;
+    const chunkDurationMs = Math.round((sampleCount / whisperSampleRateRef.current) * 1_000);
+    whisperCursorMsRef.current += chunkDurationMs;
+
+    setInterim(isEnglish ? "Transcribing…" : "받아쓰는 중…");
+    try {
+      const wav = encodeWav(downsampleAudio(merged, whisperSampleRateRef.current));
+      const formData = new FormData();
+      formData.set("audio", new File([wav], "chunk.wav", { type: "audio/wav" }));
+      formData.set("sessionId", activeSessionIdRef.current);
+      formData.set("language", isEnglish ? "en" : "ko");
+      if (whisperPreviousTextRef.current) formData.set("prompt", whisperPreviousTextRef.current.slice(-500));
+
+      const response = await fetch("/api/lecture-audio", { method: "POST", body: formData });
+      const data = await response.json() as { text?: string; error?: string };
+      if (!response.ok) throw new Error(data.error);
+      const text = data.text?.trim();
+      if (text) {
+        whisperPreviousTextRef.current = text;
+        const endMs = chunkStartMs + chunkDurationMs;
+        const id = `${chunkStartMs}-${endMs}-${text}`;
+        if (!segmentIdsRef.current.has(id)) {
+          segmentIdsRef.current.add(id);
+          const segment = { id, startMs: chunkStartMs, endMs, text };
+          setSegments((current) => {
+            const next = [...current, segment];
+            segmentsRef.current = next;
+            return next;
+          });
+          void fetch("/api/lecture-sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+            body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
+          });
+        }
+      }
+    } catch {
+      // A missed chunk skips one caption update; recording continues.
+    } finally {
+      setInterim("");
+      whisperPendingRef.current = false;
+    }
+  }
+
   async function startLecture() {
+    if (sttProvider === "deepgram") return startLectureDeepgram();
+    return startLectureWhisper();
+  }
+
+  async function startLectureWhisper() {
+    setError("");
+    startedAtRef.current = 0;
+    activeSessionIdRef.current = "";
+    chargedMinuteRef.current = -1;
+    setActiveSessionId("");
+    setStatus("connecting");
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(isEnglish ? "This browser does not support microphone input." : "이 브라우저는 마이크 입력을 지원하지 않습니다.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      streamRef.current = stream;
+
+      const sessionResponse = await fetch("/api/lecture-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({
+          action: "start",
+          classroomId: activeClassroomId || null,
+          title: lectureTitle.trim() || (isEnglish ? `Lecture ${new Date().toLocaleDateString("en-US")}` : `${new Date().toLocaleDateString("ko-KR")} 수업`),
+        }),
+      });
+      const sessionData = await sessionResponse.json() as { session?: SessionSummary; error?: string };
+      if (!sessionResponse.ok || !sessionData.session) throw new Error(sessionData.error);
+      setActiveSessionId(sessionData.session.id);
+      activeSessionIdRef.current = sessionData.session.id;
+      setLectureTitle(sessionData.session.title);
+      setSegments([]);
+      segmentsRef.current = [];
+      segmentIdsRef.current.clear();
+      setMessages([]);
+
+      const context = new AudioContext();
+      await context.audioWorklet.addModule("/pcm-capture-worklet.js");
+      await context.resume();
+      const source = context.createMediaStreamSource(stream);
+      const worklet = new AudioWorkletNode(context, "pcm-capture");
+      const sink = context.createGain();
+      sink.gain.value = 0;
+      source.connect(worklet).connect(sink).connect(context.destination);
+
+      audioContextRef.current = context;
+      audioSourceRef.current = source;
+      workletNodeRef.current = worklet;
+      audioSinkRef.current = sink;
+      whisperSampleRateRef.current = context.sampleRate;
+      whisperChunksRef.current = [];
+      whisperSamplesRef.current = 0;
+      whisperCursorMsRef.current = 0;
+      whisperPreviousTextRef.current = "";
+
+      worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+        const chunk = new Float32Array(event.data);
+        whisperChunksRef.current.push(chunk);
+        whisperSamplesRef.current += chunk.length;
+      };
+
+      startedAtRef.current = Date.now();
+      setElapsedMs(0);
+      setStatus("recording");
+      whisperFlushTimerRef.current = window.setInterval(() => void flushWhisperChunk(), WHISPER_CHUNK_MS);
+    } catch (caught) {
+      stopWhisperNodes();
+      if (activeSessionIdRef.current && startedAtRef.current === 0) {
+        void fetch("/api/lecture-sessions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
+        });
+      }
+      const message = caught instanceof Error
+        ? caught.message
+        : isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.";
+      setError(message);
+      setStatus("error");
+    }
+  }
+
+  async function startLectureDeepgram() {
     setError("");
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
@@ -515,6 +694,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     if (finishingRef.current) return;
     finishingRef.current = true;
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    if (sttProvider === "whisper") {
+      await flushWhisperChunk();
+      stopWhisperNodes();
+    }
     setStatus("ended");
     const sessionId = activeSessionIdRef.current;
     if (sessionId) {
