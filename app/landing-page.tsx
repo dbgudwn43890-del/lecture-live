@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import styles from "./preview/page.module.css";
+import styles from "./landing.module.css";
 
 type Locale = "ko" | "en";
 
@@ -56,8 +56,8 @@ const content = {
     plans: [
       { name: "무료 체험", time: "7일", price: "무료", unit: "180크레딧 · 여러 수업", detail: "계정당 한 번 · 모든 기능 포함", billingPlan: "monthly" },
       { name: "월간", time: "1개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "23,200원", price: "13,900원", priceNote: "/월", unit: "4,800크레딧 · 약 80시간", detail: "40% 프로모션 · 모든 기능 포함", billingPlan: "monthly" },
-      { name: "집중 학기", time: "4개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "88,200원", price: "52,900원", priceNote: "/4개월", unit: "19,200크레딧 · 약 320시간", detail: "40% 프로모션 · 모든 기능 포함", featured: true, billingPlan: "term" },
-      { name: "한 학기", time: "6개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "124,900원", price: "74,900원", priceNote: "/6개월", unit: "28,800크레딧 · 약 480시간", detail: "40% 프로모션 · 모든 기능 포함", billingPlan: "semester" },
+      { name: "집중 학기", time: "4개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "83,200원", price: "49,900원", priceNote: "/4개월", unit: "19,200크레딧 · 약 320시간", detail: "40% 프로모션 · 모든 기능 포함", featured: true, billingPlan: "term" },
+      { name: "한 학기", time: "6개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "118,200원", price: "70,900원", priceNote: "/6개월", unit: "28,800크레딧 · 약 480시간", detail: "40% 프로모션 · 모든 기능 포함", billingPlan: "semester" },
     ],
     featured: "가장 많이 선택",
     pricingFootnote: "취소선 가격은 프로모션 종료 후 적용할 예정인 가격입니다. 종료 일정과 최종 결제 금액은 결제 전에 안내합니다.",
@@ -132,8 +132,8 @@ const content = {
     plans: [
       { name: "Free trial", time: "7 days", price: "Free", unit: "180 credits · multiple lectures", detail: "Once per account · every feature included", billingPlan: "monthly" },
       { name: "Monthly", time: "1 month", compareLabel: "Planned post-promotion price", comparePrice: "$16.65", price: "$9.99", priceNote: "/month", unit: "4,800 credits · about 80 hours", detail: "40% promotion · every feature included", billingPlan: "monthly" },
-      { name: "Focused term", time: "4 months", compareLabel: "Planned post-promotion price", comparePrice: "$61.67", price: "$37", priceNote: "/4 months", unit: "19,200 credits · about 320 hours", detail: "40% promotion · every feature included", featured: true, billingPlan: "term" },
-      { name: "Semester", time: "6 months", compareLabel: "Planned post-promotion price", comparePrice: "$90", price: "$54", priceNote: "/6 months", unit: "28,800 credits · about 480 hours", detail: "40% promotion · every feature included", billingPlan: "semester" },
+      { name: "Focused term", time: "4 months", compareLabel: "Planned post-promotion price", comparePrice: "$59.99", price: "$35.99", priceNote: "/4 months", unit: "19,200 credits · about 320 hours", detail: "40% promotion · every feature included", featured: true, billingPlan: "term" },
+      { name: "Semester", time: "6 months", compareLabel: "Planned post-promotion price", comparePrice: "$84.99", price: "$50.99", priceNote: "/6 months", unit: "28,800 credits · about 480 hours", detail: "40% promotion · every feature included", billingPlan: "semester" },
     ],
     featured: "Most selected",
     pricingFootnote: "Struck-through prices are planned post-promotion prices. The end date and final charge are shown before checkout.",

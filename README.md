@@ -29,8 +29,8 @@ npm run dev
 1. Paddle Sandbox에서 월간 상품의 반복 가격 2개와 4개월권·한 학기권의 일회성 가격을 만듭니다.
    - 월간 체험 가격: 기본 `$9.99`, 한국 `13,900 KRW` 가격 재정의, 7일 체험
    - 월간 일반 가격: 같은 가격, 체험 없음
-   - 4개월권: 기본 `$37`, 한국 `52,900 KRW` 가격 재정의, 일회성
-   - 한 학기권: 기본 `$54`, 한국 `74,900 KRW` 가격 재정의, 일회성
+   - 4개월권: 기본 `$35.99`, 한국 `49,900 KRW` 가격 재정의, 일회성
+   - 한 학기권: 기본 `$50.99`, 한국 `70,900 KRW` 가격 재정의, 일회성
 2. 월간 체험·월간 일반·4개월권·한 학기권 Price ID를 각각 `PADDLE_MONTHLY_PRICE_ID`,
    `PADDLE_MONTHLY_NO_TRIAL_PRICE_ID`, `PADDLE_TERM_PRICE_ID`, `PADDLE_SEMESTER_PRICE_ID`에 넣습니다.
 3. Paddle API key, Webhook secret, Client-side token을 `.env.local`과 배포 환경 변수에 넣습니다.
