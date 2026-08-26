@@ -81,6 +81,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ session: data }, { status: 201 });
   }
 
+  // A refresh or crash mid-lecture used to leave the row in "recording"
+  // forever: the library showed it as live and the workspace opened it at
+  // 0:00. The workspace calls this on mount, when nothing can be recording
+  // yet, and each stale lecture is closed at its last saved segment.
+  if (body.action === "reconcile") {
+    const { data: stale, error } = await current.supabase
+      .from("lecture_sessions")
+      .select("id")
+      .eq("status", "recording");
+    if (error) {
+      console.error("Stale lecture lookup failed", error.code);
+      return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 500 });
+    }
+
+    for (const session of stale ?? []) {
+      const { data: last } = await current.supabase
+        .from("transcript_segments")
+        .select("end_ms")
+        .eq("session_id", session.id)
+        .order("end_ms", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      await current.supabase
+        .from("lecture_sessions")
+        .update({
+          status: "completed",
+          ended_at: new Date().toISOString(),
+          duration_seconds: Math.round((last?.end_ms ?? 0) / 1_000),
+        })
+        .eq("id", session.id);
+    }
+    return NextResponse.json({ reconciled: stale?.length ?? 0 });
+  }
+
   if (body.action === "segment" && validId(body.sessionId) && validSegment(body.segment)) {
     const segment = body.segment;
     const { data: session } = await current.supabase.from("lecture_sessions").select("classroom_id").eq("id", body.sessionId).maybeSingle();

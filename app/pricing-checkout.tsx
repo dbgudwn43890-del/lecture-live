@@ -10,22 +10,32 @@ type Locale = "ko" | "en";
 type Ctx = {
   ready: boolean;
   pending: BillingPlan | "webhook" | null;
+  message: string;
   startCheckout: (plan: BillingPlan) => void;
 };
 
 const PricingContext = createContext<Ctx | null>(null);
 
 export function PricingCheckoutProvider({ locale, basePath, children }: { locale: Locale; basePath: string; children: ReactNode }) {
-  const { ready, pending, initializePaddle, startCheckout } = usePaddleCheckout(locale, () => {
+  const { ready, pending, message, initializePaddle, startCheckout } = usePaddleCheckout(locale, () => {
     window.location.assign(`${basePath}/classroom?payment=success`);
   });
 
   return (
-    <PricingContext.Provider value={{ ready, pending, startCheckout }}>
-      <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" strategy="afterInteractive" onLoad={initializePaddle} onReady={initializePaddle} />
+    <PricingContext.Provider value={{ ready, pending, message, startCheckout }}>
+      {/* lazyOnload: only buyers need Paddle, but every marketing visitor was
+          downloading and executing it against hydration. */}
+      <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" strategy="lazyOnload" onLoad={initializePaddle} onReady={initializePaddle} />
       {children}
     </PricingContext.Provider>
   );
+}
+
+/** Surfaces checkout errors, which the plan buttons alone silently swallowed. */
+export function PricingCheckoutMessage({ className }: { className?: string }) {
+  const ctx = useContext(PricingContext);
+  if (!ctx?.message) return null;
+  return <p className={className} role="status">{ctx.message}</p>;
 }
 
 export function PricingCheckoutButton({

@@ -37,6 +37,7 @@ const copy = {
     opening: "안전한 결제창을 여는 중입니다…",
     ready: "결제수단과 갱신 조건은 결제창에서 최종 확인할 수 있습니다.",
     portalFailed: "결제 관리 화면을 열지 못했습니다.",
+    statusFailed: "크레딧 정보를 불러오지 못했습니다. 결제는 그대로 진행할 수 있습니다.",
   },
   en: {
     title: "Billing and credits",
@@ -65,6 +66,7 @@ const copy = {
     opening: "Opening secure checkout…",
     ready: "Payment and renewal terms are shown for final review in checkout.",
     portalFailed: "Could not open billing settings.",
+    statusFailed: "Could not load your credit balance. You can still continue to checkout.",
   },
 } as const;
 
@@ -72,6 +74,7 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
   const t = copy[locale];
   const basePath = locale === "en" ? "/en" : "";
   const [status, setStatus] = useState<CreditStatus | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
   const [portalPending, setPortalPending] = useState(false);
   const [portalMessage, setPortalMessage] = useState("");
   const autoStartedRef = useRef(false);
@@ -83,17 +86,23 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
   useEffect(() => { void loadStatus(); }, [locale]);
 
   useEffect(() => {
-    if (!ready || !status || autoStartedRef.current) return;
+    if (!ready || (!status && !statusFailed) || autoStartedRef.current) return;
     const plan = new URLSearchParams(window.location.search).get("plan");
     if (plan === "monthly" || plan === "term" || plan === "semester") {
       autoStartedRef.current = true;
       void startCheckout(plan);
     }
-  }, [ready, status]);
+  }, [ready, status, statusFailed]);
 
   async function loadStatus() {
     const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      // Returning silently left status null, which disabled every purchase
+      // button behind a message saying everything was fine.
+      setStatusFailed(true);
+      return null;
+    }
+    setStatusFailed(false);
     const data = await response.json() as CreditStatus;
     setStatus(data);
     return data;
@@ -114,8 +123,9 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
     }
   }
 
-  const disabled = !ready || !status || pending !== null || portalPending;
-  const displayMessage = message || portalMessage || t.ready;
+  // A missing credit snapshot is not a reason to block buying credits.
+  const disabled = !ready || (!status && !statusFailed) || pending !== null || portalPending;
+  const displayMessage = message || portalMessage || (statusFailed ? t.statusFailed : t.ready);
 
   function label(plan: BillingPlan, fallback: string) {
     return pending === plan ? t.opening : fallback;

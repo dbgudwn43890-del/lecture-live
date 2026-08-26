@@ -9,12 +9,39 @@ function isUnder(path: string, prefix: string) {
   return path === prefix || path.startsWith(`${prefix}/`);
 }
 
+const LOCALE_COOKIE = "site-locale";
+
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+
+  // The language toggle appends ?lang=. Remember the choice in a cookie and
+  // strip the param, so a Korean speaker abroad is not sent back to /en by the
+  // IP guess on their very next navigation.
+  const requestedLocale = request.nextUrl.searchParams.get("lang");
+  if (requestedLocale === "ko" || requestedLocale === "en") {
+    const cleanUrl = request.nextUrl.clone();
+    cleanUrl.searchParams.delete("lang");
+    const redirect = NextResponse.redirect(cleanUrl);
+    redirect.cookies.set(LOCALE_COOKIE, requestedLocale, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+    return redirect;
+  }
+
+  const chosenLocale = request.cookies.get(LOCALE_COOKIE)?.value;
   const country = request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
-  const prefersEnglish = Boolean(country && country !== "KR" && country !== "XX");
+  const prefersEnglish = chosenLocale
+    ? chosenLocale === "en"
+    : Boolean(country && country !== "KR" && country !== "XX");
   const usesEnglishHomepage = path === "/" && prefersEnglish;
-  const oauthFallbackNext = getOAuthFallbackNext(path, country, request.nextUrl.searchParams.has("code"));
+  const oauthFallbackNext = getOAuthFallbackNext(
+    path,
+    country,
+    request.nextUrl.searchParams.has("code"),
+    chosenLocale ? chosenLocale === "en" : undefined,
+  );
 
   // Supabase falls back to the Site URL when an OAuth redirect URL is not allow-listed.
   // Recover the PKCE code instead of leaving the user signed out on the landing page.
@@ -46,7 +73,12 @@ export async function proxy(request: NextRequest) {
   // lifecycle. Refreshing the session here races their cookie writes — e.g.
   // signOut() clears cookies while this client's getClaims() call can
   // reissue a still-valid session cookie for the same response.
-  if (isUnder(path, "/auth")) return response;
+  //
+  // /api routes each authenticate themselves, so the session refresh below is
+  // pure overhead on them — and they are the hot path: during a recording that
+  // is a transcription upload every few seconds plus a segment write per line.
+  // They still need the locale header set above.
+  if (isUnder(path, "/auth") || isUnder(path, "/api")) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

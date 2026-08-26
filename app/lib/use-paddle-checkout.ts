@@ -56,7 +56,13 @@ export function usePaddleCheckout(locale: Locale, onCreditsGranted: () => void) 
       token,
       checkout: { settings: { displayMode: "overlay", variant: "one-page", theme: "light", locale } },
       eventCallback(event) {
-        if (event.name === "checkout.completed") void waitForCredits();
+        if (event.name === "checkout.completed") return void waitForCredits();
+        // Closing the overlay leaves no other signal, so without this the
+        // plan buttons stayed disabled on "opening checkout…" until a reload.
+        if (event.name === "checkout.closed" || event.name === "checkout.error") {
+          setPending(null);
+          setMessage(event.name === "checkout.error" ? t.openFailed : "");
+        }
       },
     });
     initializedRef.current = true;
@@ -79,6 +85,9 @@ export function usePaddleCheckout(locale: Locale, onCreditsGranted: () => void) 
         }
       }
     }
+    // Refresh before telling the user it is still syncing, otherwise the
+    // credit figure above the message contradicts it.
+    onCreditsGranted();
     setPending(null);
     setMessage(t.syncing);
   }

@@ -61,6 +61,12 @@ const providerNames: Record<PersonalProvider, string> = {
 
 const MAX_LECTURE_MS = 10_800_000;
 const WHISPER_CHUNK_MS = 5_000;
+// /api/lecture-audio rejects anything over 500,000 bytes, which at 16kHz
+// 16-bit mono is 15.6s of audio. Browsers throttle background timers to about
+// one tick a minute, so a backgrounded tab would otherwise build a chunk far
+// past that and have every upload rejected — silently, for the rest of the
+// lecture. Send the backlog as slices that each fit, with a safety margin.
+const WHISPER_MAX_UPLOAD_MS = 14_000;
 
 function formatTime(milliseconds: number) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -128,6 +134,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const audioSinkRef = useRef<GainNode | null>(null);
   const whisperChunksRef = useRef<Float32Array[]>([]);
   const whisperSamplesRef = useRef(0);
+  const whisperFailuresRef = useRef(0);
   const whisperSampleRateRef = useRef(16_000);
   const whisperCursorMsRef = useRef(0);
   const whisperPreviousTextRef = useRef("");
@@ -198,9 +205,29 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     return () => { cancelled = true; };
   }, []);
 
+  const hydratedRef = useRef(Boolean(initial));
+
   useEffect(() => {
-    void loadClassrooms();
-    void loadCredits();
+    // The server already sent classrooms and credits with the page, so the
+    // first pass only closes lectures abandoned by an earlier crash — and
+    // reloads only if that actually changed something.
+    void (async () => {
+      if (!hydratedRef.current) {
+        await Promise.all([loadClassrooms(), loadCredits()]);
+      }
+      hydratedRef.current = false;
+      try {
+        const response = await fetch("/api/lecture-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ action: "reconcile" }),
+        });
+        const data = await response.json() as { reconciled?: number };
+        if (response.ok && data.reconciled) await loadClassrooms();
+      } catch {
+        // Reconciliation is housekeeping; a failure only delays it to next load.
+      }
+    })();
   }, [locale]);
 
   async function loadCredits() {
@@ -404,10 +431,44 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     audioContextRef.current = null;
   }
 
+  async function uploadWhisperSlice(samples: Float32Array, startMs: number, durationMs: number) {
+    const wav = encodeWav(downsampleAudio(samples, whisperSampleRateRef.current));
+    const formData = new FormData();
+    formData.set("audio", new File([wav], "chunk.wav", { type: "audio/wav" }));
+    formData.set("sessionId", activeSessionIdRef.current);
+    formData.set("language", isEnglish ? "en" : "ko");
+    if (whisperPreviousTextRef.current) formData.set("prompt", whisperPreviousTextRef.current.slice(-500));
+
+    const response = await fetch("/api/lecture-audio", { method: "POST", body: formData });
+    const data = await response.json() as { text?: string; error?: string };
+    if (!response.ok) throw new Error(data.error);
+
+    const text = data.text?.trim();
+    if (!text) return;
+
+    whisperPreviousTextRef.current = text;
+    const endMs = startMs + durationMs;
+    const id = `${startMs}-${endMs}-${text}`;
+    if (segmentIdsRef.current.has(id)) return;
+    segmentIdsRef.current.add(id);
+    const segment = { id, startMs, endMs, text };
+    setSegments((current) => {
+      const next = [...current, segment];
+      segmentsRef.current = next;
+      return next;
+    });
+    void fetch("/api/lecture-sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+      body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
+    });
+  }
+
   async function flushWhisperChunk() {
     if (whisperPendingRef.current) return;
     const sampleCount = whisperSamplesRef.current;
-    if (sampleCount < whisperSampleRateRef.current * 0.5) return;
+    const sampleRate = whisperSampleRateRef.current;
+    if (sampleCount < sampleRate * 0.5) return;
     whisperPendingRef.current = true;
 
     const merged = new Float32Array(sampleCount);
@@ -418,44 +479,29 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     }
     whisperChunksRef.current = [];
     whisperSamplesRef.current = 0;
-    const chunkStartMs = whisperCursorMsRef.current;
-    const chunkDurationMs = Math.round((sampleCount / whisperSampleRateRef.current) * 1_000);
-    whisperCursorMsRef.current += chunkDurationMs;
 
     setInterim(isEnglish ? "Transcribing…" : "받아쓰는 중…");
+    const sliceSamples = Math.floor(sampleRate * (WHISPER_MAX_UPLOAD_MS / 1_000));
     try {
-      const wav = encodeWav(downsampleAudio(merged, whisperSampleRateRef.current));
-      const formData = new FormData();
-      formData.set("audio", new File([wav], "chunk.wav", { type: "audio/wav" }));
-      formData.set("sessionId", activeSessionIdRef.current);
-      formData.set("language", isEnglish ? "en" : "ko");
-      if (whisperPreviousTextRef.current) formData.set("prompt", whisperPreviousTextRef.current.slice(-500));
-
-      const response = await fetch("/api/lecture-audio", { method: "POST", body: formData });
-      const data = await response.json() as { text?: string; error?: string };
-      if (!response.ok) throw new Error(data.error);
-      const text = data.text?.trim();
-      if (text) {
-        whisperPreviousTextRef.current = text;
-        const endMs = chunkStartMs + chunkDurationMs;
-        const id = `${chunkStartMs}-${endMs}-${text}`;
-        if (!segmentIdsRef.current.has(id)) {
-          segmentIdsRef.current.add(id);
-          const segment = { id, startMs: chunkStartMs, endMs, text };
-          setSegments((current) => {
-            const next = [...current, segment];
-            segmentsRef.current = next;
-            return next;
-          });
-          void fetch("/api/lecture-sessions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-            body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
-          });
-        }
+      for (let start = 0; start < sampleCount; start += sliceSamples) {
+        const slice = merged.subarray(start, Math.min(sampleCount, start + sliceSamples));
+        const startMs = whisperCursorMsRef.current;
+        const durationMs = Math.round((slice.length / sampleRate) * 1_000);
+        whisperCursorMsRef.current += durationMs;
+        await uploadWhisperSlice(slice, startMs, durationMs);
       }
-    } catch {
-      // A missed chunk skips one caption update; recording continues.
+      whisperFailuresRef.current = 0;
+    } catch (caught) {
+      // One dropped chunk is a missed caption and recording continues, but a
+      // run of them means the transcript has stopped and the user cannot tell.
+      whisperFailuresRef.current += 1;
+      if (whisperFailuresRef.current >= 3) {
+        setError(caught instanceof Error && caught.message
+          ? caught.message
+          : isEnglish
+            ? "The transcript has stopped updating. Check your connection."
+            : "받아쓰기가 멈췄습니다. 네트워크 상태를 확인해 주세요.");
+      }
     } finally {
       setInterim("");
       whisperPendingRef.current = false;
@@ -690,6 +736,15 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
       socket.onclose = () => {
         if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+        // A mid-lecture drop (a Wi-Fi handoff in a lecture hall) used to leave
+        // the UI saying 기록 중 while the timer kept charging credits against a
+        // transcript that had stopped. End the lecture and say so.
+        if (startedAtRef.current > 0 && !finishingRef.current) {
+          setError(isEnglish
+            ? "The connection dropped, so the lecture was saved and ended. Start again to keep recording."
+            : "연결이 끊겨 수업을 저장하고 종료했습니다. 이어서 기록하려면 다시 시작해 주세요.");
+          void finishLecture();
+        }
       };
     } catch (caught) {
       streamRef.current?.getTracks().forEach((track) => track.stop());

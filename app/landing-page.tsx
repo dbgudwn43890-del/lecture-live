@@ -3,7 +3,7 @@ import Link from "next/link";
 import styles from "./landing.module.css";
 import { getPlanLabel } from "./lib/plan-label";
 import type { BillingPlan } from "./lib/use-paddle-checkout";
-import { PricingCheckoutButton, PricingCheckoutProvider } from "./pricing-checkout";
+import { PricingCheckoutButton, PricingCheckoutMessage, PricingCheckoutProvider } from "./pricing-checkout";
 import ProfileMenu from "./profile-menu";
 
 type Locale = "ko" | "en";
@@ -180,7 +180,9 @@ export default function LandingPage({
           <a href="#faq">{copy.nav[1]}</a>
         </nav>
         <div className={styles.headerActions}>
-          <Link className={styles.languageLink} href={locale === "en" ? "/" : "/en"}>{copy.language}</Link>
+          {/* ?lang= tells the proxy to remember the choice; without it the IP
+              guess re-renders "/" in English and the toggle appears to do nothing. */}
+          <Link className={styles.languageLink} href={locale === "en" ? "/?lang=ko" : "/en?lang=en"}>{copy.language}</Link>
           {isAuthenticated ? (
             <>
               <ProfileMenu
@@ -260,6 +262,7 @@ export default function LandingPage({
               );
             })}
           </div>
+          <PricingCheckoutMessage className={styles.pricingFootnote} />
           <p className={styles.pricingFootnote}>{copy.pricingFootnote}</p>
           <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingPerSecond}</span><span>{copy.pricingIncluded}</span></div>
         </PricingCheckoutProvider>

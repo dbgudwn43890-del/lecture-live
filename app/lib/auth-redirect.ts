@@ -1,7 +1,14 @@
-export function getOAuthFallbackNext(path: string, country: string | null, hasCode: boolean) {
+export function getOAuthFallbackNext(
+  path: string,
+  country: string | null,
+  hasCode: boolean,
+  // An explicit language choice, when the visitor has made one. It outranks the
+  // IP guess, which is what strands a Korean speaker abroad on the English site.
+  chosenEnglish?: boolean,
+) {
   if (!hasCode || (path !== "/" && path !== "/en")) return null;
 
-  const prefersEnglish = Boolean(country && country !== "KR" && country !== "XX");
+  const prefersEnglish = chosenEnglish ?? Boolean(country && country !== "KR" && country !== "XX");
   return path === "/en" || prefersEnglish ? "/en/classroom" : "/classroom";
 }
 
