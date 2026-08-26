@@ -112,6 +112,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const socketRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const profileMenuRef = useRef<HTMLDetailsElement | null>(null);
   const startedAtRef = useRef(0);
   const segmentIdsRef = useRef(new Set<string>());
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
@@ -149,6 +150,22 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+
+  useEffect(() => {
+    function closeIfOutside(event: PointerEvent) {
+      const menu = profileMenuRef.current;
+      if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && profileMenuRef.current) profileMenuRef.current.open = false;
+    }
+    document.addEventListener("pointerdown", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
 
   useEffect(() => {
     if (!segments.length && !interim) return;
@@ -938,7 +955,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
             <span>{isEnglish ? "Credits" : "남은 크레딧"}</span>
             <b>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</b>
           </Link>
-          <details className="profile-menu">
+          <details className="profile-menu" ref={profileMenuRef}>
             <summary className="sidebar-profile">
               <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
               <span className="profile-copy">
