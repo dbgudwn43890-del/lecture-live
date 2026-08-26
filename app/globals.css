@@ -28,6 +28,13 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 
+/* Every hover in the classroom app used to snap: only the login page carried
+   transitions. One rule covers the lot; per-component ones stay for anything
+   that also moves. */
+a, button, summary, input, textarea, select {
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
 :focus-visible {
   outline: 3px solid color-mix(in srgb, var(--focus), transparent 25%);
   outline-offset: 2px;
@@ -98,10 +105,17 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 .state-recording {
   background: var(--signal);
+  animation: recording-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  50% { opacity: .35; transform: scale(.78); }
 }
 
 .state-connecting { background: #e6b64f; }
-.state-error { background: var(--signal); }
+/* A distinct hue from .state-recording: both being red made the dot, which is
+   what people glance at, identical whether recording was fine or had failed. */
+.state-error { background: #b3261e; box-shadow: 0 0 0 2px #f3d5d2; }
 
 .credit-balance {
   display: grid;
@@ -251,6 +265,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   border-radius: 10px;
   font-size: 13px;
   font-weight: 750;
+  /* The brutalist hover/active offsets below move these 2px and 4px; without
+     this they teleported. */
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease,
+    transform 90ms ease-out, box-shadow 90ms ease-out;
 }
 
 .start-button { background: white; color: var(--ink); }
@@ -440,7 +458,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .panes {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(360px, 44%) minmax(0, 56%);
+  /* fr, not %: percentage tracks do not account for the gap, so the grid was
+     always 12px wider than the pane and .workspace-main clipped the border. */
+  grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);
   gap: 12px;
   padding: 14px 16px 18px;
 }
@@ -633,6 +653,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-size: clamp(12px, 1.1vw, 15px);
   line-height: 1.55;
   letter-spacing: -.018em;
+  /* Arriving transcript is the highest-frequency visual event in the product
+     and had no entrance at all. */
+  animation: line-in 220ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes line-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .transcript-copy .interim-line { color: var(--muted); }
@@ -1302,7 +1330,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; }
+  /* The spinner is exempt: its ring is a bare circle whose only "working"
+     affordance is the spin, so killing it leaves a static grey donut. */
+  *:not(.auth-spinner), *::before, *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition-duration: .01ms !important;
+  }
 }
 
 /* Lecue brutalism: retain the brand palette, expose the product structure. */
@@ -1826,8 +1860,10 @@ button:active,
   font-weight: 700;
 }
 
-.lecture-toolbar .lecture-title-field input:hover,
-.lecture-toolbar .lecture-title-field input:focus { border-bottom-color: #c8c4bb; outline: 0; }
+.lecture-toolbar .lecture-title-field input:hover { border-bottom-color: #c8c4bb; }
+/* Suppress the outline only for pointer focus. Killing it on :focus too left
+   keyboard editing of the title with a focus ring identical to plain hover. */
+.lecture-toolbar .lecture-title-field input:focus:not(:focus-visible) { border-bottom-color: #c8c4bb; outline: 0; }
 .lecture-toolbar > small { margin-left: auto; color: #98938b; font-size: 10px; white-space: nowrap; }
 
 .workspace .panes { gap: 12px; padding: 14px 18px 16px; background: #f8f7f4; }
@@ -1856,7 +1892,7 @@ button:active,
 
 @media (max-width: 980px) {
   .workspace { grid-template-columns: 224px minmax(0, 1fr); }
-  .workspace .panes { grid-template-columns: minmax(300px, 45%) minmax(0, 55%); }
+  .workspace .panes { grid-template-columns: minmax(300px, 45fr) minmax(0, 55fr); }
   .profile-copy small { display: none; }
 }
 
@@ -1879,7 +1915,12 @@ button:active,
     border-bottom: 1px solid #dedbd3;
   }
 
-  .sidebar-new-lecture { min-height: 34px; }
+  /* Touch targets: the sidebar's controls sit between 22px and 34px on the
+     desktop scale, well under a fingertip. */
+  .workspace-sidebar button,
+  .workspace-sidebar summary,
+  .workspace-sidebar a { min-height: 44px; }
+  .sidebar-new-lecture { min-height: 44px; }
   .sidebar-library { grid-column: 1 / -1; max-height: 190px; padding-bottom: 8px; }
   .sidebar-account { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding-top: 8px; }
   .sidebar-credit { gap: 8px; }
@@ -1899,8 +1940,9 @@ button:active,
   .workspace-sidebar { max-height: 330px; }
   .sidebar-account { align-items: stretch; flex-direction: column; }
   .sidebar-profile { min-width: 0; }
+  /* The app's primary control. It used to shrink here, not grow. */
   .workspace .start-button,
-  .workspace .stop-button { min-width: 76px; padding: 0 10px; font-size: 11px; }
+  .workspace .stop-button { min-width: 76px; min-height: 44px; padding: 0 12px; font-size: 13px; }
   .lecture-toolbar { padding: 8px 12px; }
   .lecture-toolbar > span { max-width: 90px; }
   .lecture-toolbar > small { display: none; }
