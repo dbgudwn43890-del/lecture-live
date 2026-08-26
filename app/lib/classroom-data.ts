@@ -4,8 +4,10 @@ import type { User } from "@supabase/supabase-js";
 export async function getClassroomData(supabase: SupabaseClient, user: User) {
   const [{ data: classrooms, error: classroomError }, { data: sessions, error: sessionError }, { data: questions, error: questionError }] = await Promise.all([
     supabase.from("classrooms").select("id,title,locale,created_at,updated_at").order("updated_at", { ascending: false }),
-    supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").order("started_at", { ascending: false }),
-    supabase.from("lecture_questions").select("session_id"),
+    supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").order("started_at", { ascending: false }).limit(500),
+    // Grouped in Postgres. Selecting every question row and tallying them here
+    // grew without bound across semesters.
+    supabase.from("lecture_question_counts").select("session_id,question_count"),
   ]);
 
   if (classroomError || sessionError || questionError) {
@@ -13,8 +15,8 @@ export async function getClassroomData(supabase: SupabaseClient, user: User) {
   }
 
   const questionCounts = new Map<string, number>();
-  for (const question of questions ?? []) {
-    questionCounts.set(question.session_id, (questionCounts.get(question.session_id) ?? 0) + 1);
+  for (const row of questions ?? []) {
+    questionCounts.set(row.session_id, row.question_count);
   }
 
   const withQuestionCounts = (sessions ?? []).map((session) => ({

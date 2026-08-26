@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-import { getAuthenticatedUserId } from "../../lib/auth";
 import { cleanAnswerText, cleanSources } from "../../lib/answer-format";
 import {
   isAllowedPersonalModel,
@@ -154,22 +153,28 @@ async function findEarlierLectureContext(
   const apiKey = process.env.OPENAI_API_KEY;
   if (!admin || !apiKey) return { text: "", sources: [] as LectureSource[], admin: null };
 
-  const { data: session } = await admin
-    .from("lecture_sessions")
-    .select("id")
-    .eq("id", sessionId)
-    .eq("classroom_id", classroomId)
-    .eq("user_id", userId)
-    .maybeSingle();
+  // Independent checks, so they run together rather than back to back. The
+  // chunk check asks only whether any exist — an exact count made Postgres
+  // scan every chunk in the classroom, and that grows with every lecture.
+  const [{ data: session }, { data: anyChunk }] = await Promise.all([
+    admin
+      .from("lecture_sessions")
+      .select("id")
+      .eq("id", sessionId)
+      .eq("classroom_id", classroomId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    admin
+      .from("lecture_chunks")
+      .select("id")
+      .eq("classroom_id", classroomId)
+      .eq("user_id", userId)
+      .neq("session_id", sessionId)
+      .limit(1)
+      .maybeSingle(),
+  ]);
   if (!session) return { text: "", sources: [] as LectureSource[], admin: null };
-
-  const { count } = await admin
-    .from("lecture_chunks")
-    .select("id", { count: "exact", head: true })
-    .eq("classroom_id", classroomId)
-    .eq("user_id", userId)
-    .neq("session_id", sessionId);
-  if (!count) return { text: "", sources: [] as LectureSource[], admin };
+  if (!anyChunk) return { text: "", sources: [] as LectureSource[], admin };
 
   try {
     const openai = new OpenAI({ apiKey });
@@ -413,15 +418,24 @@ function providerErrorMessage(error: ProviderRequestError, isEnglish: boolean) {
 }
 
 export async function POST(request: Request) {
-  const userId = await getAuthenticatedUserId();
+  // Derived up front: the early exits below used to be hardcoded Korean
+  // because the locale was not read until after the body was parsed, so an
+  // English learner saw Korean errors rendered as the assistant's answer.
+  let isEnglish = request.headers.get("x-site-locale") === "en";
+
+  // One client for the whole request. Building a second one for the credit
+  // check below meant a second auth round trip before the first LLM token.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const userId = user?.id ?? null;
   if (!userId) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    return NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 });
   }
 
   const rateLimit = await checkSharedRateLimit(`ask:${userId}`, 20, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
-      { error: "질문 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { error: isEnglish ? "Too many questions. Try again shortly." : "질문 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
       { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
     );
   }
@@ -430,15 +444,14 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as AskBody;
   } catch {
-    return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
+    return NextResponse.json({ error: isEnglish ? "Invalid request." : "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
   const locale = body.locale === "en" ? "en" : "ko";
-  const isEnglish = locale === "en";
+  isEnglish = locale === "en";
   const requestedSessionId = isUuid(body.lectureSessionId) ? body.lectureSessionId : null;
   const requestedMinuteIndex = typeof body.questionAtMs === "number" && Number.isFinite(body.questionAtMs)
     ? Math.min(179, Math.max(0, Math.floor(body.questionAtMs / 60_000)))
     : 0;
-  const supabase = await createClient();
   const { data: canAsk, error: creditError } = await supabase.rpc("can_ask_with_credits", {
     p_session_id: requestedSessionId,
     p_minute_index: requestedMinuteIndex,
@@ -483,7 +496,7 @@ export async function POST(request: Request) {
   }
   if (!personalLlm && !process.env.OPENAI_API_KEY) {
     return NextResponse.json(
-      { error: "OPENAI_API_KEY가 설정되지 않았습니다." },
+      { error: isEnglish ? "The built-in AI is not configured yet." : "기본 AI가 아직 설정되지 않았습니다." },
       { status: 503 },
     );
   }

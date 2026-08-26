@@ -145,7 +145,11 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     if (status !== "recording") return;
     const timer = window.setInterval(() => {
       const elapsed = Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current);
-      setElapsedMs(elapsed);
+      // The clock is only read at second granularity, so publishing all four
+      // ticks a second re-rendered the whole workspace for an identical
+      // string — 43,200 times over a three-hour lecture.
+      setElapsedMs((current) =>
+        Math.floor(current / 1_000) === Math.floor(elapsed / 1_000) ? current : elapsed);
       const minuteIndex = Math.min(179, Math.floor(elapsed / 60_000));
       if (activeSessionIdRef.current && minuteIndex > chargedMinuteRef.current && !creditChargePendingRef.current) {
         void consumeCreditsThrough(activeSessionIdRef.current, minuteIndex);
@@ -339,7 +343,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       segmentIdsRef.current = new Set(restoredSegments.map((segment) => segment.id));
       setMessages((data.questions ?? []).flatMap((item) => [
         { id: `${item.id}-q`, role: "user" as const, text: item.question },
-        { id: `${item.id}-a`, role: "assistant" as const, text: item.answer, sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
+        { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerText(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
       ]));
       setInterim("");
       setElapsedMs(data.session.duration_seconds * 1_000);
@@ -873,7 +877,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           message.id === assistantId
             ? {
                 ...message,
-                text: data.answer!,
+                // Cleaned once here rather than on every render: it is eleven
+                // regex passes and the result never changes.
+                text: cleanAnswerText(data.answer!),
                 pending: false,
                 sources: cleanSources(data.sources ?? []),
                 lectureSources: data.lectureSources ?? [],
@@ -1167,7 +1173,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                     <span className="message-label">{message.assistantLabel ?? (isEnglish ? "Lecture assistant · AI" : "강의 조교 · AI")}</span>
                   )}
                   <p className={message.pending ? "pending" : undefined}>
-                    {message.role === "assistant" ? cleanAnswerText(message.text) : message.text}
+                    {message.text}
                   </p>
                   {message.sources && message.sources.length > 0 && (
                     <div className="sources">
