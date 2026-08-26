@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {

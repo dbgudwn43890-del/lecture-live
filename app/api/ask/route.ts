@@ -177,7 +177,10 @@ async function findEarlierLectureContext(
   if (!anyChunk) return { text: "", sources: [] as LectureSource[], admin };
 
   try {
-    const openai = new OpenAI({ apiKey });
+    // Bound the wait: SDK defaults are a 10-minute timeout with 2 retries,
+    // so a hung provider rode to the platform timeout and returned a raw 504
+    // instead of the localized error the catch block below produces.
+    const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
     const embedding = await openai.embeddings.create({ model: "text-embedding-3-small", input: question });
     const { data, error } = await admin.rpc("match_lecture_chunks", {
       p_user_id: userId,
@@ -213,7 +216,7 @@ async function askOpenAI(
   instructions: string,
   reasoningEffort: "low" | "medium",
 ): Promise<AnswerResult> {
-  const openai = new OpenAI({ apiKey });
+  const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
   const response = await openai.beta.responses.create({
     model,
     reasoning: { effort: reasoningEffort },

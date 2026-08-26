@@ -38,7 +38,12 @@ export function verifyPaddleSignature(
   const timestamp = parts.find(([key]) => key === "ts")?.[1];
   const signatures = parts.filter(([key]) => key === "h1").map(([, value]) => value);
   const eventSeconds = Number(timestamp);
-  if (!timestamp || !Number.isInteger(eventSeconds) || Math.abs(nowSeconds - eventSeconds) > 30 || signatures.length === 0) {
+  // 300s is Paddle's own documented replay window. At 30s a cold start plus
+  // reading a large transaction.completed body could age the delivery past the
+  // limit, rejecting a real payment and leaving the buyer's credits waiting on
+  // Paddle's retry. Replay protection comes from billing_webhook_events, not
+  // from a tight clock.
+  if (!timestamp || !Number.isInteger(eventSeconds) || Math.abs(nowSeconds - eventSeconds) > 300 || signatures.length === 0) {
     return false;
   }
 
@@ -82,6 +87,8 @@ export async function paddleRequest<T>(path: string, init: RequestInit = {}) {
       ...init.headers,
     },
     cache: "no-store",
+    // Without this a hung Paddle call rides to the platform function timeout.
+    signal: AbortSignal.timeout(15_000),
   });
   const payload = await response.json().catch(() => null) as { data?: T; meta?: { request_id?: string }; error?: { code?: string } } | null;
   if (!response.ok || !payload?.data) {

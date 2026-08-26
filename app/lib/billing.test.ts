@@ -11,7 +11,10 @@ test("verifies an untampered Paddle signature", () => {
   const signature = createHmac("sha256", secret).update(`${timestamp}:${body}`).digest("hex");
   assert.equal(verifyPaddleSignature(body, `ts=${timestamp};h1=${signature}`, secret, timestamp), true);
   assert.equal(verifyPaddleSignature(`${body} `, `ts=${timestamp};h1=${signature}`, secret, timestamp), false);
-  assert.equal(verifyPaddleSignature(body, `ts=${timestamp};h1=${signature}`, secret, timestamp + 31), false);
+  // 300s replay window: a slow-but-genuine delivery is accepted, an old one is
+  // not. Cold starts made the previous 30s reject real payments.
+  assert.equal(verifyPaddleSignature(body, `ts=${timestamp};h1=${signature}`, secret, timestamp + 299), true);
+  assert.equal(verifyPaddleSignature(body, `ts=${timestamp};h1=${signature}`, secret, timestamp + 301), false);
 });
 
 test("keeps calendar-month expiry at the end of shorter months", () => {

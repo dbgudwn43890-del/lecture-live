@@ -6,6 +6,9 @@ import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
 
+/** One lecture's hard cap. Past this a "recording" row cannot still be live. */
+const MAX_LECTURE_MS = 10_800_000;
+
 type SegmentBody = TranscriptPart & { id?: unknown };
 
 async function context(request: Request) {
@@ -83,13 +86,17 @@ export async function POST(request: Request) {
 
   // A refresh or crash mid-lecture used to leave the row in "recording"
   // forever: the library showed it as live and the workspace opened it at
-  // 0:00. The workspace calls this on mount, when nothing can be recording
-  // yet, and each stale lecture is closed at its last saved segment.
+  // 0:00. Only sessions past the 3-hour cap are closed — a session younger
+  // than that may be recording right now in another tab, and completing it
+  // would make every further audio chunk fail with LECTURE_NOT_RECORDING.
   if (body.action === "reconcile") {
+    const abandonedBefore = new Date(Date.now() - MAX_LECTURE_MS).toISOString();
     const { data: stale, error } = await current.supabase
       .from("lecture_sessions")
       .select("id")
-      .eq("status", "recording");
+      .eq("status", "recording")
+      .lt("started_at", abandonedBefore)
+      .limit(20);
     if (error) {
       console.error("Stale lecture lookup failed", error.code);
       return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 500 });
@@ -183,7 +190,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Invalid lecture completion data." : "수업 종료 정보를 확인해 주세요." }, { status: 400 });
   }
   const segments = body.segments.filter(validSegment).slice(0, 5_000);
-  const { data: session } = await current.supabase.from("lecture_sessions").select("id,classroom_id").eq("id", body.sessionId).maybeSingle();
+  const { data: session } = await current.supabase.from("lecture_sessions").select("id,classroom_id,started_at").eq("id", body.sessionId).maybeSingle();
   if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
 
   if (segments.length) {
@@ -199,7 +206,11 @@ export async function PATCH(request: Request) {
     if (error) console.error("Final transcript save failed", error.code);
   }
 
-  const durationSeconds = Math.min(10_800, Math.max(0, Math.ceil(body.durationMs / 1_000)));
+  // Derived from the session's own started_at, not from the client. A client
+  // reporting durationMs: 0 after a 90-minute lecture used to store 0 and skip
+  // the final credit reconciliation below.
+  const elapsedMs = Date.now() - new Date(session.started_at).getTime();
+  const durationSeconds = Math.min(10_800, Math.max(0, Math.ceil(elapsedMs / 1_000)));
   if (durationSeconds > 0) {
     const { error: creditError } = await current.supabase.rpc("consume_lecture_credits", {
       p_session_id: body.sessionId,
@@ -217,7 +228,7 @@ export async function PATCH(request: Request) {
   const chunks = chunkTranscript(segments);
   if (chunks.length && process.env.OPENAI_API_KEY) {
     try {
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60_000, maxRetries: 1 });
       const embeddings = await openai.embeddings.create({ model: "text-embedding-3-small", input: chunks.map((chunk) => chunk.text) });
       await current.supabase.from("lecture_chunks").delete().eq("session_id", body.sessionId);
       const { error } = await current.supabase.from("lecture_chunks").insert(chunks.map((chunk, index) => ({

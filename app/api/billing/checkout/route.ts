@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../../lib/auth";
 import { isBillingPlan, paddlePriceId, paddleRequest } from "../../../lib/billing";
-import { checkRateLimit } from "../../../lib/rate-limit";
+import { checkSharedRateLimit } from "../../../lib/rate-limit";
 import { createAdminClient } from "../../../lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const isEnglish = request.headers.get("x-site-locale") === "en";
   const userId = await getAuthenticatedUserId();
   if (!userId) return NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 });
-  const rateLimit = checkRateLimit(`billing-checkout:${userId}`, 6, 60_000);
+  const rateLimit = await checkSharedRateLimit(`billing-checkout:${userId}`, 6, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: isEnglish ? "Too many checkout requests. Try again shortly." : "결제 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
   }

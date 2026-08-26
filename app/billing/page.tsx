@@ -79,9 +79,11 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
   const [portalMessage, setPortalMessage] = useState("");
   const autoStartedRef = useRef(false);
 
-  const { ready, pending, message, initializePaddle, startCheckout } = usePaddleCheckout(locale, () => {
-    window.location.assign(`${basePath}/classroom?payment=success`);
-  });
+  const { ready, pending, message, initializePaddle, startCheckout } = usePaddleCheckout(
+    locale,
+    () => window.location.assign(`${basePath}/classroom?payment=success`),
+    () => void loadStatus(),
+  );
 
   useEffect(() => { void loadStatus(); }, [locale]);
 

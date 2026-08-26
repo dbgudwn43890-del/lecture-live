@@ -36,13 +36,28 @@ const copy = {
   },
 } as const;
 
-export function usePaddleCheckout(locale: Locale, onCreditsGranted: () => void) {
+export function usePaddleCheckout(
+  locale: Locale,
+  onCreditsGranted: () => void,
+  // Both call sites navigate away in onCreditsGranted, so the slow-webhook
+  // path needs a way to refresh in place instead of announcing a success that
+  // has not happened yet.
+  onRefresh?: () => void,
+) {
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState<BillingPlan | "webhook" | null>(null);
   const [message, setMessage] = useState("");
   const initializedRef = useRef(false);
   const baselineRef = useRef<{ credits: number; grantAt: string | null }>({ credits: 0, grantAt: null });
+  // Paddle's eventCallback is registered once, so it would close over the
+  // first render's `pending`. Read it through a ref instead.
+  const pendingRef = useRef<BillingPlan | "webhook" | null>(null);
   const t = copy[locale];
+
+  function updatePending(next: BillingPlan | "webhook" | null) {
+    pendingRef.current = next;
+    setPending(next);
+  }
 
   function initializePaddle() {
     if (initializedRef.current || !window.Paddle) return;
@@ -59,8 +74,11 @@ export function usePaddleCheckout(locale: Locale, onCreditsGranted: () => void) 
         if (event.name === "checkout.completed") return void waitForCredits();
         // Closing the overlay leaves no other signal, so without this the
         // plan buttons stayed disabled on "opening checkout…" until a reload.
+        // Paddle emits closed right after completed, though, so a close that
+        // follows a successful purchase must not cancel the credit wait.
         if (event.name === "checkout.closed" || event.name === "checkout.error") {
-          setPending(null);
+          if (pendingRef.current === "webhook") return;
+          updatePending(null);
           setMessage(event.name === "checkout.error" ? t.openFailed : "");
         }
       },
@@ -70,7 +88,7 @@ export function usePaddleCheckout(locale: Locale, onCreditsGranted: () => void) 
   }
 
   async function waitForCredits() {
-    setPending("webhook");
+    updatePending("webhook");
     setMessage(t.processing);
     const baseline = baselineRef.current;
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -79,22 +97,22 @@ export function usePaddleCheckout(locale: Locale, onCreditsGranted: () => void) 
       if (response.ok) {
         const current = await response.json() as { credits?: number; latestGrantAt?: string | null };
         if ((current.credits ?? 0) > baseline.credits || current.latestGrantAt !== baseline.grantAt) {
-          setPending(null);
+          updatePending(null);
           onCreditsGranted();
           return;
         }
       }
     }
-    // Refresh before telling the user it is still syncing, otherwise the
-    // credit figure above the message contradicts it.
-    onCreditsGranted();
-    setPending(null);
+    // Refresh in place. Calling onCreditsGranted here navigated the buyer to
+    // a "payment success" screen with none of the credits actually granted.
+    onRefresh?.();
+    updatePending(null);
     setMessage(t.syncing);
   }
 
   async function startCheckout(plan: BillingPlan) {
     if (!window.Paddle || !ready || pending) return;
-    setPending(plan);
+    updatePending(plan);
     setMessage(t.opening);
     try {
       const statusResponse = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
@@ -112,7 +130,7 @@ export function usePaddleCheckout(locale: Locale, onCreditsGranted: () => void) 
       setMessage("");
     } catch (caught) {
       setMessage(caught instanceof Error && caught.message ? caught.message : t.openFailed);
-      setPending(null);
+      updatePending(null);
     }
   }
 

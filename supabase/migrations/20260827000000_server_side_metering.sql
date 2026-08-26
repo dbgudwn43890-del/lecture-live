@@ -104,17 +104,9 @@ end;
 $$;
 
 revoke all on function public.consume_rate_limit(text, integer, integer) from public, anon, authenticated;
+-- Called only through the admin client. Without this the revoke above leaves
+-- nobody able to execute it and every rate-limit check fails open.
+grant execute on function public.consume_rate_limit(text, integer, integer) to service_role;
 
--- Sweeps counters whose window closed over an hour ago. Safe to call from any
--- request path; it only ever removes rows no live window can still reference.
-create or replace function public.purge_rate_limit_counters()
-returns void
-language sql
-security definer
-set search_path = ''
-as $$
-  delete from public.rate_limit_counters
-  where window_started_at < now() - interval '1 hour';
-$$;
-
-revoke all on function public.purge_rate_limit_counters() from public, anon, authenticated;
+-- No sweeper: bucket_key is stable per user per route, so the table is bounded
+-- by users × limited routes rather than growing with traffic.

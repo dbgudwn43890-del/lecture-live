@@ -170,9 +170,17 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ error: "Billing storage is not configured" }, { status: 503 });
-  const { data: processed, error: readError } = await admin.from("billing_webhook_events").select("event_id").eq("event_id", event.event_id).maybeSingle();
-  if (readError) return NextResponse.json({ error: "Billing storage is not ready" }, { status: 503 });
-  if (processed) return NextResponse.json({ received: true });
+  // Claim the event before doing the work. A select-then-insert let two
+  // concurrent deliveries of one event_id both pass the check, and the second
+  // could then race grantPaidCredits into a unique-violation 500 that made
+  // Paddle retry the event indefinitely.
+  const { error: claimError } = await admin.from("billing_webhook_events").insert({
+    event_id: event.event_id,
+    event_type: event.event_type,
+    occurred_at: event.occurred_at,
+  });
+  if (claimError?.code === "23505") return NextResponse.json({ received: true });
+  if (claimError) return NextResponse.json({ error: "Billing storage is not ready" }, { status: 503 });
 
   try {
     if ([
@@ -191,14 +199,10 @@ export async function POST(request: Request) {
     } else if (event.event_type === "adjustment.updated") {
       await revokeRefundedCredits(admin, event);
     }
-    const { error } = await admin.from("billing_webhook_events").insert({
-      event_id: event.event_id,
-      event_type: event.event_type,
-      occurred_at: event.occurred_at,
-    });
-    if (error && error.code !== "23505") throw new Error(`event record: ${error.code}`);
     return NextResponse.json({ received: true });
   } catch (error) {
+    // Release the claim so Paddle's retry can actually reprocess the event.
+    await admin.from("billing_webhook_events").delete().eq("event_id", event.event_id);
     console.error("Paddle webhook processing failed", event.event_type, error instanceof Error ? error.message : "unknown");
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });
   }

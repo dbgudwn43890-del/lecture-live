@@ -85,6 +85,12 @@ export async function checkSharedRateLimit(
   });
   if (error) {
     console.error("Shared rate limit failed", error.code);
+    // A misconfigured grant is not a transient blip — degrading to the
+    // in-process limiter would hide it exactly where it matters. Only a
+    // genuinely unavailable RPC falls back.
+    if (error.code === "42501" || error.code === "42883") {
+      return { allowed: false, remaining: 0, retryAfterSeconds: Math.max(1, Math.ceil(windowMs / 1_000)) };
+    }
     return checkRateLimit(key, limit, windowMs);
   }
 

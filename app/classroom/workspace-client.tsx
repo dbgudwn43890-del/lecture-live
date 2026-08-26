@@ -153,7 +153,15 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         Math.floor(current / 1_000) === Math.floor(elapsed / 1_000) ? current : elapsed);
       const minuteIndex = Math.min(179, Math.floor(elapsed / 60_000));
       if (activeSessionIdRef.current && minuteIndex > chargedMinuteRef.current && !creditChargePendingRef.current) {
-        void consumeCreditsThrough(activeSessionIdRef.current, minuteIndex);
+        // Deepgram only charges minute 0 server-side, so its lectures still
+        // need this ticker. Whisper meters every chunk in /api/lecture-audio
+        // from the DB clock; running both there would have two meters racing
+        // on each boundary, one of them on the client's clock.
+        if (sttProvider === "deepgram") void consumeCreditsThrough(activeSessionIdRef.current, minuteIndex);
+        else {
+          chargedMinuteRef.current = minuteIndex;
+          void loadCredits();
+        }
       }
       if (elapsed >= MAX_LECTURE_MS) void finishLecture();
     }, 250);
@@ -492,14 +500,22 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
     const response = await fetch("/api/lecture-audio", { method: "POST", body: formData });
     const data = await response.json() as { text?: string; error?: string };
-    if (!response.ok) throw new Error(data.error);
+    if (!response.ok) {
+      const failure = new Error(data.error ?? "") as Error & { status?: number };
+      failure.status = response.status;
+      throw failure;
+    }
 
-    const text = data.text?.trim();
+    const text = data.text?.trim().slice(0, 2_000);
     if (!text) return;
 
     whisperPreviousTextRef.current = text;
     const endMs = startMs + durationMs;
-    const id = `${startMs}-${endMs}-${text}`;
+    // The server rejects an id over 2200 chars or text over 2000 to match the
+    // column constraints, and the save below never reads its response — so an
+    // over-long chunk used to render, be rejected with an unseen 400, and
+    // vanish on the next reload.
+    const id = `${startMs}-${endMs}-${text.slice(0, 120)}`;
     if (segmentIdsRef.current.has(id)) return;
     segmentIdsRef.current.add(id);
     const segment = { id, startMs, endMs, text };
@@ -533,26 +549,46 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
     setInterim(isEnglish ? "Transcribing…" : "받아쓰는 중…");
     const sliceSamples = Math.floor(sampleRate * (WHISPER_MAX_UPLOAD_MS / 1_000));
+
+    // The cursor advances across the whole backlog before any upload. Doing it
+    // per slice inside the loop meant one failure discarded the remaining
+    // slices without their durations, shifting every later timestamp earlier
+    // for the rest of the lecture.
+    const slices: Array<{ samples: Float32Array; startMs: number; durationMs: number }> = [];
+    for (let start = 0; start < sampleCount; start += sliceSamples) {
+      const samples = merged.subarray(start, Math.min(sampleCount, start + sliceSamples));
+      const durationMs = Math.round((samples.length / sampleRate) * 1_000);
+      slices.push({ samples, startMs: whisperCursorMsRef.current, durationMs });
+      whisperCursorMsRef.current += durationMs;
+    }
+
     try {
-      for (let start = 0; start < sampleCount; start += sliceSamples) {
-        const slice = merged.subarray(start, Math.min(sampleCount, start + sliceSamples));
-        const startMs = whisperCursorMsRef.current;
-        const durationMs = Math.round((slice.length / sampleRate) * 1_000);
-        whisperCursorMsRef.current += durationMs;
-        await uploadWhisperSlice(slice, startMs, durationMs);
+      for (const slice of slices) {
+        try {
+          await uploadWhisperSlice(slice.samples, slice.startMs, slice.durationMs);
+          whisperFailuresRef.current = 0;
+        } catch (caught) {
+          const status = (caught as { status?: number }).status;
+          // Out of credits is terminal: retrying just repeats the rejection
+          // every few seconds while the UI still claims to be recording.
+          if (status === 402 || status === 409) throw caught;
+          // Anything else costs one caption. A run of them means the
+          // transcript has stopped and the user cannot otherwise tell.
+          whisperFailuresRef.current += 1;
+          if (whisperFailuresRef.current >= 3) {
+            setError(caught instanceof Error && caught.message
+              ? caught.message
+              : isEnglish
+                ? "The transcript has stopped updating. Check your connection."
+                : "받아쓰기가 멈췄습니다. 네트워크 상태를 확인해 주세요.");
+          }
+        }
       }
-      whisperFailuresRef.current = 0;
     } catch (caught) {
-      // One dropped chunk is a missed caption and recording continues, but a
-      // run of them means the transcript has stopped and the user cannot tell.
-      whisperFailuresRef.current += 1;
-      if (whisperFailuresRef.current >= 3) {
-        setError(caught instanceof Error && caught.message
-          ? caught.message
-          : isEnglish
-            ? "The transcript has stopped updating. Check your connection."
-            : "받아쓰기가 멈췄습니다. 네트워크 상태를 확인해 주세요.");
-      }
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Recording stopped." : "기록이 중단됐습니다.");
+      void finishLecture();
     } finally {
       setInterim("");
       whisperPendingRef.current = false;

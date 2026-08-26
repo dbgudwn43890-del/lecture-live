@@ -16,6 +16,13 @@ test("does not intercept a normal landing page request", async () => {
   assert.equal(getOAuthFallbackNext("/", null, false), null);
 });
 
+test("an explicit language choice outranks the IP guess", async () => {
+  // A Korean speaker abroad picked Korean; the US IP must not override it.
+  assert.equal(getOAuthFallbackNext("/", "US", true, false), "/classroom");
+  // And someone in Korea who picked English keeps English.
+  assert.equal(getOAuthFallbackNext("/", "KR", true, true), "/en/classroom");
+});
+
 test("keeps only approved post-auth destinations", () => {
   assert.equal(getSafeAuthNext("/billing?plan=monthly"), "/billing?plan=monthly");
   assert.equal(getSafeAuthNext("/classrooms"), "/classrooms");
