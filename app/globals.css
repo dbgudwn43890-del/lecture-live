@@ -1704,6 +1704,121 @@ button:active,
 
 .sidebar-classroom-group.drop-target { background: #e4ece9; border-radius: 8px; outline: 1px dashed #8fa8a2; }
 
+/* ---------------------------------------------------------------------------
+   Quiet pass. The workspace had inherited two identities at once: the loud
+   brutalist one underneath (heavy weights, hard rules, a decorative dash over
+   every empty state) and the warm one above it. This settles on the warm one
+   and takes weight out, so the only emphatic thing left on the screen is the
+   control that starts a lecture.
+   --------------------------------------------------------------------------- */
+
+/* Three children — title, state, button — but only two columns were declared,
+   so the button wrapped onto its own implicit row and stretched into a slab
+   across the width of the workspace. */
+.workspace .topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+}
+
+.workspace .session-state { justify-self: end; font-size: 12px; }
+.workspace .session-state time { font-variant-numeric: tabular-nums; }
+
+.workspace .start-button,
+.workspace .stop-button {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.workspace .chat-pane,
+.workspace .transcript-pane { border-color: #ece9e3; border-radius: 14px; }
+
+.workspace .pane-heading {
+  min-height: 0;
+  padding: 18px 20px 16px;
+  border-color: #f0ede7;
+}
+
+.workspace .pane-heading h1,
+.workspace .pane-heading h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.012em;
+}
+
+/* Counts were set in a monospace face, which read as code rather than as a
+   tally. Tabular figures keep them from jittering as they climb. */
+.workspace .count {
+  color: #99948b;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* A 42px teal dash floated above every empty state, meaning nothing. An empty
+   pane is an invitation to start; the sentence is enough. */
+.workspace .empty-chat::before,
+.workspace .empty-transcript::before { content: none; }
+
+.workspace .empty-chat,
+.workspace .empty-transcript { gap: 7px; }
+.workspace .empty-chat p,
+.workspace .empty-transcript p { font-size: 14.5px; font-weight: 600; letter-spacing: -.008em; }
+.workspace .empty-chat span,
+.workspace .empty-transcript span { color: #8a867f; font-size: 13px; }
+/* The transcript's empty state was indented up to 120px and the chat's was
+   not, so the two panes started their sentences at different places. */
+.workspace .empty-transcript { padding-left: 0; }
+
+/* Teal was doing duty as both the primary action and the selected-row tint,
+   which left the sidebar reading as cool against a warm page. It now marks the
+   action only. */
+.workspace .sidebar-classroom { font-weight: 600; }
+.workspace .sidebar-classroom.active { color: #2a2823; background: #e4e2db; }
+.workspace .sidebar-classroom.active small { color: #7d786f; }
+.workspace .sidebar-sessions button.active { font-weight: 600; }
+.workspace .sidebar-brand { font-weight: 700; letter-spacing: -.04em; }
+
+/* The composer read as two slabs: a dashed rule above it and a 70x58 filled
+   button beside the field. The rule is a hairline and the button now sits on
+   the field's last line, the size of the text it sends. */
+.workspace .question-form {
+  align-items: end;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid #ece9e3;
+}
+
+.workspace .question-form textarea {
+  min-height: 46px;
+  padding: 12px;
+  border-color: #dedbd3;
+  font-size: 13.5px;
+}
+
+.workspace .question-form button {
+  width: auto;
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Adding a classroom is a rare, secondary act; it was wearing the same filled
+   teal as the button that starts a lecture. */
+.workspace .sidebar-create-classroom button {
+  color: #6f6a63;
+  background: #e4e2db;
+  font-size: 15px;
+  font-weight: 500;
+}
+.workspace .sidebar-create-classroom button:hover { color: #302e2a; background: #dbd8d0; }
+.workspace .sidebar-create-classroom input { background: #fff; border-color: #dedbd3; }
+.workspace .sidebar-section-heading { font-weight: 600; }
+
 @media (max-width: 980px) {
   .workspace { grid-template-columns: 224px minmax(0, 1fr); }
   .workspace .panes { grid-template-columns: minmax(300px, 45fr) minmax(0, 55fr); }
@@ -1741,10 +1856,19 @@ button:active,
   .sidebar-profile { min-width: 210px; }
   .profile-copy small { display: block; }
 
-  .workspace-main { min-height: 100svh; grid-template-rows: 48px auto auto 30px; overflow: visible; }
-  .workspace .topbar { display: grid; grid-template-columns: 1fr auto; padding: 0 12px; }
-  .workspace .session-state { grid-column: 1; grid-row: 1; }
-  .workspace .topbar > button { grid-column: 2; grid-row: 1; }
+  /* Same five children as the desktop rule; the topbar wraps to two rows here, so it sizes itself. */
+  .workspace-main { min-height: 100svh; grid-template-rows: auto auto auto auto 30px; overflow: visible; }
+  /* Narrow: the title takes the first row on its own, the state and the button
+     share the second, so none of the three has to be truncated. */
+  .workspace .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: center;
+    gap: 6px 12px;
+    padding: 8px 12px;
+  }
+  .workspace .lecture-title-field { grid-column: 1 / -1; grid-row: 1; }
+  .workspace .session-state { grid-column: 1; grid-row: 2; justify-self: start; }
+  .workspace .topbar > button { grid-column: 2; grid-row: 2; }
   .workspace .panes { grid-template-columns: 1fr; padding: 12px; }
   .workspace .chat-pane,
   .workspace .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
