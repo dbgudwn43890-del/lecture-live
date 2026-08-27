@@ -10,6 +10,111 @@ export const runtime = "nodejs";
 const MAX_LECTURE_MS = 10_800_000;
 
 type SegmentBody = TranscriptPart & { id?: unknown };
+type SegmentRow = { client_id: string; start_ms: number; end_ms: number; text: string };
+
+// PostgREST silently caps a single select at 1,000 rows no matter what
+// `.limit()` says. A 3-hour lecture can produce many more transcript segments
+// than that, so any full-transcript read has to page through with `.range()`
+// or the tail of a long lecture comes back missing without any error.
+const SEGMENT_PAGE_SIZE = 1_000;
+
+async function fetchAllSegments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessionId: string,
+  maxRows: number,
+): Promise<{ rows: SegmentRow[]; error?: undefined } | { rows?: undefined; error: { code?: string } }> {
+  const rows: SegmentRow[] = [];
+  let from = 0;
+  while (rows.length < maxRows) {
+    const to = Math.min(from + SEGMENT_PAGE_SIZE, maxRows) - 1;
+    const { data, error } = await supabase
+      .from("transcript_segments")
+      .select("client_id,start_ms,end_ms,text")
+      .eq("session_id", sessionId)
+      // start_ms is not unique, and a paginated read needs a total order or
+      // rows that share a timestamp can straddle a page boundary and be
+      // repeated or skipped. client_id is unique per session.
+      .order("start_ms")
+      .order("client_id")
+      .range(from, to);
+    if (error) return { error };
+    rows.push(...(data ?? []));
+    if (!data || data.length < to - from + 1) break; // fewer rows than requested: reached the end
+    from += SEGMENT_PAGE_SIZE;
+  }
+  return { rows };
+}
+
+type IndexInput = { sessionId: string; classroomId: string | null; userId: string; segments: TranscriptPart[] };
+
+// Shared by the PATCH completion path and the reconcile recovery path: turns
+// saved transcript segments into `lecture_chunks` rows so
+// `match_lecture_chunks` (used by /api/ask's findEarlierLectureContext) can
+// find the lecture. A lecture closed by reconcile needs the exact same
+// indexing a normal "end lecture" gets, or its data is stored but never
+// searchable.
+//
+// Indexing failures are logged and swallowed per session — a lecture that
+// fails to embed still ends up "completed" (the caller already committed
+// that); it just stays un-searchable until a later attempt indexes it.
+async function indexLectureChunks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessions: IndexInput[],
+): Promise<Map<string, boolean>> {
+  const indexed = new Map<string, boolean>();
+  if (!process.env.OPENAI_API_KEY) return indexed;
+
+  const batches = sessions
+    .map((session) => ({ session, chunks: chunkTranscript(session.segments) }))
+    .filter((entry) => entry.chunks.length > 0);
+  if (!batches.length) return indexed;
+
+  // ponytail: one embeddings.create call for the whole batch instead of one
+  // per session — reconcile can carry several sessions in a single request,
+  // and issuing that many sequential OpenAI calls would make one reconcile
+  // request take minutes. A single call scales with total transcript size,
+  // not with session count.
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60_000, maxRetries: 1 });
+  let embeddings: Awaited<ReturnType<typeof openai.embeddings.create>>;
+  try {
+    embeddings = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: batches.flatMap((entry) => entry.chunks.map((chunk) => chunk.text)),
+    });
+    // One call now carries chunks from several lectures, so a response that
+    // came back out of order would file one lecture's text under another
+    // lecture's vector. Sort by the index the API echoes back rather than
+    // trusting array position.
+    embeddings.data = [...embeddings.data].sort((a, b) => a.index - b.index);
+  } catch (error) {
+    console.error("Lecture indexing embedding call failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+    return indexed;
+  }
+
+  let offset = 0;
+  for (const entry of batches) {
+    const { session, chunks } = entry;
+    const rows = chunks.map((chunk, i) => ({
+      session_id: session.sessionId,
+      classroom_id: session.classroomId,
+      user_id: session.userId,
+      start_ms: chunk.startMs,
+      end_ms: chunk.endMs,
+      text: chunk.text,
+      embedding: embeddings.data[offset + i].embedding,
+    }));
+    offset += chunks.length;
+    try {
+      await supabase.from("lecture_chunks").delete().eq("session_id", session.sessionId);
+      const { error } = await supabase.from("lecture_chunks").insert(rows);
+      if (error) throw error;
+      indexed.set(session.sessionId, true);
+    } catch (error) {
+      console.error("Lecture indexing save failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+    }
+  }
+  return indexed;
+}
 
 async function context(request: Request) {
   const supabase = await createClient();
@@ -38,9 +143,12 @@ export async function GET(request: Request) {
   const sessionId = new URL(request.url).searchParams.get("sessionId");
   if (!validId(sessionId)) return NextResponse.json({ error: current.isEnglish ? "Check the lecture ID." : "수업 ID를 확인해 주세요." }, { status: 400 });
 
-  const [{ data: session, error: sessionError }, { data: segments, error: segmentError }, { data: questions, error: questionError }] = await Promise.all([
+  // ponytail: 50,000 segments is far beyond any real lecture (individual
+  // "segment" saves during recording are never capped like the PATCH
+  // completion payload is) — it's just a safety ceiling against a runaway read.
+  const [{ data: session, error: sessionError }, { rows: segments, error: segmentError }, { data: questions, error: questionError }] = await Promise.all([
     current.supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").eq("id", sessionId).maybeSingle(),
-    current.supabase.from("transcript_segments").select("client_id,start_ms,end_ms,text").eq("session_id", sessionId).order("start_ms"),
+    fetchAllSegments(current.supabase, sessionId, 50_000),
     current.supabase.from("lecture_questions").select("id,question,answer,provider,model,external_sources,lecture_sources,created_at").eq("session_id", sessionId).order("created_at"),
   ]);
 
@@ -90,36 +198,99 @@ export async function POST(request: Request) {
   // than that may be recording right now in another tab, and completing it
   // would make every further audio chunk fail with LECTURE_NOT_RECORDING.
   if (body.action === "reconcile") {
+    // ponytail: batch size this reconcile call closes in one request. If we
+    // fill it, more stale sessions likely remain — say so in the response
+    // instead of quietly leaving them for a caller that never checks again.
+    const MAX_RECONCILE_SESSIONS = 20;
+    // ponytail: cap on total chunks embedded per reconcile call. Batching all
+    // sessions into one OpenAI call (see indexLectureChunks) keeps this fast
+    // in the normal case, but a pile of stale 3-hour lectures could still add
+    // up to a huge combined input. Sessions beyond the cap stay "completed"
+    // without chunks — same outcome as the bug this fixes for those specific
+    // sessions — but the response reports it instead of hiding it, so this is
+    // a rare, visible edge case rather than a silent, permanent one.
+    const MAX_RECONCILE_CHUNKS = 1_000;
+
     const abandonedBefore = new Date(Date.now() - MAX_LECTURE_MS).toISOString();
     const { data: stale, error } = await current.supabase
       .from("lecture_sessions")
-      .select("id")
+      .select("id,classroom_id,user_id")
       .eq("status", "recording")
       .lt("started_at", abandonedBefore)
-      .limit(20);
+      .limit(MAX_RECONCILE_SESSIONS);
     if (error) {
       console.error("Stale lecture lookup failed", error.code);
       return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 500 });
     }
 
+    const toIndex: IndexInput[] = [];
     for (const session of stale ?? []) {
-      const { data: last } = await current.supabase
-        .from("transcript_segments")
-        .select("end_ms")
-        .eq("session_id", session.id)
-        .order("end_ms", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // The client never sends segments for a session it didn't close itself,
+      // so read the transcript straight from the table — paginated, because a
+      // 3-hour lecture has far more than PostgREST's 1,000-row default cap.
+      const { rows: segments, error: segmentsError } = await fetchAllSegments(current.supabase, session.id, 5_000);
+      if (segmentsError) console.error("Reconcile transcript read failed", segmentsError.code);
+
+      const durationSeconds = segments?.length ? Math.round(Math.max(...segments.map((row) => row.end_ms)) / 1_000) : 0;
       await current.supabase
         .from("lecture_sessions")
         .update({
           status: "completed",
           ended_at: new Date().toISOString(),
-          duration_seconds: Math.round((last?.end_ms ?? 0) / 1_000),
+          duration_seconds: durationSeconds,
         })
         .eq("id", session.id);
+
+      if (segments?.length) {
+        toIndex.push({
+          sessionId: session.id,
+          classroomId: session.classroom_id,
+          userId: session.user_id,
+          segments: segments.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })),
+        });
+      }
     }
-    return NextResponse.json({ reconciled: stale?.length ?? 0 });
+
+    let indexedCount = 0;
+    let indexingDeferred = 0;
+    if (toIndex.length) {
+      // Don't re-embed a session that somehow already has chunks (e.g. a
+      // concurrent reconcile call raced this one for the same stale session).
+      const { data: existingChunks } = await current.supabase
+        .from("lecture_chunks")
+        .select("session_id")
+        .in("session_id", toIndex.map((entry) => entry.sessionId));
+      const alreadyIndexed = new Set((existingChunks ?? []).map((row) => row.session_id));
+      const pending = toIndex.filter((entry) => !alreadyIndexed.has(entry.sessionId));
+
+      const batch: IndexInput[] = [];
+      let usedChunks = 0;
+      for (const entry of pending) {
+        const chunkCount = chunkTranscript(entry.segments).length;
+        if (batch.length && usedChunks + chunkCount > MAX_RECONCILE_CHUNKS) {
+          indexingDeferred += 1;
+          continue;
+        }
+        batch.push(entry);
+        usedChunks += chunkCount;
+      }
+      if (indexingDeferred > 0) console.warn("Reconcile deferred indexing for", indexingDeferred, "session(s) past the chunk cap");
+
+      if (batch.length) {
+        const indexResult = await indexLectureChunks(current.supabase, batch);
+        indexedCount = [...indexResult.values()].filter(Boolean).length;
+      }
+    }
+
+    const reconciled = stale?.length ?? 0;
+    return NextResponse.json({
+      reconciled,
+      indexed: indexedCount,
+      indexingDeferred,
+      // Batch was full: there may be more stale sessions this call didn't
+      // reach. The client can use this to decide whether to call again.
+      hasMore: reconciled === MAX_RECONCILE_SESSIONS,
+    });
   }
 
   if (body.action === "segment" && validId(body.sessionId) && validSegment(body.segment)) {
@@ -224,28 +395,13 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 500 });
   }
 
-  let indexed = false;
-  const chunks = chunkTranscript(segments);
-  if (chunks.length && process.env.OPENAI_API_KEY) {
-    try {
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60_000, maxRetries: 1 });
-      const embeddings = await openai.embeddings.create({ model: "text-embedding-3-small", input: chunks.map((chunk) => chunk.text) });
-      await current.supabase.from("lecture_chunks").delete().eq("session_id", body.sessionId);
-      const { error } = await current.supabase.from("lecture_chunks").insert(chunks.map((chunk, index) => ({
-        session_id: body.sessionId,
-        classroom_id: session.classroom_id,
-        user_id: current.userId,
-        start_ms: chunk.startMs,
-        end_ms: chunk.endMs,
-        text: chunk.text,
-        embedding: embeddings.data[index].embedding,
-      })));
-      if (error) throw error;
-      indexed = true;
-    } catch (error) {
-      console.error("Lecture indexing failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
-    }
-  }
+  const indexResult = await indexLectureChunks(current.supabase, [{
+    sessionId: body.sessionId,
+    classroomId: session.classroom_id,
+    userId: current.userId,
+    segments,
+  }]);
+  const indexed = indexResult.get(body.sessionId) ?? false;
 
   return NextResponse.json({ completed: true, indexed });
 }
