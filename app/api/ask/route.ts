@@ -16,6 +16,7 @@ import { createClient } from "../../lib/supabase/server";
 export const runtime = "nodejs";
 
 type Segment = {
+  id?: string;
   startMs: number;
   endMs: number;
   text: string;
@@ -95,11 +96,16 @@ const englishInstructions = [
 ].join("\n");
 
 class ProviderRequestError extends Error {
-  constructor(
-    readonly provider: string,
-    readonly status: number,
-  ) {
+  // Plain fields, not a TS parameter-property constructor: the latter needs a
+  // real transform (not just erasure), which node --experimental-strip-types
+  // — the runner this repo's test:* scripts use — rejects outright.
+  readonly provider: string;
+  readonly status: number;
+
+  constructor(provider: string, status: number) {
     super(`${provider} request failed (${status})`);
+    this.provider = provider;
+    this.status = status;
   }
 }
 
@@ -114,6 +120,7 @@ function isSegment(value: unknown): value is Segment {
   if (!value || typeof value !== "object") return false;
   const segment = value as Record<string, unknown>;
   return (
+    (segment.id === undefined || (typeof segment.id === "string" && segment.id.length <= 2_200)) &&
     typeof segment.startMs === "number" &&
     Number.isFinite(segment.startMs) &&
     typeof segment.endMs === "number" &&
@@ -121,6 +128,56 @@ function isSegment(value: unknown): value is Segment {
     typeof segment.text === "string" &&
     segment.text.length <= 2_000
   );
+}
+
+const SEGMENT_PAGE_SIZE = 1_000;
+const SEGMENT_CAP = 5_000;
+
+// The client only ships segments the server hasn't confirmed yet (see
+// confirmedSegmentIdsRef in workspace-client.tsx), so the durable transcript
+// lives here. PostgREST silently truncates at 1000 rows by default, and a
+// 3-hour lecture regularly has more segments than that.
+async function fetchStoredSegments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessionId: string,
+): Promise<Segment[]> {
+  const rows: Segment[] = [];
+  let offset = 0;
+  while (rows.length < SEGMENT_CAP) {
+    const { data, error } = await supabase
+      .from("transcript_segments")
+      .select("client_id,start_ms,end_ms,text")
+      .eq("session_id", sessionId)
+      // start_ms is not unique, and a paginated read needs a total order or
+      // rows sharing a timestamp can straddle a page boundary and be repeated
+      // or skipped. client_id is unique per session.
+      .order("start_ms", { ascending: true })
+      .order("client_id", { ascending: true })
+      .range(offset, offset + SEGMENT_PAGE_SIZE - 1);
+    if (error) {
+      console.error("Transcript segment read failed", error.code);
+      break;
+    }
+    const page = data ?? [];
+    for (const row of page) rows.push({ id: row.client_id, startMs: row.start_ms, endMs: row.end_ms, text: row.text });
+    if (page.length < SEGMENT_PAGE_SIZE) break;
+    offset += SEGMENT_PAGE_SIZE;
+  }
+  return rows.slice(0, SEGMENT_CAP);
+}
+
+// De-duplicate by client id (a segment the client already confirmed can still
+// arrive once more in an unconfirmed request during the race window) and
+// re-sort, since DB order and arrival order of the unconfirmed tail can differ.
+function mergeSegments(stored: Segment[], unconfirmed: Segment[]): Segment[] {
+  // Stored rows always have a client_id, but a request could carry a segment
+  // without one. Keying such a segment on its own content keeps it in the
+  // transcript instead of dropping the very tail the client sent it for.
+  const key = (segment: Segment) => segment.id ?? `${segment.startMs}-${segment.endMs}-${segment.text}`;
+  const merged = new Map<string, Segment>();
+  for (const segment of stored) merged.set(key(segment), segment);
+  for (const segment of unconfirmed) merged.set(key(segment), segment);
+  return [...merged.values()].sort((a, b) => a.startMs - b.startMs);
 }
 
 function parsePersonalLlm(value: unknown): PersonalLlm | null {
@@ -208,6 +265,8 @@ async function findEarlierLectureContext(
   }
 }
 
+type DeltaSink = (text: string) => void;
+
 async function askOpenAI(
   apiKey: string,
   model: string,
@@ -215,9 +274,10 @@ async function askOpenAI(
   safetyIdentifier: string,
   instructions: string,
   reasoningEffort: "low" | "medium",
+  onDelta: DeltaSink,
 ): Promise<AnswerResult> {
   const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
-  const response = await openai.beta.responses.create({
+  const stream = await openai.beta.responses.create({
     model,
     reasoning: { effort: reasoningEffort },
     store: false,
@@ -231,50 +291,68 @@ async function askOpenAI(
     include: ["web_search_call.action.sources"],
     instructions,
     input,
+    stream: true,
   });
 
-  const answer = response.output
-    .flatMap((item) =>
-      item.type === "message"
-        ? item.content
-            .filter((content) => content.type === "output_text")
-            .map((content) => content.text)
-        : [],
-    )
-    .join("\n");
+  let answer = "";
+  let sources: Source[] = [];
+  let usage: AnswerResult["usage"] = null;
+  for await (const event of stream) {
+    if (event.type === "response.output_text.delta") {
+      answer += event.delta;
+      onDelta(event.delta);
+    } else if (event.type === "response.completed") {
+      const response = event.response;
+      const citations = response.output.flatMap((item) =>
+        item.type === "message"
+          ? item.content.flatMap((content) =>
+              content.type === "output_text"
+                ? content.annotations
+                    .filter((annotation) => annotation.type === "url_citation")
+                    .map((annotation) => ({ title: annotation.title, url: annotation.url }))
+                : [],
+            )
+          : [],
+      );
+      const searchSources = response.output.flatMap((item) =>
+        item.type === "web_search_call" && item.action.type === "search"
+          ? (item.action.sources ?? []).map((source) => ({ title: "", url: source.url }))
+          : [],
+      );
+      sources = [...citations, ...searchSources];
+      usage = response.usage
+        ? {
+            inputTokens: response.usage.input_tokens,
+            cachedInputTokens: response.usage.input_tokens_details.cached_tokens,
+            cacheWriteTokens: response.usage.input_tokens_details.cache_write_tokens,
+            outputTokens: response.usage.output_tokens,
+            webSearchCalls: response.output.filter((item) => item.type === "web_search_call").length,
+          }
+        : null;
+    }
+  }
   if (!answer) throw new ProviderRequestError("OpenAI", 502);
 
-  const citations = response.output.flatMap((item) =>
-    item.type === "message"
-      ? item.content.flatMap((content) =>
-          content.type === "output_text"
-            ? content.annotations
-                .filter((annotation) => annotation.type === "url_citation")
-                .map((annotation) => ({ title: annotation.title, url: annotation.url }))
-            : [],
-        )
-      : [],
-  );
-  const searchSources = response.output.flatMap((item) =>
-    item.type === "web_search_call" && item.action.type === "search"
-      ? (item.action.sources ?? []).map((source) => ({ title: "", url: source.url }))
-      : [],
-  );
-  const usage = response.usage;
+  return { answer, sources, usage };
+}
 
-  return {
-    answer,
-    sources: [...citations, ...searchSources],
-    usage: usage
-      ? {
-          inputTokens: usage.input_tokens,
-          cachedInputTokens: usage.input_tokens_details.cached_tokens,
-          cacheWriteTokens: usage.input_tokens_details.cache_write_tokens,
-          outputTokens: usage.output_tokens,
-          webSearchCalls: response.output.filter((item) => item.type === "web_search_call").length,
-        }
-      : null,
-  };
+async function readSseLines(body: ReadableStream<Uint8Array>, onLine: (data: string) => void) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.startsWith("data: ")) onLine(line.slice(6));
+    }
+  }
+  // A body that ends without a trailing newline leaves its last event here,
+  // and for these providers that last event is the one carrying usage.
+  if (buffer.startsWith("data: ")) onLine(buffer.slice(6));
 }
 
 async function askAnthropic(
@@ -282,6 +360,7 @@ async function askAnthropic(
   model: string,
   input: string,
   instructions: string,
+  onDelta: DeltaSink,
 ): Promise<AnswerResult> {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -297,53 +376,60 @@ async function askAnthropic(
       system: instructions,
       messages: [{ role: "user", content: input }],
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
+      stream: true,
     }),
     signal: AbortSignal.timeout(60_000),
   });
 
-  if (!response.ok) throw new ProviderRequestError("Anthropic", response.status);
+  if (!response.ok || !response.body) throw new ProviderRequestError("Anthropic", response.status);
 
-  const data = (await response.json()) as {
-    content?: Array<{
+  let answer = "";
+  const sources: Source[] = [];
+  let inputTokens = 0;
+  let cachedInputTokens: number | undefined;
+  let cacheWriteTokens: number | undefined;
+  let usage: AnswerResult["usage"] = null;
+
+  await readSseLines(response.body, (data) => {
+    let event: {
       type?: string;
-      text?: string;
-      citations?: Array<{ type?: string; title?: string; url?: string }>;
-    }>;
-    usage?: {
-      input_tokens?: number;
-      output_tokens?: number;
-      cache_read_input_tokens?: number;
-      cache_creation_input_tokens?: number;
-      server_tool_use?: { web_search_requests?: number };
+      message?: { usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } };
+      delta?: { type?: string; text?: string; citation?: { type?: string; title?: string; url?: string } };
+      usage?: { output_tokens?: number; server_tool_use?: { web_search_requests?: number } };
     };
-  };
-  const textBlocks = (data.content ?? []).filter(
-    (block): block is typeof block & { text: string } => block.type === "text" && typeof block.text === "string",
-  );
-  const answer = textBlocks.map((block) => block.text).join("\n");
+    try {
+      event = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (event.type === "message_start") {
+      inputTokens = event.message?.usage?.input_tokens ?? 0;
+      cachedInputTokens = event.message?.usage?.cache_read_input_tokens;
+      cacheWriteTokens = event.message?.usage?.cache_creation_input_tokens;
+    } else if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && typeof event.delta.text === "string") {
+      answer += event.delta.text;
+      onDelta(event.delta.text);
+    } else if (event.type === "content_block_delta" && event.delta?.type === "citations_delta") {
+      // ponytail: citation field names mirrored from the non-streaming response
+      // shape (not separately confirmed for the streaming delta). Worst case a
+      // citation is missed and sources comes back short, not wrong.
+      const citation = event.delta.citation;
+      if (citation?.type === "web_search_result_location" && typeof citation.url === "string") {
+        sources.push({ title: citation.title ?? "", url: citation.url });
+      }
+    } else if (event.type === "message_delta" && typeof event.usage?.output_tokens === "number") {
+      usage = {
+        inputTokens,
+        cachedInputTokens,
+        cacheWriteTokens,
+        outputTokens: event.usage.output_tokens,
+        webSearchCalls: event.usage.server_tool_use?.web_search_requests ?? 0,
+      };
+    }
+  });
   if (!answer) throw new ProviderRequestError("Anthropic", 502);
 
-  const sources = textBlocks.flatMap((block) =>
-    (block.citations ?? []).flatMap((citation) =>
-      citation.type === "web_search_result_location" && typeof citation.url === "string"
-        ? [{ title: citation.title ?? "", url: citation.url }]
-        : [],
-    ),
-  );
-
-  return {
-    answer,
-    sources,
-    usage: data.usage
-      ? {
-          inputTokens: data.usage.input_tokens ?? 0,
-          cachedInputTokens: data.usage.cache_read_input_tokens,
-          cacheWriteTokens: data.usage.cache_creation_input_tokens,
-          outputTokens: data.usage.output_tokens ?? 0,
-          webSearchCalls: data.usage.server_tool_use?.web_search_requests ?? 0,
-        }
-      : null,
-  };
+  return { answer, sources, usage };
 }
 
 async function askGoogle(
@@ -351,9 +437,10 @@ async function askGoogle(
   model: string,
   input: string,
   instructions: string,
+  onDelta: DeltaSink,
 ): Promise<AnswerResult> {
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -367,41 +454,55 @@ async function askGoogle(
     },
   );
 
-  if (!response.ok) throw new ProviderRequestError("Google Gemini", response.status);
+  if (!response.ok || !response.body) throw new ProviderRequestError("Google Gemini", response.status);
 
-  const data = (await response.json()) as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> };
-      groundingMetadata?: {
-        groundingChunks?: Array<{ web?: { title?: string; uri?: string } }>;
-        webSearchQueries?: string[];
+  let answer = "";
+  let sources: Source[] = [];
+  let usage: AnswerResult["usage"] = null;
+
+  await readSseLines(response.body, (data) => {
+    let chunk: {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        groundingMetadata?: {
+          groundingChunks?: Array<{ web?: { title?: string; uri?: string } }>;
+          webSearchQueries?: string[];
+        };
+      }>;
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+    };
+    try {
+      chunk = JSON.parse(data);
+    } catch {
+      return;
+    }
+    const candidate = chunk.candidates?.[0];
+    // Each chunk carries only its new text; usageMetadata is cumulative, so
+    // the last chunk's value is the final one and simply overwrites earlier ones.
+    const text = (candidate?.content?.parts ?? [])
+      .flatMap((part) => (typeof part.text === "string" ? [part.text] : []))
+      .join("\n");
+    if (text) {
+      answer += text;
+      onDelta(text);
+    }
+    const chunkSources = (candidate?.groundingMetadata?.groundingChunks ?? []).flatMap((webChunk) =>
+      typeof webChunk.web?.uri === "string"
+        ? [{ title: webChunk.web.title ?? "", url: webChunk.web.uri }]
+        : [],
+    );
+    if (chunkSources.length) sources = chunkSources;
+    if (chunk.usageMetadata) {
+      usage = {
+        inputTokens: chunk.usageMetadata.promptTokenCount ?? 0,
+        outputTokens: chunk.usageMetadata.candidatesTokenCount ?? 0,
+        webSearchCalls: candidate?.groundingMetadata?.webSearchQueries?.length ?? 0,
       };
-    }>;
-    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-  };
-  const candidate = data.candidates?.[0];
-  const answer = (candidate?.content?.parts ?? [])
-    .flatMap((part) => (typeof part.text === "string" ? [part.text] : []))
-    .join("\n");
+    }
+  });
   if (!answer) throw new ProviderRequestError("Google Gemini", 502);
 
-  const sources = (candidate?.groundingMetadata?.groundingChunks ?? []).flatMap((chunk) =>
-    typeof chunk.web?.uri === "string"
-      ? [{ title: chunk.web.title ?? "", url: chunk.web.uri }]
-      : [],
-  );
-
-  return {
-    answer,
-    sources,
-    usage: data.usageMetadata
-      ? {
-          inputTokens: data.usageMetadata.promptTokenCount ?? 0,
-          outputTokens: data.usageMetadata.candidatesTokenCount ?? 0,
-          webSearchCalls: candidate?.groundingMetadata?.webSearchQueries?.length ?? 0,
-        }
-      : null,
-  };
+  return { answer, sources, usage };
 }
 
 function providerErrorMessage(error: ProviderRequestError, isEnglish: boolean) {
@@ -418,6 +519,32 @@ function providerErrorMessage(error: ProviderRequestError, isEnglish: boolean) {
   return isEnglish
     ? `Could not receive an answer from ${error.provider}. Please try again.`
     : `${error.provider}에서 답변을 받지 못했습니다. 잠시 후 다시 시도해 주세요.`;
+}
+
+// Mirrors the pre-stream error classification below so a mid-stream provider
+// failure gets the same localized message as one caught before streaming began.
+function askErrorMessage(error: unknown, personalLlm: PersonalLlm | null, isEnglish: boolean): string {
+  if (error instanceof ProviderRequestError) {
+    console.error("AI provider response failed", error.provider, error.status);
+    return personalLlm
+      ? providerErrorMessage(error, isEnglish)
+      : isEnglish ? "Could not create an answer. Please try again." : "답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  }
+
+  const providerStatus =
+    error && typeof error === "object" && "status" in error && typeof error.status === "number"
+      ? error.status
+      : null;
+  if (personalLlm?.provider === "openai" && providerStatus) {
+    const providerError = new ProviderRequestError("OpenAI", providerStatus);
+    console.error("AI provider response failed", providerError.provider, providerError.status);
+    return providerErrorMessage(providerError, isEnglish);
+  }
+
+  console.error("AI response failed", error instanceof Error ? error.name : "unknown");
+  return personalLlm
+    ? isEnglish ? "Could not create an answer. Check the API key and provider limit." : "답변을 만들지 못했습니다. API 키와 공급자 사용 한도를 확인해 주세요."
+    : isEnglish ? "Could not create an answer. Please try again." : "답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 export async function POST(request: Request) {
@@ -521,7 +648,7 @@ export async function POST(request: Request) {
   }
 
   const question = body.question?.trim() ?? "";
-  const segments = Array.isArray(body.segments) ? body.segments.filter(isSegment) : [];
+  const unconfirmedSegments = Array.isArray(body.segments) ? body.segments.filter(isSegment) : [];
   const interim = typeof body.interim === "string" ? body.interim.trim().slice(0, 2_000) : "";
   const questionAtMs = Number.isFinite(body.questionAtMs) ? Math.max(0, body.questionAtMs!) : 0;
   const safetyIdentifier = createHash("sha256").update(userId).digest("hex");
@@ -530,12 +657,18 @@ export async function POST(request: Request) {
   if (!question || question.length > 1_000) {
     return NextResponse.json({ error: isEnglish ? "Enter a question between 1 and 1,000 characters." : "질문은 1~1,000자로 입력해 주세요." }, { status: 400 });
   }
+
+  const classroomId = isUuid(body.classroomId) ? body.classroomId : null;
+  const lectureSessionId = requestedSessionId;
+  // Without a session id there is nothing to read back, so fall back to
+  // whatever the request carried (the pre-existing behavior).
+  const segments = lectureSessionId
+    ? mergeSegments(await fetchStoredSegments(supabase, lectureSessionId), unconfirmedSegments)
+    : unconfirmedSegments;
   if (segments.length > 5_000) {
     return NextResponse.json({ error: isEnglish ? "The transcript is too long." : "스크립트가 너무 깁니다." }, { status: 413 });
   }
 
-  const classroomId = isUuid(body.classroomId) ? body.classroomId : null;
-  const lectureSessionId = requestedSessionId;
   const earlier = classroomId && lectureSessionId
     ? await findEarlierLectureContext(userId, classroomId, lectureSessionId, question)
     : { text: "", sources: [] as LectureSource[], admin: null };
@@ -556,97 +689,87 @@ export async function POST(request: Request) {
     ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
     : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
 
-  try {
-    let result: AnswerResult;
-    if (!personalLlm) {
-      result = await askOpenAI(
-        process.env.OPENAI_API_KEY!,
-        "gpt-5.6-luna",
-        input,
-        safetyIdentifier,
-        instructions,
-        "low",
-      );
-    } else if (personalLlm.provider === "openai") {
-      result = await askOpenAI(
-        personalLlm.apiKey!,
-        personalLlm.model,
-        input,
-        safetyIdentifier,
-        instructions,
-        "medium",
-      );
-    } else if (personalLlm.provider === "anthropic") {
-      result = await askAnthropic(personalLlm.apiKey!, personalLlm.model, input, instructions);
-    } else {
-      result = await askGoogle(personalLlm.apiKey!, personalLlm.model, input, instructions);
-    }
-    result = {
-      ...result,
-      answer: cleanAnswerText(result.answer),
-      sources: cleanSources(result.sources),
-    };
+  // Everything above this line is validation (auth, rate limit, credits, body
+  // shape); only once all of it has passed does the response start streaming.
+  const provider = personalLlm?.provider ?? "lecture-live";
+  const model = personalLlm?.model ?? "gpt-5.6-luna";
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      // Enqueueing to a stream whose reader has gone away throws. Swallow it:
+      // the listener is gone, and letting it escape would turn a closed tab
+      // into an unhandled rejection that also skips the save below.
+      const send = (line: unknown) => {
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
+        } catch {
+          /* reader closed */
+        }
+      };
+      try {
+        let result: AnswerResult;
+        if (!personalLlm) {
+          result = await askOpenAI(
+            process.env.OPENAI_API_KEY!,
+            "gpt-5.6-luna",
+            input,
+            safetyIdentifier,
+            instructions,
+            "low",
+            (delta) => send({ delta }),
+          );
+        } else if (personalLlm.provider === "openai") {
+          result = await askOpenAI(
+            personalLlm.apiKey!,
+            personalLlm.model,
+            input,
+            safetyIdentifier,
+            instructions,
+            "medium",
+            (delta) => send({ delta }),
+          );
+        } else if (personalLlm.provider === "anthropic") {
+          result = await askAnthropic(personalLlm.apiKey!, personalLlm.model, input, instructions, (delta) => send({ delta }));
+        } else {
+          result = await askGoogle(personalLlm.apiKey!, personalLlm.model, input, instructions, (delta) => send({ delta }));
+        }
 
-    const provider = personalLlm?.provider ?? "lecture-live";
-    const model = personalLlm?.model ?? "gpt-5.6-luna";
-    if (lectureSessionId) {
-      const { error: saveError } = await supabase.from("lecture_questions").insert({
-        session_id: lectureSessionId,
-        classroom_id: classroomId,
-        user_id: userId,
-        question_at_ms: Math.min(10_800_000, Math.round(questionAtMs)),
-        question,
-        answer: result.answer,
-        provider,
-        model,
-        external_sources: result.sources,
-        lecture_sources: earlier.sources,
-        input_tokens: result.usage?.inputTokens,
-        cached_input_tokens: result.usage?.cachedInputTokens,
-        cache_write_tokens: result.usage?.cacheWriteTokens,
-        output_tokens: result.usage?.outputTokens,
-        web_search_calls: result.usage?.webSearchCalls,
-      });
-      if (saveError) console.error("Lecture question save failed", saveError.code);
-    }
+        const cleanedAnswer = cleanAnswerText(result.answer);
+        const cleanedSources = cleanSources(result.sources);
 
-    return NextResponse.json({
-      ...result,
-      lectureSources: earlier.sources,
-      provider,
-      model,
-    });
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      console.error("AI provider response failed", error.provider, error.status);
-      return NextResponse.json(
-        {
-          error: personalLlm
-            ? providerErrorMessage(error, isEnglish)
-            : isEnglish ? "Could not create an answer. Please try again." : "답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
-        },
-        { status: 502 },
-      );
-    }
+        if (lectureSessionId) {
+          const { error: saveError } = await supabase.from("lecture_questions").insert({
+            session_id: lectureSessionId,
+            classroom_id: classroomId,
+            user_id: userId,
+            question_at_ms: Math.min(10_800_000, Math.round(questionAtMs)),
+            question,
+            answer: cleanedAnswer,
+            provider,
+            model,
+            external_sources: cleanedSources,
+            lecture_sources: earlier.sources,
+            input_tokens: result.usage?.inputTokens,
+            cached_input_tokens: result.usage?.cachedInputTokens,
+            cache_write_tokens: result.usage?.cacheWriteTokens,
+            output_tokens: result.usage?.outputTokens,
+            web_search_calls: result.usage?.webSearchCalls,
+          });
+          if (saveError) console.error("Lecture question save failed", saveError.code);
+        }
 
-    const providerStatus =
-      error && typeof error === "object" && "status" in error && typeof error.status === "number"
-        ? error.status
-        : null;
-    if (personalLlm?.provider === "openai" && providerStatus) {
-      const providerError = new ProviderRequestError("OpenAI", providerStatus);
-      console.error("AI provider response failed", providerError.provider, providerError.status);
-      return NextResponse.json({ error: providerErrorMessage(providerError, isEnglish) }, { status: 502 });
-    }
+        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, provider, model } });
+      } catch (error) {
+        send({ error: askErrorMessage(error, personalLlm, isEnglish) });
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          /* already closed by a departing reader */
+        }
+      }
+    },
+  });
 
-    console.error("AI response failed", error instanceof Error ? error.name : "unknown");
-    return NextResponse.json(
-      {
-        error: personalLlm
-          ? isEnglish ? "Could not create an answer. Check the API key and provider limit." : "답변을 만들지 못했습니다. API 키와 공급자 사용 한도를 확인해 주세요."
-          : isEnglish ? "Could not create an answer. Please try again." : "답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      },
-      { status: 502 },
-    );
-  }
+  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8" } });
 }

@@ -14,7 +14,9 @@
     "test:audio": "node --experimental-strip-types --test app/lib/audio.test.ts",
     "test:billing": "node --experimental-strip-types --test app/lib/billing.test.ts",
     "eval:ask": "node scripts/eval-ask.mjs",
-    "test:webhook": "node --experimental-test-module-mocks --test app/api/billing/webhook/route.test.ts"
+    "test:webhook": "node --experimental-test-module-mocks --test app/api/billing/webhook/route.test.ts",
+    "test:ask": "node --experimental-strip-types --experimental-test-module-mocks --test app/api/ask/route.test.ts",
+    "test:lecture-sessions": "node --experimental-test-module-mocks --test app/api/lecture-sessions/route.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

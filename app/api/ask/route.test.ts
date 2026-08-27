@@ -1,0 +1,260 @@
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import test, { mock } from "node:test";
+import { pathToFileURL } from "node:url";
+
+const USER_ID = "22222222-2222-4222-8222-222222222222";
+const SESSION_ID = "11111111-1111-4111-8111-111111111111";
+
+// --- Supabase stub: enough of the query builder for the paths this route
+// exercises (credit rpc, transcript_segments pagination, lecture_questions
+// insert). Modeled on app/api/billing/webhook/route.test.ts's Call ledger.
+let authUser: { id: string } | null = { id: USER_ID };
+let transcriptRows: Array<{ session_id: string; client_id: string; start_ms: number; end_ms: number; text: string }> = [];
+let insertedQuestions: Array<Record<string, unknown>> = [];
+let rangeCalls: Array<{ table: string; from: number; to: number }> = [];
+let canAsk = true;
+
+function queryBuilder(table: string) {
+  const filters: Record<string, unknown> = {};
+  const builder = {
+    select() { return builder; },
+    eq(column: string, value: unknown) { filters[column] = value; return builder; },
+    order() { return builder; },
+    range(from: number, to: number) {
+      rangeCalls.push({ table, from, to });
+      if (table !== "transcript_segments") return Promise.resolve({ data: [], error: null });
+      const rows = transcriptRows.filter((row) => row.session_id === filters.session_id);
+      return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+    },
+    insert(payload: unknown) {
+      if (table === "lecture_questions") insertedQuestions.push(payload as Record<string, unknown>);
+      return Promise.resolve({ data: null, error: null });
+    },
+  };
+  return builder;
+}
+
+const supabaseStub = {
+  auth: { getUser: async () => ({ data: { user: authUser } }) },
+  rpc: async (name: string) => {
+    if (name === "can_ask_with_credits") return { data: canAsk, error: null };
+    return { data: null, error: null };
+  },
+  from: (table: string) => queryBuilder(table),
+};
+
+mock.module(pathToFileURL("app/lib/supabase/server.ts").href, {
+  namedExports: { createClient: async () => supabaseStub },
+});
+mock.module(pathToFileURL("app/lib/supabase/admin.ts").href, {
+  namedExports: { createAdminClient: () => null },
+});
+
+// --- OpenAI stub: the route imports the "openai" package for its default
+// (platform-key) answer path and drives it with `stream: true`.
+let openAiEvents: unknown[] = [];
+let openAiShouldThrow = false;
+const openAiCreateCalls: Array<Record<string, unknown>> = [];
+
+class FakeOpenAI {
+  constructor(_options: unknown) {}
+  beta = {
+    responses: {
+      create: async (params: Record<string, unknown>) => {
+        openAiCreateCalls.push(params);
+        if (openAiShouldThrow) throw Object.assign(new Error("boom"), { status: 500 });
+        return openAiEvents;
+      },
+    },
+  };
+  embeddings = { create: async () => ({ data: [{ embedding: [] }] }) };
+}
+
+mock.module("openai", { defaultExport: FakeOpenAI });
+
+// The route imports its siblings the way a bundler resolves them — no file
+// extension. Node needs one, so retry with the extensions the repo uses.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      for (const extension of [".ts", ".js"]) {
+        try { return nextResolve(`${specifier}${extension}`, context); } catch { /* try the next one */ }
+      }
+      throw error;
+    }
+  },
+});
+
+process.env.OPENAI_API_KEY = "sk-test";
+
+const { POST } = await import("./route.ts");
+
+test.beforeEach(() => {
+  authUser = { id: USER_ID };
+  transcriptRows = [];
+  insertedQuestions = [];
+  rangeCalls = [];
+  canAsk = true;
+  openAiEvents = [];
+  openAiShouldThrow = false;
+  openAiCreateCalls.length = 0;
+});
+
+function ask(body: Record<string, unknown>) {
+  return POST(new Request("https://lecue.test/api/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }));
+}
+
+async function readNdjson(response: Response): Promise<Array<Record<string, unknown>>> {
+  const text = await response.text();
+  return text.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line));
+}
+
+function seedTranscript(sessionId: string, count: number) {
+  for (let i = 0; i < count; i += 1) {
+    transcriptRows.push({
+      session_id: sessionId,
+      client_id: `db-${i}`,
+      start_ms: i * 1_000,
+      end_ms: i * 1_000 + 900,
+      text: `segment ${i}`,
+    });
+  }
+}
+
+test("paginates past 1000 stored rows and merges in the unconfirmed tail, sorted by time", async () => {
+  seedTranscript(SESSION_ID, 1_200);
+  openAiEvents = [
+    { type: "response.output_text.delta", delta: "ok" },
+    { type: "response.completed", response: { output: [], usage: null } },
+  ];
+
+  const response = await ask({
+    question: "What did we just cover?",
+    questionAtMs: 1_205_000,
+    segments: [{ id: "unconfirmed-1", startMs: 1_201_000, endMs: 1_201_500, text: "brand new" }],
+    lectureSessionId: SESSION_ID,
+  });
+  await readNdjson(response);
+
+  const transcriptRangeCalls = rangeCalls.filter((call) => call.table === "transcript_segments");
+  assert.equal(transcriptRangeCalls.length, 2, "1200 rows needs two 1000-row pages");
+
+  const input = openAiCreateCalls[0].input as string;
+  assert.ok(input.includes("segment 1199"));
+  assert.ok(input.includes("brand new"));
+  assert.ok(input.indexOf("segment 1199") < input.indexOf("brand new"), "later segments must sort after earlier ones");
+});
+
+test("does not re-send a segment the client has already confirmed as duplicate text", async () => {
+  seedTranscript(SESSION_ID, 3);
+  openAiEvents = [
+    { type: "response.output_text.delta", delta: "ok" },
+    { type: "response.completed", response: { output: [], usage: null } },
+  ];
+
+  const response = await ask({
+    question: "Recap?",
+    questionAtMs: 5_000,
+    // Same id as an already-stored row — the merge must not duplicate it.
+    segments: [{ id: "db-1", startMs: 1_000, endMs: 1_900, text: "segment 1" }],
+    lectureSessionId: SESSION_ID,
+  });
+  await readNdjson(response);
+
+  const input = openAiCreateCalls[0].input as string;
+  const lines = input.split("\n").filter((line) => line.endsWith("segment 1"));
+  assert.equal(lines.length, 1, "the duplicate client id must collapse to a single transcript line");
+});
+
+test("rejects with 413 once the merged transcript exceeds the 5000 segment cap", async () => {
+  // The DB read alone is capped at 5000 (the infinite-loop guard), so the cap
+  // is only exceedable once the unconfirmed tail adds a segment on top of it.
+  seedTranscript(SESSION_ID, 5_000);
+
+  const response = await ask({
+    question: "Too long?",
+    questionAtMs: 1_000,
+    segments: [{ id: "unconfirmed-over-cap", startMs: 5_001_000, endMs: 5_001_500, text: "one too many" }],
+    lectureSessionId: SESSION_ID,
+  });
+
+  assert.equal(response.status, 413);
+  assert.equal(openAiCreateCalls.length, 0, "the provider must never be called once validation fails");
+});
+
+test("streams deltas then a cleaned done line, and saves the cleaned answer", async () => {
+  openAiEvents = [
+    { type: "response.output_text.delta", delta: "**Hello** " },
+    { type: "response.output_text.delta", delta: "world (https://example.com)." },
+    {
+      type: "response.completed",
+      response: {
+        output: [
+          {
+            type: "message",
+            content: [
+              {
+                type: "output_text",
+                text: "unused",
+                annotations: [{ type: "url_citation", title: "Example", url: "https://example.com/a?utm_source=openai" }],
+              },
+            ],
+          },
+        ],
+        usage: {
+          input_tokens: 120,
+          input_tokens_details: { cached_tokens: 10, cache_write_tokens: 0 },
+          output_tokens: 40,
+        },
+      },
+    },
+  ];
+
+  const response = await ask({
+    question: "Summarize.",
+    questionAtMs: 1_000,
+    segments: [],
+    lectureSessionId: SESSION_ID,
+    classroomId: null,
+  });
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /x-ndjson/);
+
+  const lines = await readNdjson(response);
+  const deltaLines = lines.filter((line) => "delta" in line);
+  const doneLine = lines.find((line) => "done" in line) as { done: { answer: string; sources: Array<{ url: string }> } } | undefined;
+
+  assert.equal(deltaLines.map((line) => line.delta).join(""), "**Hello** world (https://example.com).");
+  assert.ok(doneLine, "a done line must close the stream");
+  assert.equal(doneLine!.done.answer, "Hello world.");
+  assert.deepEqual(doneLine!.done.sources, [{ title: "Example", url: "https://example.com/a" }]);
+
+  assert.equal(insertedQuestions.length, 1);
+  assert.equal(insertedQuestions[0].answer, "Hello world.");
+  assert.equal(insertedQuestions[0].session_id, SESSION_ID);
+});
+
+test("emits an error line and skips the lecture_questions save when the provider fails mid-stream", async () => {
+  openAiShouldThrow = true;
+
+  const response = await ask({
+    question: "Will this fail?",
+    questionAtMs: 1_000,
+    segments: [],
+    lectureSessionId: SESSION_ID,
+  });
+
+  assert.equal(response.status, 200, "headers are already committed once streaming starts");
+  const lines = await readNdjson(response);
+  assert.equal(lines.length, 1);
+  assert.ok(typeof lines[0].error === "string" && lines[0].error.length > 0);
+  assert.equal(insertedQuestions.length, 0);
+});

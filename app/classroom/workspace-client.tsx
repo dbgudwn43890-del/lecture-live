@@ -122,6 +122,10 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const profileMenuRef = useRef<HTMLDetailsElement | null>(null);
   const startedAtRef = useRef(0);
   const segmentIdsRef = useRef(new Set<string>());
+  // Segments the server has actually persisted (its "segment" save fetch
+  // resolved with response.ok). /api/ask only needs to carry the ones missing
+  // from this set — the server reads everything else back from the DB itself.
+  const confirmedSegmentIdsRef = useRef(new Set<string>());
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const segmentsRef = useRef<Segment[]>([]);
   const activeSessionIdRef = useRef("");
@@ -218,6 +222,11 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     return () => { cancelled = true; };
   }, []);
 
+  // ponytail: bounded rather than looping until hasMore clears — a backlog
+  // this deep is already pathological, and the next page load picks up the
+  // remainder. Raise it if real backlogs turn out to be larger.
+  const MAX_RECONCILE_PASSES = 5;
+
   const hydratedRef = useRef(Boolean(initial));
 
   useEffect(() => {
@@ -230,13 +239,22 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       }
       hydratedRef.current = false;
       try {
-        const response = await fetch("/api/lecture-sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({ action: "reconcile" }),
-        });
-        const data = await response.json() as { reconciled?: number };
-        if (response.ok && data.reconciled) await loadClassrooms();
+        // The server closes at most one batch per call and reports hasMore when
+        // it filled that batch. A single call used to leave the rest abandoned
+        // until some future page load happened to catch them.
+        let reconciledAny = false;
+        for (let pass = 0; pass < MAX_RECONCILE_PASSES; pass += 1) {
+          const response = await fetch("/api/lecture-sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+            body: JSON.stringify({ action: "reconcile" }),
+          });
+          const data = await response.json() as { reconciled?: number; hasMore?: boolean };
+          if (!response.ok) break;
+          reconciledAny ||= Boolean(data.reconciled);
+          if (!data.hasMore) break;
+        }
+        if (reconciledAny) await loadClassrooms();
       } catch {
         // Reconciliation is housekeeping; a failure only delays it to next load.
       }
@@ -528,6 +546,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
       body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
+    }).then((response) => {
+      if (response.ok) confirmedSegmentIdsRef.current.add(id);
     });
   }
 
@@ -795,6 +815,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
               method: "POST",
               headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
               body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
+            }).then((response) => {
+              if (response.ok) confirmedSegmentIdsRef.current.add(id);
             });
           }
           setInterim("");
@@ -933,7 +955,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         body: JSON.stringify({
           question: cleanQuestion,
           questionAtMs: askedAt,
-          segments,
+          // Only the tail the server hasn't confirmed saved yet — everything
+          // else it reads back from transcript_segments itself.
+          segments: segments.filter((segment) => !confirmedSegmentIdsRef.current.has(segment.id)),
           interim,
           locale,
           classroomId: activeClassroomId,
@@ -946,10 +970,48 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                 : { provider: aiProvider, model: selectedModel!.id, apiKey: personalApiKey.trim() },
         }),
       });
-      const data = (await response.json()) as { answer?: string; sources?: Source[]; lectureSources?: LectureSource[]; error?: string };
-      if (!response.ok || !data.answer) throw new Error(data.error ?? (isEnglish
-        ? "Could not receive an answer."
-        : "답변을 받지 못했습니다."));
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error ?? (isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다."));
+      }
+      if (!response.body) throw new Error(isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다.");
+
+      // NDJSON: one {"delta"} line per text chunk, then a final {"done"} line
+      // (or {"error"} if the provider failed mid-stream). Deltas render raw so
+      // the reader sees text arrive immediately; done's cleaned text replaces it.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamedText = "";
+      let streamError: string | null = null;
+      let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[] } | null = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const parsed = JSON.parse(line) as { delta?: string; done?: typeof finalDone; error?: string };
+          if (typeof parsed.delta === "string") {
+            streamedText += parsed.delta;
+            const text = streamedText;
+            setMessages((current) =>
+              current.map((message) => (message.id === assistantId ? { ...message, text, pending: true } : message)),
+            );
+          } else if (parsed.done) {
+            finalDone = parsed.done;
+          } else if (parsed.error) {
+            streamError = parsed.error;
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError);
+      if (!finalDone) throw new Error(isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다.");
+      const { answer, sources, lectureSources } = finalDone;
 
       setMessages((current) =>
         current.map((message) =>
@@ -958,10 +1020,10 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                 ...message,
                 // Cleaned once here rather than on every render: it is eleven
                 // regex passes and the result never changes.
-                text: cleanAnswerText(data.answer!),
+                text: cleanAnswerText(answer),
                 pending: false,
-                sources: cleanSources(data.sources ?? []),
-                lectureSources: data.lectureSources ?? [],
+                sources: cleanSources(sources ?? []),
+                lectureSources: lectureSources ?? [],
               }
             : message,
         ),
