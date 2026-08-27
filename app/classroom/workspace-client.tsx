@@ -157,6 +157,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const whisperPreviousTextRef = useRef("");
   const whisperFlushTimerRef = useRef<number | null>(null);
   const whisperPendingRef = useRef(false);
+  const whisperFlushRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -305,18 +306,24 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   /** Renames any lecture — the topbar field and the sidebar menu both land here. */
   async function renameSession(sessionId: string, raw: string) {
     const title = raw.trim();
-    if (!sessionId || !title || title === sessionsById.get(sessionId)?.title) return;
+    const stored = sessionsById.get(sessionId)?.title;
+    // The topbar field is controlled state, so every path that does not rename
+    // has to put the stored title back or it keeps showing a name nothing has.
+    const revert = () => {
+      if (sessionId === activeSessionIdRef.current) setLectureTitle(stored ?? "");
+    };
+    if (!sessionId || !title || title === stored) return revert();
     try {
       const response = await fetch("/api/lecture-sessions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
         body: JSON.stringify({ action: "rename", sessionId, title }),
       });
-      if (!response.ok) return;
+      if (!response.ok) return revert();
       if (sessionId === activeSessionIdRef.current) setLectureTitle(title);
       await loadClassrooms();
     } catch {
-      // The title stays in the field; the next blur retries.
+      revert();
     }
   }
 
@@ -464,6 +471,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       setLectureTitle(data.session.title);
       setSegments(restoredSegments);
       segmentIdsRef.current = new Set(restoredSegments.map((segment) => segment.id));
+      // Restored segments are already saved, so /api/ask must not re-upload them.
+      confirmedSegmentIdsRef.current = new Set(segmentIdsRef.current);
       setMessages((data.questions ?? []).flatMap((item) => [
         { id: `${item.id}-q`, role: "user" as const, text: item.question },
         { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerText(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
@@ -484,6 +493,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     setLectureTitle("");
     setSegments([]);
     segmentIdsRef.current.clear();
+    confirmedSegmentIdsRef.current.clear();
     setMessages([]);
     setInterim("");
     setElapsedMs(0);
@@ -709,6 +719,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       setSegments([]);
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
+      confirmedSegmentIdsRef.current.clear();
       setMessages([]);
 
       const context = new AudioContext();
@@ -739,7 +750,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       startedAtRef.current = Date.now();
       setElapsedMs(0);
       setStatus("recording");
-      whisperFlushTimerRef.current = window.setInterval(() => void flushWhisperChunk(), WHISPER_CHUNK_MS);
+      whisperFlushTimerRef.current = window.setInterval(() => { whisperFlushRef.current = flushWhisperChunk(); }, WHISPER_CHUNK_MS);
     } catch (caught) {
       stopWhisperNodes();
       if (activeSessionIdRef.current && startedAtRef.current === 0) {
@@ -790,6 +801,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       setSegments([]);
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
+      confirmedSegmentIdsRef.current.clear();
       setMessages([]);
 
       const tokenResponse = await fetch("/api/deepgram-token", {
@@ -921,6 +933,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     finishingRef.current = true;
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     if (sttProvider === "whisper") {
+      // A flush in flight makes flushWhisperChunk() a no-op, so awaiting it
+      // alone would drop everything buffered behind that upload.
+      await whisperFlushRef.current;
       await flushWhisperChunk();
       stopWhisperNodes();
     }
@@ -950,6 +965,10 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "The lecture ended, but saving did not finish." : "강의는 종료됐지만 저장을 마치지 못했습니다.");
       }
     }
+    // socket.onclose lands after these round-trips on a fast connection, so
+    // finishingRef alone does not stop a clean stop from being read as a drop.
+    // A lecture that has ended has no start time.
+    startedAtRef.current = 0;
     finishingRef.current = false;
   }
 
