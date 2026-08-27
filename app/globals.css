@@ -962,12 +962,6 @@ a, button, summary, input, textarea, select {
 .classroom-session strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .classroom-session span { color: var(--muted); font-size: 9px; }
 
-.session-move { position: relative; z-index: 2; }
-.session-move summary { padding: 7px 9px; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; font-size: 9px; font-weight: 800; list-style: none; }
-.session-move summary::-webkit-details-marker { display: none; }
-.session-move-menu { position: absolute; top: calc(100% + 5px); right: 0; width: 190px; display: grid; gap: 4px; padding: 7px; background: white; border: 1px solid var(--line-strong); box-shadow: 3px 4px 0 rgba(157, 169, 173, .35); }
-.session-move-menu button { padding: 8px 9px; color: var(--ink); background: #f5f7f6; border: 0; border-radius: 4px; font-size: 10px; text-align: left; }
-.session-move-menu button:hover { color: white; background: var(--focus); }
 
 .classroom-empty { margin: 0; padding: 22px 21px 24px 96px; color: var(--muted); font-size: 11px; }
 
@@ -1154,15 +1148,12 @@ a, button, summary, input, textarea, select {
 .classroom-unit > header > a,
 .classroom-rename input,
 .classroom-rename button,
-.session-move summary,
-.session-move-menu button,
 .classrooms-first-run a {
   border-radius: 2px;
 }
 
 .login-panel,
-.classroom-create,
-.session-move-menu {
+.classroom-create {
   border: var(--brutal-border);
   box-shadow: var(--brutal-shadow);
 }
@@ -1489,12 +1480,22 @@ button:active,
 
 .workspace .start-button,
 .workspace .stop-button {
-  min-width: 88px;
-  min-height: 34px;
-  padding: 0 15px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 650;
   box-shadow: none;
+}
+
+/* The brutalist :hover further up lifts these 2px and drops a 5px black
+   shadow, which read as the button popping in and out of the quiet topbar. */
+.workspace .start-button:hover,
+.workspace .stop-button:hover {
+  box-shadow: none;
+  transform: none;
 }
 
 .workspace .start-button { color: white; background: var(--focus); }
@@ -1612,6 +1613,96 @@ button:active,
 .workspace .question-form button { background: var(--focus); }
 .workspace .transcript { padding: 20px 24px 42px; }
 .workspace .footnote { color: #8a867f; background: #f1f0eb; border-top: 1px solid #dedbd3; }
+
+/* The title is a label until it is double-clicked, so the topbar stops looking
+   like a form. readOnly, not disabled: the text stays selectable and copyable. */
+.workspace .lecture-title-field input {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.workspace .lecture-title-field input:read-only { cursor: default; }
+.workspace .lecture-title-field input:read-only:hover { background: #f4f2ee; }
+.workspace .lecture-title-field input:not(:read-only) { background: #fff; border-color: #c9c4ba; cursor: text; }
+
+.sidebar-session { display: flex; align-items: center; gap: 2px; }
+.sidebar-session > button { flex: 1 1 auto; }
+.sidebar-session[draggable="true"] > button { cursor: grab; }
+
+.session-menu { position: relative; flex: 0 0 auto; }
+
+.sidebar-sessions .session-menu summary {
+  width: 20px;
+  padding: 3px 0;
+  color: #a29d94;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  list-style: none;
+  /* Hidden until the row is touched, so the list stays a plain list. */
+  opacity: 0;
+}
+
+.sidebar-sessions .session-menu summary::-webkit-details-marker { display: none; }
+.sidebar-session:hover .session-menu summary,
+.sidebar-session:focus-within .session-menu summary,
+.session-menu[open] summary { opacity: 1; }
+.sidebar-sessions .session-menu summary:hover { color: #302e2a; background: #e2e0d9; }
+
+.session-menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 6;
+  width: 176px;
+  max-height: 260px;
+  display: grid;
+  gap: 1px;
+  padding: 5px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #dedbd3;
+  border-radius: 9px;
+  box-shadow: 0 6px 18px rgba(38, 37, 33, .12);
+}
+
+.session-menu-panel p {
+  margin: 5px 0 1px;
+  padding: 0 7px;
+  color: #a29d94;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.sidebar-sessions .session-menu-panel button {
+  width: 100%;
+  padding: 6px 7px;
+  color: #403e39;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.sidebar-sessions .session-menu-panel button:hover:not(:disabled) { color: #24231f; background: #eeece6; }
+
+.sidebar-session-rename {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  color: #302e2a;
+  background: #fff;
+  border: 1px solid #c9c4ba;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.sidebar-classroom-group.drop-target { background: #e4ece9; border-radius: 8px; outline: 1px dashed #8fa8a2; }
 
 @media (max-width: 980px) {
   .workspace { grid-template-columns: 224px minmax(0, 1fr); }

@@ -53,6 +53,11 @@ type DeepgramResult = {
   channel?: { alternatives?: Array<{ transcript?: string }> };
 };
 
+/** Closes the <details> menu that a clicked menu item sits inside. */
+function closeMenu(event: { currentTarget: HTMLElement }) {
+  event.currentTarget.closest("details")?.removeAttribute("open");
+}
+
 const providerNames: Record<PersonalProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
@@ -111,15 +116,22 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const [activeSessionId, setActiveSessionId] = useState("");
   const [classroomPending, setClassroomPending] = useState(false);
   const [newClassroomTitle, setNewClassroomTitle] = useState("");
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [renamingSessionId, setRenamingSessionId] = useState("");
+  const [dragSessionId, setDragSessionId] = useState("");
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(initial?.profile ?? null);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(initial?.creditStatus ?? null);
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
+  const sessionsById = useMemo(
+    () => new Map([...unassignedSessions, ...classrooms.flatMap((classroom) => classroom.sessions)].map((session) => [session.id, session])),
+    [unassignedSessions, classrooms],
+  );
 
   const socketRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const profileMenuRef = useRef<HTMLDetailsElement | null>(null);
   const startedAtRef = useRef(0);
   const segmentIdsRef = useRef(new Set<string>());
   // Segments the server has actually persisted (its "segment" save fetch
@@ -175,13 +187,20 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
+  // Every <details> menu in the shell closes the same way, and the sidebar now
+  // has one per lecture, so this queries them rather than holding a ref each.
   useEffect(() => {
+    function openMenus() {
+      return document.querySelectorAll<HTMLDetailsElement>("details.profile-menu[open], details.session-menu[open]");
+    }
     function closeIfOutside(event: PointerEvent) {
-      const menu = profileMenuRef.current;
-      if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
+      for (const menu of openMenus()) {
+        if (!menu.contains(event.target as Node)) menu.open = false;
+      }
     }
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && profileMenuRef.current) profileMenuRef.current.open = false;
+      if (event.key !== "Escape") return;
+      for (const menu of openMenus()) menu.open = false;
     }
     document.addEventListener("pointerdown", closeIfOutside);
     document.addEventListener("keydown", closeOnEscape);
@@ -283,20 +302,51 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       : isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.";
   }
 
-  /** Persists an edited title to the lecture that is open, if any. */
-  async function renameActiveLecture() {
-    const title = lectureTitle.trim();
-    const sessionId = activeSessionIdRef.current;
-    if (!sessionId || !title) return;
+  /** Renames any lecture — the topbar field and the sidebar menu both land here. */
+  async function renameSession(sessionId: string, raw: string) {
+    const title = raw.trim();
+    if (!sessionId || !title || title === sessionsById.get(sessionId)?.title) return;
     try {
       const response = await fetch("/api/lecture-sessions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
         body: JSON.stringify({ action: "rename", sessionId, title }),
       });
-      if (response.ok) await loadClassrooms();
+      if (!response.ok) return;
+      if (sessionId === activeSessionIdRef.current) setLectureTitle(title);
+      await loadClassrooms();
     } catch {
       // The title stays in the field; the next blur retries.
+    }
+  }
+
+  /** Persists an edited title to the lecture that is open, if any. */
+  async function renameActiveLecture() {
+    await renameSession(activeSessionIdRef.current, lectureTitle);
+  }
+
+  /** Moves a lecture between classrooms. Both the sidebar menu and a drag land here. */
+  async function moveSession(sessionId: string, classroomId: string | null) {
+    const session = sessionsById.get(sessionId);
+    if (!session || (session.classroom_id ?? null) === classroomId) return;
+    setClassroomPending(true);
+    setError("");
+    try {
+      const response = await fetch("/api/lecture-sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ action: "move", sessionId, classroomId }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      if (sessionId === activeSessionIdRef.current) setActiveClassroomId(classroomId ?? "");
+      await loadClassrooms();
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not move the lecture." : "수업을 이동하지 못했습니다.");
+    } finally {
+      setClassroomPending(false);
     }
   }
 
@@ -1057,6 +1107,114 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         personalModelOptions[aiProvider][0].label;
   const planLabel = getPlanLabel(creditStatus?.planCode, locale);
 
+  const sidebarLocked = classroomPending || status === "recording" || status === "connecting";
+
+  /** One lecture row: open it, rename it in place, or move it by menu or drag. */
+  function renderSessionRow(session: SessionSummary) {
+    if (renamingSessionId === session.id) {
+      return (
+        <input
+          key={session.id}
+          className="sidebar-session-rename"
+          autoFocus
+          defaultValue={session.title}
+          maxLength={80}
+          onBlur={(event) => {
+            setRenamingSessionId("");
+            void renameSession(session.id, event.target.value);
+          }}
+          onKeyDown={(event) => {
+            // Escape restores the stored title first, so the blur below is a no-op.
+            if (event.key === "Escape") event.currentTarget.value = session.title;
+            if (event.key === "Escape" || event.key === "Enter") event.currentTarget.blur();
+          }}
+        />
+      );
+    }
+    return (
+      <div
+        key={session.id}
+        className="sidebar-session"
+        draggable={!sidebarLocked}
+        onDragStart={(event) => {
+          setDragSessionId(session.id);
+          // Firefox refuses to start a drag without payload on the transfer.
+          event.dataTransfer.setData("text/plain", session.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => { setDragSessionId(""); setDragOverKey(null); }}
+      >
+        <button
+          type="button"
+          className={session.id === activeSessionId ? "active" : undefined}
+          onClick={() => void openSession(session.id)}
+          disabled={sidebarLocked}
+          title={session.title}
+        >{session.title}</button>
+        <details className="session-menu">
+          <summary aria-label={isEnglish ? "Lecture options" : "수업 옵션"}>⋯</summary>
+          <div className="session-menu-panel">
+            <button type="button" onClick={(event) => { closeMenu(event); setRenamingSessionId(session.id); }}>
+              {isEnglish ? "Rename" : "이름 변경"}
+            </button>
+            <p>{isEnglish ? "Move to" : "이동"}</p>
+            <button
+              type="button"
+              disabled={!session.classroom_id}
+              onClick={(event) => { closeMenu(event); void moveSession(session.id, null); }}
+            >{isEnglish ? "Unassigned" : "미분류 수업"}</button>
+            {classrooms.map((classroom) => (
+              <button
+                key={classroom.id}
+                type="button"
+                disabled={classroom.id === session.classroom_id}
+                onClick={(event) => { closeMenu(event); void moveSession(session.id, classroom.id); }}
+              >{classroom.title}</button>
+            ))}
+          </div>
+        </details>
+      </div>
+    );
+  }
+
+  /** A classroom and its lectures. The whole group is a drop target. */
+  function renderClassroomGroup(key: string, label: string, sessions: SessionSummary[]) {
+    return (
+      <div
+        key={key || "unassigned"}
+        className={dragOverKey === key ? "sidebar-classroom-group drop-target" : "sidebar-classroom-group"}
+        onDragOver={(event) => {
+          if (!dragSessionId) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          setDragOverKey(key);
+        }}
+        onDragLeave={() => setDragOverKey((current) => (current === key ? null : current))}
+        onDrop={(event) => {
+          event.preventDefault();
+          const sessionId = dragSessionId;
+          setDragSessionId("");
+          setDragOverKey(null);
+          if (sessionId) void moveSession(sessionId, key || null);
+        }}
+      >
+        <button
+          type="button"
+          className={activeClassroomId === key ? "sidebar-classroom active" : "sidebar-classroom"}
+          onClick={() => {
+            setActiveClassroomId(key);
+            prepareNewLecture();
+          }}
+          disabled={status === "recording" || status === "connecting"}
+        >
+          <span>{label}</span>
+          <small>{sessions.length}</small>
+        </button>
+        <div className="sidebar-sessions">{sessions.map(renderSessionRow)}</div>
+      </div>
+    );
+  }
+
   return (
     <main className="workspace">
       <aside className="workspace-sidebar">
@@ -1079,61 +1237,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           </div>
 
           <nav className="sidebar-classrooms" aria-label={isEnglish ? "Classrooms and lectures" : "강의실과 수업 목록"}>
-            <div className="sidebar-classroom-group">
-              <button
-                type="button"
-                className={!activeClassroomId ? "sidebar-classroom active" : "sidebar-classroom"}
-                onClick={() => {
-                  setActiveClassroomId("");
-                  prepareNewLecture();
-                }}
-                disabled={status === "recording" || status === "connecting"}
-              >
-                <span>{isEnglish ? "Unassigned" : "미분류 수업"}</span>
-                <small>{unassignedSessions.length}</small>
-              </button>
-              <div className="sidebar-sessions">
-                {unassignedSessions.map((session) => (
-                  <button
-                    type="button"
-                    key={session.id}
-                    className={session.id === activeSessionId ? "active" : undefined}
-                    onClick={() => void openSession(session.id)}
-                    disabled={classroomPending || status === "recording" || status === "connecting"}
-                    title={session.title}
-                  >{session.title}</button>
-                ))}
-              </div>
-            </div>
-
-            {classrooms.map((classroom) => (
-              <div className="sidebar-classroom-group" key={classroom.id}>
-                <button
-                  type="button"
-                  className={classroom.id === activeClassroomId ? "sidebar-classroom active" : "sidebar-classroom"}
-                  onClick={() => {
-                    setActiveClassroomId(classroom.id);
-                    prepareNewLecture();
-                  }}
-                  disabled={status === "recording" || status === "connecting"}
-                >
-                  <span>{classroom.title}</span>
-                  <small>{classroom.sessions.length}</small>
-                </button>
-                <div className="sidebar-sessions">
-                  {classroom.sessions.map((session) => (
-                    <button
-                      type="button"
-                      key={session.id}
-                      className={session.id === activeSessionId ? "active" : undefined}
-                      onClick={() => void openSession(session.id)}
-                      disabled={classroomPending || status === "recording" || status === "connecting"}
-                      title={session.title}
-                    >{session.title}</button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            {renderClassroomGroup("", isEnglish ? "Unassigned" : "미분류 수업", unassignedSessions)}
+            {classrooms.map((classroom) => renderClassroomGroup(classroom.id, classroom.title, classroom.sessions))}
           </nav>
 
           <form className="sidebar-create-classroom" onSubmit={createClassroom}>
@@ -1157,7 +1262,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
             <span>{isEnglish ? "Credits" : "남은 크레딧"}</span>
             <b>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</b>
           </Link>
-          <details className="profile-menu" ref={profileMenuRef}>
+          <details className="profile-menu">
             <summary className="sidebar-profile">
               <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
               <span className="profile-copy">
@@ -1276,11 +1381,17 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
               the rename endpoint had no way to be reached. */}
           <label className="lecture-title-field">
             <span className="sr-only">{isEnglish ? "Lecture title" : "수업 제목"}</span>
+            {/* Reads as plain text until a double-click; the field only looks
+                editable while it is. */}
             <input
               type="text"
               value={lectureTitle}
+              readOnly={!titleEditing}
+              title={isEnglish ? "Double-click to rename" : "더블클릭하면 이름을 바꿉니다"}
               onChange={(event) => setLectureTitle(event.target.value)}
-              onBlur={() => void renameActiveLecture()}
+              onDoubleClick={(event) => { setTitleEditing(true); event.currentTarget.select(); }}
+              onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+              onBlur={() => { setTitleEditing(false); void renameActiveLecture(); }}
               placeholder={isEnglish ? "Untitled lecture" : "제목 없는 수업"}
               maxLength={80}
             />
