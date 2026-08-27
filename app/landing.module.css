@@ -208,6 +208,52 @@
 .planGrid button:hover span { transform: translateX(4px); }
 .heroNote { margin: 14px 0 0; color: #818b8e; font-size: 11px; }
 
+.secondaryCta {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 6px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+.secondaryCta span { transition: transform .3s cubic-bezier(.16, 1, .3, 1); }
+.secondaryCta:hover span { transform: translateY(3px); }
+
+/* Two explanatory sections between the hero and the classrooms: what the
+   product does, then the order you do it in. Both are rule-separated text
+   rather than cards — the plan grid below is the only card surface, so the
+   page does not read as one card wall. */
+.features {
+  padding: 142px max(30px, calc((100vw - 1240px) / 2));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.featuresIntro { max-width: 780px; }
+.featuresIntro > p { margin: 0 0 22px; color: var(--signal); font: 800 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; }
+/* deslop-ignore-next-line 11 -- 기능 영역을 여는 두 줄 장 제목 */
+.featuresIntro h2 { margin: 0; font-size: clamp(38px, 4.2vw, 58px); line-height: 1.08; letter-spacing: -.05em; }
+.featureGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 clamp(30px, 4vw, 56px); margin-top: 66px; }
+.featureGrid article { padding: 32px 0 38px; border-top: 1px solid var(--line); }
+.featureGrid h3 { margin: 0; font-size: 17px; letter-spacing: -.03em; }
+.featureGrid p { margin: 12px 0 0; color: var(--muted); font-size: 14px; line-height: 1.85; }
+
+.steps {
+  padding: 142px max(30px, calc((100vw - 1240px) / 2));
+  background: var(--paper);
+}
+.stepsIntro { max-width: 780px; }
+.stepsIntro > p { margin: 0 0 22px; color: var(--signal); font: 800 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; }
+/* deslop-ignore-next-line 11 -- 사용 순서를 여는 두 줄 장 제목 */
+.stepsIntro h2 { margin: 0; font-size: clamp(38px, 4.2vw, 58px); line-height: 1.08; letter-spacing: -.05em; }
+.stepList { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 3vw, 42px); margin: 62px 0 0; padding: 0; list-style: none; }
+.stepList li { display: flex; flex-direction: column; padding: 26px 24px 30px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.stepList span { color: var(--muted); font: 800 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; }
+.stepList h3 { margin: 16px 0 0; font-size: 22px; letter-spacing: -.04em; }
+.stepList p { margin: 12px 0 0; color: var(--muted); font-size: 14px; line-height: 1.85; }
+
 .productFrame {
   overflow: hidden;
   color: var(--ink);
@@ -425,6 +471,8 @@
   .hero h1 { font-size: clamp(58px, 8vw, 86px); }
   .heroProductFrame { width: min(920px, 100%); justify-self: center; }
   .planGrid { grid-template-columns: 1fr 1fr; }
+  .featureGrid { grid-template-columns: 1fr 1fr; }
+  .stepList { grid-template-columns: 1fr; }
   .rooms { grid-template-columns: 1fr; }
   .roomsCopy { max-width: 700px; }
 }
@@ -439,6 +487,7 @@
   .hero h1 { font-size: clamp(47px, 13.7vw, 69px); line-height: 1.02; }
   .heroDescription { margin-top: 25px; font-size: 15px; line-height: 1.75; }
   .heroActions { align-items: stretch; flex-direction: column; gap: 12px; }
+  .secondaryCta { justify-content: center; align-self: center; }
   .productTopbar { grid-template-columns: 1fr auto; padding: 0 16px; }
   .productTopbar > span { display: none; }
   .productPanes { min-height: 900px; grid-template-columns: 1fr; }
@@ -456,6 +505,11 @@
   .roomShelf > header { padding: 18px; }
   .roomShelf article { grid-template-columns: 65px 1fr auto; gap: 12px; padding: 16px 18px; }
   .roomShelf h3 { font-size: 12px; }
+  .features, .steps { padding: 100px 16px; }
+  .featureGrid { grid-template-columns: 1fr; margin-top: 46px; }
+  .featureGrid article { padding: 26px 0 30px; }
+  .stepList { margin-top: 44px; }
+  .featuresIntro h2, .stepsIntro h2 { font-size: 38px; }
   .pricing { padding: 100px 16px; }
   .pricingIntro h2 { font-size: 46px; }
   .planGrid { grid-template-columns: 1fr; margin-top: 56px; }

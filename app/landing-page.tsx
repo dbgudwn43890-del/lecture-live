@@ -12,7 +12,7 @@ const content = {
   ko: {
     homeLabel: "Lecue 홈",
     navLabel: "주요 메뉴",
-    nav: ["요금", "자주 묻는 질문"],
+    nav: ["기능", "요금", "자주 묻는 질문"],
     signIn: "로그인",
     signUp: "회원가입",
     classroom: "내 강의실",
@@ -25,6 +25,24 @@ const content = {
     heroCta: "7일 무료로 시작하기",
     heroNote: "무료 체험 180크레딧 · 여러 수업 사용 가능",
     demoTitle: "질문과 강의가 나란히 흐릅니다",
+    heroSecondaryCta: "제품 화면 먼저 보기",
+    featuresLabel: "무엇을 하는 서비스인가",
+    featuresTitle: ["수업 중에 필요한 것만,", "군더더기 없이."],
+    features: [
+      ["실시간 스크립트", "마이크로 들어온 강의를 문단 단위로 정리해 화면에 이어 붙입니다. 질문하는 동안에도 멈추지 않습니다."],
+      ["질문한 시점까지의 맥락", "답변은 그 수업에서 지금까지 나온 설명을 근거로 만듭니다. 아직 다루지 않은 내용을 앞질러 말하지 않습니다."],
+      ["필요할 때만 웹 검색", "강의 내용만으로 충분한지 먼저 판단하고, 최신 정보나 외부 확인이 필요할 때만 검색합니다."],
+      ["과목별 강의실", "수업 스크립트와 질문을 과목별로 모아 둡니다. 다음 수업의 답변이 지난 수업을 참고합니다."],
+      ["내 API 키 사용", "OpenAI·Claude·Gemini 키를 현재 탭에서만 쓰거나 계정에 암호화해 저장할 수 있습니다."],
+      ["1분 = 1크레딧", "시작한 녹음 1분이 1크레딧입니다. 질문 횟수로 따로 과금하지 않습니다."],
+    ],
+    stepsLabel: "쓰는 순서",
+    stepsTitle: ["세 번 누르면", "수업 준비 끝."],
+    steps: [
+      ["수업 전", "강의실 만들기", "과목 이름으로 강의실을 하나 만듭니다. 그 과목의 수업과 질문이 여기에 쌓입니다."],
+      ["수업 중", "기록 시작", "강의실에서 기록을 켜면 스크립트가 실시간으로 이어집니다. 한 수업은 최대 3시간입니다."],
+      ["흐름이 끊길 때", "그 자리에서 질문", "놓친 부분을 물으면 지금까지의 강의 내용을 근거로 답합니다. 기록은 계속됩니다."],
+    ],
     demoQuestionTitle: "강의에 질문하기",
     demoQuestionCount: "1개 질문",
     demoQuestion: "여기서 말하는 증권회사가 정확히 뭐야?",
@@ -86,7 +104,7 @@ const content = {
   en: {
     homeLabel: "Lecue home",
     navLabel: "Main navigation",
-    nav: ["Pricing", "FAQ"],
+    nav: ["Features", "Pricing", "FAQ"],
     signIn: "Sign in",
     signUp: "Sign up",
     classroom: "My classrooms",
@@ -99,6 +117,24 @@ const content = {
     heroCta: "Start free",
     heroNote: "180 trial credits · use them across multiple lectures",
     demoTitle: "Questions and the lecture move side by side",
+    heroSecondaryCta: "See the product first",
+    featuresLabel: "What Lecue does",
+    featuresTitle: ["Only what a lecture needs,", "and nothing else."],
+    features: [
+      ["Live transcript", "Speech from your microphone is written out paragraph by paragraph as the lecture runs. It does not pause while you ask."],
+      ["Context up to your question", "Answers are built from what the lecture has covered so far. Lecue does not run ahead of the class."],
+      ["Web search only when needed", "The model first decides whether the lecture is enough, and searches only for current information or outside verification."],
+      ["A classroom per subject", "Transcripts and questions stay grouped by subject, so the next lecture can draw on the last one."],
+      ["Your own API key", "Use an OpenAI, Claude, or Gemini key for the current tab only, or save it encrypted to your account."],
+      ["1 minute = 1 credit", "One started recording minute costs one credit. Questions are not billed separately."],
+    ],
+    stepsLabel: "How it works",
+    stepsTitle: ["Three taps", "and class is set."],
+    steps: [
+      ["Before class", "Open a classroom", "Create one classroom named after the subject. Its lectures and questions collect there."],
+      ["During class", "Start recording", "Turn recording on and the transcript follows the lecture live. One lecture can run up to 3 hours."],
+      ["When you lose the thread", "Ask right there", "Ask what you missed and the answer comes from the lecture so far. Recording keeps going."],
+    ],
     demoQuestionTitle: "Ask about the lecture",
     demoQuestionCount: "1 question",
     demoQuestion: "What exactly does a brokerage firm do here?",
@@ -174,8 +210,9 @@ export default function LandingPage({
       <header className={styles.header}>
         <Link className={styles.brand} href={base || "/"} aria-label={copy.homeLabel}>Lecue</Link>
         <nav className={styles.nav} aria-label={copy.navLabel}>
-          <a href="#pricing">{copy.nav[0]}</a>
-          <a href="#faq">{copy.nav[1]}</a>
+          <a href="#features">{copy.nav[0]}</a>
+          <a href="#pricing">{copy.nav[1]}</a>
+          <a href="#faq">{copy.nav[2]}</a>
         </nav>
         <div className={styles.headerActions}>
           {/* ?lang= tells the proxy to remember the choice; without it the IP
@@ -209,6 +246,7 @@ export default function LandingPage({
           <p className={styles.heroDescription}>{copy.heroDescription}</p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryCta} href={isAuthenticated ? classroomPath : `${base}/billing?plan=monthly`}>{isAuthenticated ? copy.openClassroom : copy.heroCta}<span aria-hidden>→</span></Link>
+            <a className={styles.secondaryCta} href="#product">{copy.heroSecondaryCta}<span aria-hidden>↓</span></a>
           </div>
           <p className={styles.heroNote}>{copy.heroNote}</p>
         </div>
@@ -227,6 +265,26 @@ export default function LandingPage({
             </section>
           </div>
         </div>
+      </section>
+
+      <section className={styles.features} id="features" aria-labelledby={`features-title-${locale}`}>
+        <header className={`${styles.featuresIntro} ${styles.reveal}`}>
+          <p>{copy.featuresLabel}</p>
+          <h2 id={`features-title-${locale}`}>{copy.featuresTitle[0]}<br />{copy.featuresTitle[1]}</h2>
+        </header>
+        <div className={`${styles.featureGrid} ${styles.reveal}`}>
+          {copy.features.map(([title, detail]) => <article key={title}><h3>{title}</h3><p>{detail}</p></article>)}
+        </div>
+      </section>
+
+      <section className={styles.steps} id="steps" aria-labelledby={`steps-title-${locale}`}>
+        <header className={`${styles.stepsIntro} ${styles.reveal}`}>
+          <p>{copy.stepsLabel}</p>
+          <h2 id={`steps-title-${locale}`}>{copy.stepsTitle[0]}<br />{copy.stepsTitle[1]}</h2>
+        </header>
+        <ol className={`${styles.stepList} ${styles.reveal}`}>
+          {copy.steps.map(([when, title, detail]) => <li key={title}><span>{when}</span><h3>{title}</h3><p>{detail}</p></li>)}
+        </ol>
       </section>
 
       <section className={styles.rooms} id="rooms" aria-labelledby={`rooms-title-${locale}`}>
