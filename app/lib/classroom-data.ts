@@ -30,7 +30,7 @@ async function fetchAllSessions(supabase: SupabaseClient) {
 
 export async function getClassroomData(supabase: SupabaseClient, user: User) {
   const [{ data: classrooms, error: classroomError }, { rows: sessions, error: sessionError }, { data: questions, error: questionError }] = await Promise.all([
-    supabase.from("classrooms").select("id,title,locale,created_at,updated_at").order("updated_at", { ascending: false }),
+    supabase.from("classrooms").select("id,title,locale,glossary,created_at,updated_at").order("updated_at", { ascending: false }),
     fetchAllSessions(supabase),
     // Grouped in Postgres. Selecting every question row and tallying them here
     // grew without bound across semesters.

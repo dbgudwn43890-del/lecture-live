@@ -988,6 +988,23 @@ a, button, summary, input, textarea, select {
 .classroom-rename input { min-height: 38px; padding: 7px 10px; color: var(--ink); background: white; border: 1px solid var(--line-strong); border-radius: 6px; }
 .classroom-rename button { min-height: 38px; padding: 0 13px; color: white; background: var(--focus); border: 0; border-radius: 6px; font-size: 10px; font-weight: 850; }
 
+/* The glossary reuses the rename row's shell but needs a text area and a
+   caption line, so it takes the same grid over two rows. */
+.classroom-glossary { align-items: start; }
+.classroom-glossary label { padding-top: 10px; }
+.classroom-glossary textarea {
+  min-height: 74px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.classroom-glossary small { grid-column: 2 / -1; color: var(--muted); font-size: 10px; }
+
 .classroom-session-list {
   position: relative;
   display: grid;

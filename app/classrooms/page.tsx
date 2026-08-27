@@ -18,6 +18,7 @@ type Classroom = {
   id: string;
   title: string;
   locale: "ko" | "en";
+  glossary: string;
   created_at: string;
   updated_at: string;
   sessions: SessionSummary[];
@@ -39,6 +40,8 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
   const [newClassroomName, setNewClassroomName] = useState("");
   const [renameId, setRenameId] = useState("");
   const [renameTitle, setRenameTitle] = useState("");
+  const [glossaryId, setGlossaryId] = useState("");
+  const [glossaryText, setGlossaryText] = useState("");
   const [pending, setPending] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -108,6 +111,32 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
       setError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not rename the classroom." : "강의실 이름을 바꾸지 못했습니다.");
+    } finally {
+      setPending("");
+    }
+  }
+
+  // The subject's own vocabulary, sent with every transcription request so a
+  // general model stops guessing at terms it has never heard (PRD 36.3.1).
+  async function saveGlossary(event: FormEvent, classroomId: string) {
+    event.preventDefault();
+    setPending(`glossary-${classroomId}`);
+    setError("");
+    try {
+      const response = await fetch("/api/classrooms", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ classroomId, glossary: glossaryText }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      setGlossaryId("");
+      setGlossaryText("");
+      await loadClassrooms();
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not save the glossary." : "용어집을 저장하지 못했습니다.");
     } finally {
       setPending("");
     }
@@ -251,6 +280,10 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
                         setRenameId(renameId === classroom.id ? "" : classroom.id);
                         setRenameTitle(classroom.title);
                       }}>{isEnglish ? "Rename" : "이름 변경"}</button>
+                      <button type="button" onClick={() => {
+                        setGlossaryId(glossaryId === classroom.id ? "" : classroom.id);
+                        setGlossaryText(classroom.glossary ?? "");
+                      }}>{isEnglish ? "Glossary" : "용어집"}</button>
                       <Link href={`${basePath}/classroom?classroom=${encodeURIComponent(classroom.id)}`}>{isEnglish ? "Start lecture" : "수업 시작"}</Link>
                     </div>
                   </header>
@@ -259,6 +292,27 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
                       <label htmlFor={`rename-${classroom.id}`}>{isEnglish ? "Classroom name" : "강의실 이름"}</label>
                       <input id={`rename-${classroom.id}`} value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} maxLength={80} autoFocus />
                       <button type="submit" disabled={pending === `rename-${classroom.id}` || !renameTitle.trim()}>{isEnglish ? "Save" : "저장"}</button>
+                    </form>
+                  )}
+                  {glossaryId === classroom.id && (
+                    <form className="classroom-rename classroom-glossary" onSubmit={(event) => void saveGlossary(event, classroom.id)}>
+                      <label htmlFor={`glossary-${classroom.id}`}>
+                        {isEnglish ? "Subject terms, separated by commas" : "과목 용어 (쉼표로 구분)"}
+                      </label>
+                      <textarea
+                        id={`glossary-${classroom.id}`}
+                        value={glossaryText}
+                        onChange={(event) => setGlossaryText(event.target.value)}
+                        placeholder={isEnglish ? "e.g. Fourier transform, eigenvalue, convolution" : "예: 푸리에 변환, 고윳값, 합성곱"}
+                        maxLength={1_200}
+                        rows={3}
+                      />
+                      <button type="submit" disabled={pending === `glossary-${classroom.id}`}>
+                        {pending === `glossary-${classroom.id}` ? (isEnglish ? "Saving…" : "저장 중…") : (isEnglish ? "Save" : "저장")}
+                      </button>
+                      <small>{isEnglish
+                        ? "Up to 60 terms. They are sent with every transcription request for this classroom."
+                        : "최대 60개. 이 강의실의 모든 받아쓰기 요청에 함께 전달됩니다."}</small>
                     </form>
                   )}
                   {sessionRows(classroom.sessions, classroom.id)}

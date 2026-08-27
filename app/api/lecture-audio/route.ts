@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
+import { glossaryPrompt, parseGlossary } from "../../lib/glossary";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
 import { transcribeWithWhisper } from "../../lib/whisper";
@@ -58,9 +59,13 @@ export async function POST(request: Request) {
   // than anything the client sent. Consumption is idempotent per minute, so
   // the repeated chunk uploads inside one minute only ever bill it once.
   const supabase = await createClient();
-  const { data: creditData, error: creditError } = await supabase.rpc("consume_lecture_credits_elapsed", {
-    p_session_id: sessionId,
-  });
+  // The classroom glossary is read alongside the credit call, not after it:
+  // this runs once per audio chunk, so a second serial round trip would add
+  // its latency to every few seconds of the lecture.
+  const [{ data: creditData, error: creditError }, { data: sessionRow }] = await Promise.all([
+    supabase.rpc("consume_lecture_credits_elapsed", { p_session_id: sessionId }),
+    supabase.from("lecture_sessions").select("classrooms(glossary)").eq("id", sessionId).maybeSingle(),
+  ]);
   if (creditError) {
     console.error("Credit consumption failed", creditError.code);
     return NextResponse.json({ error: isEnglish ? "Could not use credits for this lecture." : "이 수업의 크레딧을 차감하지 못했습니다." }, { status: 409 });
@@ -73,7 +78,15 @@ export async function POST(request: Request) {
     }, { status: 402 });
   }
 
-  const result = await transcribeWithWhisper(audioBuffer, { language, prompt: prompt || undefined });
+  // The glossary leads the prompt so the terms survive even when the previous
+  // sentence is long: Whisper reads initial_prompt as a hint, and the subject's
+  // own vocabulary is the part general models get wrong (PRD 36.3.1).
+  const classroom = sessionRow?.classrooms as { glossary?: unknown } | { glossary?: unknown }[] | null | undefined;
+  const glossaryRaw = Array.isArray(classroom) ? classroom[0]?.glossary : classroom?.glossary;
+  const hint = glossaryPrompt(parseGlossary(glossaryRaw));
+  const fullPrompt = [hint, prompt].filter(Boolean).join(" ");
+
+  const result = await transcribeWithWhisper(audioBuffer, { language, prompt: fullPrompt || undefined });
   if ("error" in result) {
     console.error("Whisper transcription failed", result.error);
     return NextResponse.json({ error: isEnglish ? "Could not transcribe this segment." : "이 구간을 받아쓰지 못했습니다." }, { status: result.status });

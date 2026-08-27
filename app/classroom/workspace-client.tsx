@@ -6,6 +6,7 @@ import Link from "next/link";
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
+import { parseGlossary } from "../lib/glossary";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
 
@@ -30,7 +31,7 @@ type SessionSummary = {
   duration_seconds: number;
   question_count: number;
 };
-type Classroom = { id: string; title: string; locale: "ko" | "en"; sessions: SessionSummary[] };
+type Classroom = { id: string; title: string; locale: "ko" | "en"; glossary?: string; sessions: SessionSummary[] };
 type UserProfile = { displayName: string; email: string };
 type AiProvider = "lecture-live" | PersonalProvider;
 type SavedCredential = { provider: PersonalProvider; model: string; updated_at: string };
@@ -855,6 +856,12 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         utterance_end_ms: "1000",
         mip_opt_out: "true",
       });
+      // Nova-3 takes the classroom glossary as repeated keyterm values, the
+      // streaming counterpart to the initial_prompt hint the Whisper path
+      // sends (PRD 36.3.1).
+      for (const term of parseGlossary(classrooms.find((room) => room.id === activeClassroomId)?.glossary).slice(0, 20)) {
+        params.append("keyterm", term);
+      }
       const socket = new WebSocket(
         `wss://api.deepgram.com/v1/listen?${params.toString()}`,
         ["bearer", tokenData.accessToken],
