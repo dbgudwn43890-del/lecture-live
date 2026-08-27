@@ -469,7 +469,8 @@ a, button, summary, input, textarea, select {
 /* Pilot reporting (PRD 36.2). The control only appears on hover or keyboard
    focus: a button on every transcript line would compete with the lecture the
    learner is trying to read. */
-.transcript-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; }
+.transcript-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: 6px; }
+.transcript-line .line-ask,
 .transcript-line .line-report {
   padding: 3px 7px;
   color: var(--muted);
@@ -479,9 +480,14 @@ a, button, summary, input, textarea, select {
   font-weight: 750;
   opacity: 0;
 }
+.transcript-line:hover .line-ask,
 .transcript-line:hover .line-report,
+.transcript-line .line-ask:focus-visible,
 .transcript-line .line-report:focus-visible,
 .transcript-line .line-report:disabled { opacity: 1; }
+.transcript-line .line-ask { color: var(--focus); font-weight: 800; }
+.transcript-line .line-ask:not(:disabled):hover { border-color: var(--focus); }
+.transcript-line .line-ask:disabled { opacity: 0; }
 .transcript-line .line-report:not(:disabled):hover { color: var(--signal); border-color: var(--signal); }
 .transcript-line .line-report:disabled { color: var(--muted); opacity: .7; }
 

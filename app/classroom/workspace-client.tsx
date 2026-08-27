@@ -1008,10 +1008,22 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     void finishLecture();
   }
 
-  async function askQuestion(event: FormEvent) {
+  const canAsk = (segments.length > 0 || interim.length > 0)
+    && !messages.some((message) => message.pending)
+    && (creditStatus === null || creditStatus.credits > 0 || status === "recording");
+
+  function askQuestion(event: FormEvent) {
     event.preventDefault();
-    const cleanQuestion = question.trim();
-    if (!cleanQuestion || messages.some((message) => message.pending)) return;
+    void submitQuestion(question, true);
+  }
+
+  // Typing during a lecture is itself a distraction, so a transcript paragraph
+  // can send its own question with one press (PRD 36.3.3). Both entry points
+  // land here; only the composer clears itself, or a half-typed draft would
+  // disappear when the learner tapped a paragraph instead.
+  async function submitQuestion(text: string, fromComposer = false) {
+    const cleanQuestion = text.trim().slice(0, 1_000);
+    if (!cleanQuestion || !canAsk || messages.some((message) => message.pending)) return;
     if (aiProvider !== "lecture-live" && !personalApiKey.trim() && !savedCredential) {
       setError(isEnglish
         ? "Enter or save an API key for the selected provider in Answer model settings."
@@ -1047,7 +1059,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         assistantLabel,
       },
     ]);
-    setQuestion("");
+    if (fromComposer) setQuestion("");
 
     try {
       const response = await fetch("/api/ask", {
@@ -1148,9 +1160,6 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
   const canStart = (status === "idle" || status === "ended" || status === "error")
     && (creditStatus === null || creditStatus.credits > 0);
-  const canAsk = (segments.length > 0 || interim.length > 0)
-    && !messages.some((message) => message.pending)
-    && (creditStatus === null || creditStatus.credits > 0 || status === "recording");
   const activeModelLabel =
     aiProvider === "lecture-live"
       ? isEnglish ? "Default AI" : "기본 AI"
@@ -1615,6 +1624,16 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                   return (
                     <div className="transcript-line" key={key}>
                       <p>{paragraph.text}</p>
+                      <button
+                        type="button"
+                        className="line-ask"
+                        disabled={!canAsk}
+                        onClick={() => void submitQuestion(isEnglish
+                          ? `Explain this part of the lecture in plain language: "${paragraph.text}"`
+                          : `강의의 이 부분을 쉽게 설명해 줘: "${paragraph.text}"`)}
+                      >
+                        {isEnglish ? "Explain" : "설명"}
+                      </button>
                       <button
                         type="button"
                         className="line-report"
