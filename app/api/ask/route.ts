@@ -42,6 +42,7 @@ type PersonalLlm = {
 
 type Source = { title: string; url: string };
 type LectureSource = { sessionId: string; title: string; startMs: number; endMs: number };
+type MaterialSource = { documentId: string; filename: string; startPage: number; endPage: number };
 type AnswerResult = {
   answer: string;
   sources: Source[];
@@ -65,6 +66,7 @@ const koreanInstructions = [
   "예를 들어 '주식·채권을 발행하고 중개한다'고만 설명하지 말고, 증권과 주식·채권이 각각 어떤 권리인지, 발행은 기업이 새 증권을 팔아 자금을 모으는 과정이고 중개는 투자자의 주문을 시장에 전달해 거래가 체결되게 하는 과정인지도 풀어야 한다.",
   "강의에 없는 보편적 배경지식은 보충할 수 있지만 강의에서 직접 말한 내용처럼 표현하지 않는다.",
   "같은 강의실의 이전 수업 내용이 제공되면 현재 수업을 이해하는 보조 맥락으로만 사용한다. 현재 수업에서 말한 내용과 혼동하지 않는다.",
+  "강의 자료 발췌가 제공되면 강사가 화면에 띄운 수식·표·그림의 내용으로 보고 활용한다. 음성 스크립트에 빠진 기호나 값은 자료 쪽을 우선한다. 자료에 없는 쪽 번호나 내용을 지어내지 않는다.",
   "강의 내용으로 충분하면 검색하지 않는다. 최신 정보나 검증이 필요하면 웹 검색을 사용한다.",
   "검색할 때는 질문의 핵심 사실 하나를 겨냥한 좁은 검색어로 먼저 한 번만 검색한다. 신뢰할 만한 근거가 부족할 때만 한 번 더 검색하고, 충분하면 즉시 멈춘다.",
   "공식 자료나 원문처럼 결정적인 근거를 우선하고, 답변에 실제로 사용한 소수의 출처만 인용한다.",
@@ -85,6 +87,7 @@ const englishInstructions = [
   "Do not replace one technical term with another. For abstract verbs such as 'issues', 'handles', or 'acts on behalf of', explain who does what and how money, rights, or information move.",
   "You may add general background knowledge that was not stated in the lecture, but do not present it as something the lecturer said.",
   "When excerpts from earlier lectures in the same classroom are provided, use them only as supporting context and do not present them as statements from the current lecture.",
+  "When excerpts from lecture materials are provided, treat them as the formulas, tables, and figures shown on screen. Prefer them over the audio transcript for symbols and values the transcript dropped, and never invent a page number or content that is not there.",
   "Do not search when the lecture and stable background knowledge are enough. Search the web when current or independently verified information is needed.",
   "Start with one narrow search query aimed at the single fact needed to answer. Search once more only if trustworthy evidence is still missing, and stop as soon as the evidence is sufficient.",
   "Prefer decisive primary or official sources and cite only the small set actually used in the answer.",
@@ -200,7 +203,17 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function findEarlierLectureContext(
+const EMPTY_CLASSROOM_CONTEXT = {
+  text: "",
+  sources: [] as LectureSource[],
+  materialText: "",
+  materialSources: [] as MaterialSource[],
+};
+
+// One embedding of the question serves both retrievals: earlier lectures in
+// this classroom, and the slides uploaded to it (PRD 36.3.2). Embedding twice
+// would double the pre-answer latency for no better match.
+async function findClassroomContext(
   userId: string,
   classroomId: string,
   sessionId: string,
@@ -208,12 +221,12 @@ async function findEarlierLectureContext(
 ) {
   const admin = createAdminClient();
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!admin || !apiKey) return { text: "", sources: [] as LectureSource[], admin: null };
+  if (!admin || !apiKey) return { ...EMPTY_CLASSROOM_CONTEXT, admin: null };
 
   // Independent checks, so they run together rather than back to back. The
   // chunk check asks only whether any exist — an exact count made Postgres
   // scan every chunk in the classroom, and that grows with every lecture.
-  const [{ data: session }, { data: anyChunk }] = await Promise.all([
+  const [{ data: session }, { data: anyChunk }, { data: anyMaterial }] = await Promise.all([
     admin
       .from("lecture_sessions")
       .select("id")
@@ -229,9 +242,16 @@ async function findEarlierLectureContext(
       .neq("session_id", sessionId)
       .limit(1)
       .maybeSingle(),
+    admin
+      .from("material_chunks")
+      .select("id")
+      .eq("classroom_id", classroomId)
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle(),
   ]);
-  if (!session) return { text: "", sources: [] as LectureSource[], admin: null };
-  if (!anyChunk) return { text: "", sources: [] as LectureSource[], admin };
+  if (!session) return { ...EMPTY_CLASSROOM_CONTEXT, admin: null };
+  if (!anyChunk && !anyMaterial) return { ...EMPTY_CLASSROOM_CONTEXT, admin };
 
   try {
     // Bound the wait: SDK defaults are a 10-minute timeout with 2 retries,
@@ -239,29 +259,56 @@ async function findEarlierLectureContext(
     // instead of the localized error the catch block below produces.
     const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
     const embedding = await openai.embeddings.create({ model: "text-embedding-3-small", input: question });
-    const { data, error } = await admin.rpc("match_lecture_chunks", {
-      p_user_id: userId,
-      p_classroom_id: classroomId,
-      p_session_id: sessionId,
-      p_query_embedding: embedding.data[0].embedding,
-      p_match_count: 5,
-    });
-    if (error) throw error;
-    const matches = (Array.isArray(data) ? data : []).filter((item) => Number(item.similarity) >= 0.3);
+    const queryEmbedding = embedding.data[0].embedding;
+    const [lecture, material] = await Promise.all([
+      anyChunk
+        ? admin.rpc("match_lecture_chunks", {
+            p_user_id: userId,
+            p_classroom_id: classroomId,
+            p_session_id: sessionId,
+            p_query_embedding: queryEmbedding,
+            p_match_count: 5,
+          })
+        : Promise.resolve({ data: [], error: null }),
+      anyMaterial
+        ? admin.rpc("match_material_chunks", {
+            p_user_id: userId,
+            p_classroom_id: classroomId,
+            p_query_embedding: queryEmbedding,
+            p_match_count: 4,
+          })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (lecture.error) throw lecture.error;
+    if (material.error) throw material.error;
+
+    const matches = (Array.isArray(lecture.data) ? lecture.data : []).filter((item) => Number(item.similarity) >= 0.3);
     const sources = matches.map((item) => ({
       sessionId: String(item.session_id),
       title: String(item.session_title),
       startMs: Number(item.start_ms),
       endMs: Number(item.end_ms),
     }));
+    const materialMatches = (Array.isArray(material.data) ? material.data : []).filter((item) => Number(item.similarity) >= 0.3);
+    const materialSources = materialMatches.map((item) => ({
+      documentId: String(item.document_id),
+      filename: String(item.filename),
+      startPage: Number(item.start_page),
+      endPage: Number(item.end_page),
+    }));
+
     return {
       text: matches.map((item) => `[${item.session_title}] ${item.text}`).join("\n\n"),
       sources: [...new Map(sources.map((source) => [`${source.sessionId}:${source.startMs}`, source])).values()],
+      materialText: materialMatches
+        .map((item) => `[${item.filename} p.${item.start_page}${item.end_page !== item.start_page ? `-${item.end_page}` : ""}] ${item.text}`)
+        .join("\n\n"),
+      materialSources: [...new Map(materialSources.map((source) => [`${source.documentId}:${source.startPage}`, source])).values()],
       admin,
     };
   } catch (error) {
-    console.error("Earlier lecture lookup failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
-    return { text: "", sources: [] as LectureSource[], admin };
+    console.error("Classroom context lookup failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+    return { ...EMPTY_CLASSROOM_CONTEXT, admin };
   }
 }
 
@@ -670,8 +717,8 @@ export async function POST(request: Request) {
   }
 
   const earlier = classroomId && lectureSessionId
-    ? await findEarlierLectureContext(userId, classroomId, lectureSessionId, question)
-    : { text: "", sources: [] as LectureSource[], admin: null };
+    ? await findClassroomContext(userId, classroomId, lectureSessionId, question)
+    : { ...EMPTY_CLASSROOM_CONTEXT, admin: null };
 
   const transcript = segments
     .map((segment) => `[${formatTime(segment.startMs)}] ${segment.text}`)
@@ -685,9 +732,14 @@ export async function POST(request: Request) {
   const earlierBlock = earlier.text
     ? locale === "en" ? `\n\nRelevant excerpts from earlier lectures in this classroom:\n${earlier.text}` : `\n\n같은 강의실의 이전 수업 중 관련 내용:\n${earlier.text}`
     : "";
+  const materialBlock = earlier.materialText
+    ? locale === "en"
+      ? `\n\nRelevant excerpts from lecture materials uploaded to this classroom:\n${earlier.materialText}`
+      : `\n\n이 강의실에 올린 강의 자료 중 관련 내용:\n${earlier.materialText}`
+    : "";
   const input = locale === "en"
-    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
-    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
+    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}${materialBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
+    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}${materialBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
 
   // Everything above this line is validation (auth, rate limit, credits, body
   // shape); only once all of it has passed does the response start streaming.
@@ -749,6 +801,7 @@ export async function POST(request: Request) {
             model,
             external_sources: cleanedSources,
             lecture_sources: earlier.sources,
+            material_sources: earlier.materialSources,
             input_tokens: result.usage?.inputTokens,
             cached_input_tokens: result.usage?.cachedInputTokens,
             cache_write_tokens: result.usage?.cacheWriteTokens,
@@ -758,7 +811,7 @@ export async function POST(request: Request) {
           if (saveError) console.error("Lecture question save failed", saveError.code);
         }
 
-        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, provider, model } });
+        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, materialSources: earlier.materialSources, provider, model } });
       } catch (error) {
         send({ error: askErrorMessage(error, personalLlm, isEnglish) });
       } finally {

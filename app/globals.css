@@ -491,6 +491,8 @@ a, button, summary, input, textarea, select {
 .transcript-line .line-report:not(:disabled):hover { color: var(--signal); border-color: var(--signal); }
 .transcript-line .line-report:disabled { color: var(--muted); opacity: .7; }
 
+.material-sources em { padding: 4px 7px; color: var(--focus); background: var(--soft-blue); font-style: normal; font-size: 11px; font-weight: 750; }
+
 .message-report { margin-top: 8px; }
 .message-report button {
   padding: 5px 8px;
@@ -1010,6 +1012,37 @@ a, button, summary, input, textarea, select {
   resize: vertical;
 }
 .classroom-glossary small { grid-column: 2 / -1; color: var(--muted); font-size: 10px; }
+
+.classroom-materials { align-items: start; }
+.classroom-materials label { padding-top: 10px; }
+.classroom-materials > div { grid-column: 2 / -1; display: grid; gap: 10px; }
+.classroom-materials input[type="file"] { font-size: 11px; }
+.classroom-materials ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.classroom-materials li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.classroom-materials li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.classroom-materials li small { color: var(--muted); font-size: 10px; }
+.classroom-materials li button {
+  min-height: 28px;
+  padding: 0 9px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.classroom-materials li button:not(:disabled):hover { color: var(--signal); border-color: var(--signal); }
+.classroom-materials > small { grid-column: 2 / -1; color: var(--muted); font-size: 10px; line-height: 1.6; }
 
 .classroom-session-list {
   position: relative;

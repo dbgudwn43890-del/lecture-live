@@ -14,6 +14,14 @@ type SessionSummary = {
   question_count: number;
 };
 
+type MaterialDocument = {
+  id: string;
+  classroom_id: string;
+  filename: string;
+  page_count: number;
+  created_at: string;
+};
+
 type Classroom = {
   id: string;
   title: string;
@@ -42,6 +50,8 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
   const [renameTitle, setRenameTitle] = useState("");
   const [glossaryId, setGlossaryId] = useState("");
   const [glossaryText, setGlossaryText] = useState("");
+  const [materials, setMaterials] = useState<MaterialDocument[]>([]);
+  const [materialsId, setMaterialsId] = useState("");
   const [pending, setPending] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -56,12 +66,65 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
       if (!response.ok) throw new Error(data.error);
       setClassrooms(data.classrooms ?? []);
       setUnassignedSessions(data.unassignedSessions ?? []);
+      await loadMaterials();
     } catch (caught) {
       setError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not load your classrooms." : "강의실을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadMaterials() {
+    try {
+      const response = await fetch("/api/materials", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
+      const data = await response.json() as { documents?: MaterialDocument[] };
+      setMaterials(data.documents ?? []);
+    } catch {
+      // The library still renders without it; the upload row will just show none.
+    }
+  }
+
+  // Indexing reads the whole PDF with a model, so this is the one action here
+  // that takes tens of seconds. The row says so rather than looking frozen.
+  async function uploadMaterial(classroomId: string, file: File) {
+    setPending(`material-${classroomId}`);
+    setError("");
+    try {
+      const body = new FormData();
+      body.set("classroomId", classroomId);
+      body.set("file", file);
+      const response = await fetch("/api/materials", { method: "POST", headers: { "X-Site-Locale": locale }, body });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      await loadMaterials();
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not index this material." : "이 자료를 색인하지 못했습니다.");
+    } finally {
+      setPending("");
+    }
+  }
+
+  async function deleteMaterial(documentId: string) {
+    setPending(`material-delete-${documentId}`);
+    setError("");
+    try {
+      const response = await fetch(`/api/materials?documentId=${encodeURIComponent(documentId)}`, {
+        method: "DELETE",
+        headers: { "X-Site-Locale": locale },
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      await loadMaterials();
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not delete this material." : "이 자료를 삭제하지 못했습니다.");
+    } finally {
+      setPending("");
     }
   }
 
@@ -284,6 +347,9 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
                         setGlossaryId(glossaryId === classroom.id ? "" : classroom.id);
                         setGlossaryText(classroom.glossary ?? "");
                       }}>{isEnglish ? "Glossary" : "용어집"}</button>
+                      <button type="button" onClick={() => setMaterialsId(materialsId === classroom.id ? "" : classroom.id)}>
+                        {isEnglish ? "Materials" : "강의 자료"}
+                      </button>
                       <Link href={`${basePath}/classroom?classroom=${encodeURIComponent(classroom.id)}`}>{isEnglish ? "Start lecture" : "수업 시작"}</Link>
                     </div>
                   </header>
@@ -314,6 +380,42 @@ export default function ClassroomsPage({ locale = "ko" }: { locale?: "ko" | "en"
                         ? "Up to 60 terms. They are sent with every transcription request for this classroom."
                         : "최대 60개. 이 강의실의 모든 받아쓰기 요청에 함께 전달됩니다."}</small>
                     </form>
+                  )}
+                  {materialsId === classroom.id && (
+                    <div className="classroom-rename classroom-materials">
+                      <label htmlFor={`material-${classroom.id}`}>{isEnglish ? "Lecture materials (PDF)" : "강의 자료 (PDF)"}</label>
+                      <div>
+                        <input
+                          id={`material-${classroom.id}`}
+                          type="file"
+                          accept="application/pdf"
+                          disabled={pending === `material-${classroom.id}`}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            if (file) void uploadMaterial(classroom.id, file);
+                          }}
+                        />
+                        <ul>
+                          {materials.filter((document) => document.classroom_id === classroom.id).map((document) => (
+                            <li key={document.id}>
+                              <span>{document.filename}</span>
+                              <small>{document.page_count}{isEnglish ? " pages" : "쪽"}</small>
+                              <button
+                                type="button"
+                                onClick={() => void deleteMaterial(document.id)}
+                                disabled={pending === `material-delete-${document.id}`}
+                              >{isEnglish ? "Remove" : "삭제"}</button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <small>{pending === `material-${classroom.id}`
+                        ? isEnglish ? "Reading the slides… this can take up to a minute." : "슬라이드를 읽는 중입니다. 1분 정도 걸릴 수 있습니다."
+                        : isEnglish
+                          ? "Up to 20MB per PDF. Formulas, tables, and figures are read as text; the file itself is not stored."
+                          : "PDF 1개당 20MB까지. 수식·표·그림을 텍스트로 읽어 답변 맥락에 씁니다. 원본 파일은 저장하지 않습니다."}</small>
+                    </div>
                   )}
                   {sessionRows(classroom.sessions, classroom.id)}
                 </article>

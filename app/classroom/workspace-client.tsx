@@ -21,6 +21,7 @@ type Segment = {
 
 type Source = { title: string; url: string };
 type LectureSource = { sessionId: string; title: string; startMs: number; endMs: number };
+type MaterialSource = { documentId: string; filename: string; startPage: number; endPage: number };
 type SessionSummary = {
   id: string;
   classroom_id: string | null;
@@ -43,6 +44,7 @@ type Message = {
   pending?: boolean;
   sources?: Source[];
   lectureSources?: LectureSource[];
+  materialSources?: MaterialSource[];
   assistantLabel?: string;
 };
 
@@ -1097,7 +1099,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       let buffer = "";
       let streamedText = "";
       let streamError: string | null = null;
-      let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[] } | null = null;
+      let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[]; materialSources?: MaterialSource[] } | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -1124,7 +1126,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
       if (streamError) throw new Error(streamError);
       if (!finalDone) throw new Error(isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다.");
-      const { answer, sources, lectureSources } = finalDone;
+      const { answer, sources, lectureSources, materialSources } = finalDone;
 
       setMessages((current) =>
         current.map((message) =>
@@ -1137,6 +1139,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                 pending: false,
                 sources: cleanSources(sources ?? []),
                 lectureSources: lectureSources ?? [],
+                materialSources: materialSources ?? [],
               }
             : message,
         ),
@@ -1549,6 +1552,17 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                           ? isEnglish ? "Thanks, noted" : "신고 접수됨"
                           : isEnglish ? "Missed the lecture context" : "강의 맥락과 안 맞음"}
                       </button>
+                    </div>
+                  )}
+                  {message.materialSources && message.materialSources.length > 0 && (
+                    <div className="lecture-sources material-sources">
+                      <span>{isEnglish ? "Material used" : "강의 자료 참고"}</span>
+                      {message.materialSources.map((source) => (
+                        <em key={`${source.documentId}-${source.startPage}`}>
+                          {source.filename} p.{source.startPage}
+                          {source.endPage !== source.startPage ? `-${source.endPage}` : ""}
+                        </em>
+                      ))}
                     </div>
                   )}
                   {message.lectureSources && message.lectureSources.length > 0 && (
