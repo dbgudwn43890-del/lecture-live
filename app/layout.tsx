@@ -1,6 +1,21 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import localFont from "next/font/local";
 import "./globals.css";
+
+// globals.css names "Pretendard" in its font stack, but nothing ever loaded it —
+// no @font-face, no next/font call, no file under public/ — so every page rendered
+// in the browser's default sans-serif. Self-host the variable font here instead of
+// pulling it from a CDN, per next/font's built-in self-hosting.
+// Font: Pretendard Variable v1.3.9 (SIL Open Font License 1.1), see app/fonts/PRETENDARD-LICENSE.txt.
+// Weight range matches the upstream @font-face declaration (45 920).
+const pretendard = localFont({
+  src: "./fonts/PretendardVariable.woff2",
+  variable: "--font-pretendard",
+  weight: "45 920",
+  display: "swap",
+  fallback: ["SUIT", "Noto Sans KR", "system-ui", "sans-serif"],
+});
 
 // Built from the locale rather than hardcoded, so /en/classroom, /en/billing
 // and /en/classrooms — none of which export metadata of their own — stop
@@ -29,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   return (
-    <html lang={locale}>
+    <html lang={locale} className={pretendard.variable}>
       <body>{children}</body>
     </html>
   );

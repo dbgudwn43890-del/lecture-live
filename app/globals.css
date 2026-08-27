@@ -20,7 +20,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: "Pretendard", "SUIT", "Noto Sans KR", system-ui, sans-serif;
+  font-family: var(--font-pretendard), "SUIT", "Noto Sans KR", system-ui, sans-serif;
   text-rendering: optimizeLegibility;
 }
 
@@ -133,80 +133,6 @@ a, button, summary, input, textarea, select {
    what people glance at, identical whether recording was fine or had failed. */
 .state-error { background: #b3261e; box-shadow: 0 0 0 2px #f3d5d2; }
 
-.credit-balance {
-  display: grid;
-  gap: 3px;
-  padding: 7px 10px;
-  color: #aeb7b9;
-  border: 1px solid #596064;
-  border-radius: 10px;
-  text-decoration: none;
-}
-
-.credit-balance span { font-size: 9px; }
-.credit-balance b { color: white; font-size: 11px; }
-.credit-balance:hover { border-color: #aeb7b9; }
-
-.ai-settings {
-  position: relative;
-  z-index: 5;
-}
-
-.ai-settings summary {
-  min-width: 132px;
-  display: grid;
-  gap: 3px;
-  padding: 7px 28px 7px 10px;
-  color: #aeb7b9;
-  border: 1px solid #596064;
-  border-radius: 10px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.ai-settings summary::-webkit-details-marker { display: none; }
-
-.ai-settings summary::after {
-  content: "↓";
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  color: white;
-  transform: translateY(-50%);
-}
-
-.ai-settings[open] summary { border-color: #aeb7b9; }
-.ai-settings summary span { font-size: 9px; }
-.ai-settings summary b { color: white; font-size: 11px; white-space: nowrap; }
-
-.ai-settings-panel {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: min(330px, calc(100vw - 32px));
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  color: var(--ink);
-  background: white;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  box-shadow: 8px 10px 0 rgba(204, 211, 212, .55);
-}
-
-.ai-settings-panel label { display: grid; gap: 6px; }
-.ai-settings-panel label > span { font-size: 11px; font-weight: 800; }
-
-.ai-settings-panel input {
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
-  color: var(--ink);
-  background: white;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-}
-
 .settings-choice {
   min-width: 0;
   margin: 0;
@@ -242,13 +168,6 @@ a, button, summary, input, textarea, select {
 .settings-choice-list button:hover { color: var(--ink); border-color: var(--line-strong); }
 .settings-choice-list button.active { color: white; background: var(--ink); border-color: var(--ink); }
 .settings-model-list { grid-template-columns: 1fr; }
-
-.ai-settings-panel p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.6;
-}
 
 .credential-actions {
   display: flex;
@@ -291,19 +210,6 @@ a, button, summary, input, textarea, select {
 .stop-button { background: var(--signal); color: white; }
 .stop-button:hover { background: var(--signal-dark); }
 
-.signout-form { margin: 0; }
-
-.signout-button {
-  padding: 9px 0 9px 12px;
-  color: #b9c1c3;
-  background: transparent;
-  border: 0;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.signout-button:hover { color: white; }
-
 .error-banner {
   padding: 10px 22px;
   color: #7e2014;
@@ -332,54 +238,6 @@ a, button, summary, input, textarea, select {
   border: 0;
 }
 
-.classroom-bar {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto;
-  align-items: center;
-  gap: 24px;
-  min-height: 66px;
-  padding: 9px 18px;
-  background: #e9eeee;
-  border-bottom: 1px solid var(--line-strong);
-}
-
-.lecture-hierarchy {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-}
-
-.lecture-hierarchy span,
-.lecture-hierarchy > a {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-
-.lecture-hierarchy > a {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-
-.lecture-hierarchy > a:hover,
-.lecture-hierarchy > a:focus-visible { color: var(--focus); }
-
-.lecture-hierarchy strong {
-  min-width: 0;
-  max-width: 260px;
-  overflow: hidden;
-  color: var(--ink);
-  font-size: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lecture-hierarchy i { color: var(--focus); font: 800 21px/1 ui-monospace, monospace; }
-
 .lecture-title-field {
   flex: 1 1 180px;
   min-width: 120px;
@@ -397,94 +255,6 @@ a, button, summary, input, textarea, select {
 }
 
 .lecture-title-field input::placeholder { color: var(--muted); }
-
-.classroom-controls {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.context-menu {
-  position: relative;
-  z-index: 4;
-}
-
-.context-menu summary {
-  min-width: 150px;
-  display: grid;
-  gap: 2px;
-  padding: 7px 30px 7px 10px;
-  color: var(--muted);
-  background: white;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.context-menu summary::-webkit-details-marker { display: none; }
-.context-menu summary::after { content: "⌄"; position: absolute; top: 12px; right: 10px; color: var(--focus); font-weight: 900; }
-.context-menu summary span { font-size: 8px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.context-menu summary b { max-width: 135px; overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.session-menu summary { min-width: 108px; }
-.session-menu summary b { max-width: 90px; }
-
-.context-menu-panel {
-  position: absolute;
-  top: calc(100% + 7px);
-  right: 0;
-  width: min(290px, calc(100vw - 28px));
-  display: grid;
-  gap: 5px;
-  padding: 9px;
-  background: white;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  box-shadow: 3px 4px 0 rgba(157, 169, 173, .35);
-}
-
-.context-menu-panel p {
-  margin: 2px 3px 6px;
-  color: var(--muted);
-  font-size: 9px;
-  line-height: 1.5;
-}
-
-.context-menu-panel button {
-  display: grid;
-  gap: 2px;
-  padding: 9px 10px;
-  color: var(--ink);
-  background: #f5f7f6;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  text-align: left;
-}
-
-.context-menu-panel button:hover { border-color: var(--line-strong); }
-.context-menu-panel button.active { color: white; background: var(--focus); }
-.context-menu-panel button span { font-size: 11px; font-weight: 800; }
-.context-menu-panel button small { color: var(--muted); font-size: 8px; }
-.context-menu-panel button.active small { color: #d5e7eb; }
-.context-menu-panel > a { margin-top: 3px; padding: 8px 5px 4px; color: var(--focus); font-size: 10px; font-weight: 800; text-decoration: none; }
-
-.new-lecture-button,
-.manage-classrooms-link {
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.new-lecture-button { color: white; background: var(--focus); border-color: var(--focus); }
-.manage-classrooms-link { color: var(--ink); background: transparent; }
-.manage-classrooms-link:hover { background: white; }
 
 .panes {
   min-height: 0;
@@ -1281,22 +1051,8 @@ a, button, summary, input, textarea, select {
     overflow: visible;
   }
   .topbar { grid-template-columns: 1fr auto; padding: 14px 16px; gap: 12px; }
-  .credit-balance { grid-column: 1 / -1; grid-row: 2; }
-  .ai-settings { grid-column: 1 / -1; grid-row: 3; }
-  .ai-settings summary { width: 100%; }
-  .ai-settings-panel { left: 0; right: auto; }
   .session-state { grid-column: 1; grid-row: 4; justify-self: start; }
   .topbar > button { grid-column: 2; grid-row: 4; }
-  .signout-form { grid-column: 2; grid-row: 1; justify-self: end; }
-  .signout-button { padding-right: 0; }
-  .classroom-bar { grid-template-columns: 1fr; gap: 9px; padding: 10px 12px; }
-  .lecture-hierarchy strong { max-width: 150px; }
-  .classroom-controls { align-items: stretch; flex-wrap: wrap; }
-  .context-menu { flex: 1 1 150px; }
-  .context-menu summary { width: 100%; }
-  .context-menu-panel { left: 0; right: auto; }
-  .session-menu .context-menu-panel { left: auto; right: 0; }
-  .new-lecture-button, .manage-classrooms-link { flex: 0 0 auto; }
   .panes { grid-template-columns: 1fr; }
   .chat-pane, .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
   .panes { gap: 14px; padding: 12px; }
@@ -1355,9 +1111,6 @@ a, button, summary, input, textarea, select {
   .classroom-session-list { margin-right: 12px; margin-left: 34px; padding-left: 15px; }
   .classroom-session { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
   .classroom-empty { padding-left: 52px; }
-  .lecture-hierarchy span { display: none; }
-  .lecture-hierarchy strong { max-width: 120px; }
-  .manage-classrooms-link { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1377,19 +1130,10 @@ a, button, summary, input, textarea, select {
 }
 
 .lecture-title-field input,
-.credit-balance,
-.ai-settings summary,
-.ai-settings-panel,
-.ai-settings-panel input,
 .settings-choice-list button,
 .credential-actions button,
 .start-button,
 .stop-button,
-.context-menu summary,
-.context-menu-panel,
-.context-menu-panel button,
-.new-lecture-button,
-.manage-classrooms-link,
 .chat-pane,
 .transcript-pane,
 .message p,
@@ -1417,8 +1161,6 @@ a, button, summary, input, textarea, select {
   border-radius: 2px;
 }
 
-.ai-settings-panel,
-.context-menu-panel,
 .login-panel,
 .classroom-create,
 .session-move-menu {
@@ -1439,7 +1181,6 @@ a, button, summary, input, textarea, select {
   border-bottom: 3px solid var(--signal);
 }
 
-.classroom-bar,
 .pane-heading,
 .classroom-unit > header,
 .billing-topbar,
@@ -1448,9 +1189,6 @@ a, button, summary, input, textarea, select {
 }
 
 .lecture-title-field input,
-.credit-balance,
-.ai-settings summary,
-.context-menu summary,
 .question-form textarea,
 .login-form input,
 .classroom-create input,
@@ -1460,7 +1198,6 @@ a, button, summary, input, textarea, select {
 
 .start-button,
 .stop-button,
-.new-lecture-button,
 .classroom-create button,
 .classroom-rename button,
 .email-auth-button,
@@ -1483,13 +1220,8 @@ a, button, summary, input, textarea, select {
   letter-spacing: -.055em;
 }
 
-.lecture-hierarchy span,
-.lecture-hierarchy > a,
-.context-menu summary span,
 .settings-choice legend,
-.classroom-unit header span,
-.credit-balance span,
-.ai-settings summary span {
+.classroom-unit header span {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   letter-spacing: .08em;
 }
@@ -1508,7 +1240,6 @@ a, button, summary, input, textarea, select {
 @media (hover: hover) {
   .start-button:not(:disabled):hover,
   .stop-button:not(:disabled):hover,
-  .new-lecture-button:not(:disabled):hover,
   .classroom-create button:not(:disabled):hover,
   .classroom-rename button:not(:disabled):hover,
   .email-auth-button:not(:disabled):hover,
@@ -1520,7 +1251,6 @@ a, button, summary, input, textarea, select {
 }
 
 button:active,
-.new-lecture-button:active,
 .email-auth-button:active,
 .billing-plan button:active {
   box-shadow: none;
@@ -1857,46 +1587,6 @@ button:active,
 .profile-signout button { width: 100%; min-height: 34px; color: #6f6a63; background: transparent; border: 0; border-radius: 7px; font-size: 10px; font-weight: 700; text-align: left; }
 .profile-signout button:hover { color: #302e2a; background: #f1f0eb; }
 
-.lecture-toolbar {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 20px;
-  background: #fff;
-  border-bottom: 1px solid #ece9e3;
-}
-
-.lecture-toolbar > span {
-  max-width: 180px;
-  overflow: hidden;
-  color: #77736c;
-  font-size: 11px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lecture-toolbar > span::after { content: "/"; margin-left: 12px; color: #c0bcb4; }
-.lecture-toolbar .lecture-title-field { max-width: 430px; }
-
-.lecture-toolbar .lecture-title-field input {
-  padding: 6px 0;
-  color: #2e2c28;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.lecture-toolbar .lecture-title-field input:hover { border-bottom-color: #c8c4bb; }
-/* Suppress the outline only for pointer focus. Killing it on :focus too left
-   keyboard editing of the title with a focus ring identical to plain hover. */
-.lecture-toolbar .lecture-title-field input:focus:not(:focus-visible) { border-bottom-color: #c8c4bb; outline: 0; }
-.lecture-toolbar > small { margin-left: auto; color: #98938b; font-size: 10px; white-space: nowrap; }
-
 .workspace .panes { gap: 12px; padding: 14px 18px 16px; background: #f8f7f4; }
 
 .workspace .chat-pane,
@@ -1974,9 +1664,6 @@ button:active,
   /* The app's primary control. It used to shrink here, not grow. */
   .workspace .start-button,
   .workspace .stop-button { min-width: 76px; min-height: 44px; padding: 0 12px; font-size: 13px; }
-  .lecture-toolbar { padding: 8px 12px; }
-  .lecture-toolbar > span { max-width: 90px; }
-  .lecture-toolbar > small { display: none; }
 }
 
 /* Shared shell for loading.tsx / error.tsx / not-found.tsx. Before these
