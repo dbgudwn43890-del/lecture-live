@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
-import { checkRateLimit } from "../../lib/rate-limit";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -33,7 +33,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit(`deepgram-token:${userId}`, 10, 60_000);
+  // The in-process limiter this used to call is a per-instance Map, so the
+  // real ceiling on a token-minting route was 10/min times however many
+  // serverless instances answered. Every other paid route already shares a
+  // counter in Postgres.
+  const rateLimit = await checkSharedRateLimit(`deepgram-token:${userId}`, 10, 60_000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "음성 인식 연결 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getClassroomData } from "../../lib/classroom-data";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -11,6 +12,13 @@ async function context(request: Request) {
   const isEnglish = request.headers.get("x-site-locale") === "en";
   if (!user) {
     return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
+  }
+  const rateLimit = await checkSharedRateLimit(`classrooms:${user.id}`, 60, 60_000);
+  if (!rateLimit.allowed) {
+    return { response: NextResponse.json(
+      { error: isEnglish ? "Too many requests. Try again shortly." : "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    ) };
   }
   return { user, userId: user.id, supabase, isEnglish };
 }

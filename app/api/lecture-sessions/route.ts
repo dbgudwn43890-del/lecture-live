@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { chunkTranscript, type TranscriptPart } from "../../lib/chunk-transcript";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -121,6 +122,16 @@ async function context(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   const isEnglish = request.headers.get("x-site-locale") === "en";
   if (!user) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
+  // Every verb goes through here, so one ceiling covers them all. A lecture
+  // saves a segment every few seconds, so the limit is loose — it exists to
+  // bound a loop, not to pace a recording.
+  const rateLimit = await checkSharedRateLimit(`lecture-sessions:${user.id}`, 240, 60_000);
+  if (!rateLimit.allowed) {
+    return { response: NextResponse.json(
+      { error: isEnglish ? "Too many requests. Try again shortly." : "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    ) };
+  }
   return { userId: user.id, supabase, isEnglish };
 }
 
@@ -411,8 +422,13 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Invalid lecture completion data." : "수업 종료 정보를 확인해 주세요." }, { status: 400 });
   }
   const segments = body.segments.filter(validSegment).slice(0, 5_000);
-  const { data: session } = await current.supabase.from("lecture_sessions").select("id,classroom_id,started_at").eq("id", body.sessionId).maybeSingle();
+  const { data: session } = await current.supabase.from("lecture_sessions").select("id,classroom_id,started_at,status").eq("id", body.sessionId).maybeSingle();
   if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
+  // Only a recording lecture can be completed. consume_lecture_credits already
+  // refuses anything else, but that rejection was logged and stepped over, so a
+  // completed session could be re-PATCHed forever — each replay re-embedding a
+  // fresh 5,000-segment payload on the platform key. Ending twice is a no-op.
+  if (session.status !== "recording") return NextResponse.json({ completed: true, indexed: false });
 
   if (segments.length) {
     const { error } = await current.supabase.from("transcript_segments").upsert(segments.map((segment) => ({
@@ -431,7 +447,17 @@ export async function PATCH(request: Request) {
   // reporting durationMs: 0 after a 90-minute lecture used to store 0 and skip
   // the final credit reconciliation below.
   const elapsedMs = Date.now() - new Date(session.started_at).getTime();
-  const durationSeconds = Math.min(10_800, Math.max(0, Math.ceil(elapsedMs / 1_000)));
+  // A start that failed before the first sample (a blocked AudioContext, a
+  // missing worklet) still lands here, and billing off started_at charged it a
+  // full lecture-minute for a lecture that recorded nothing. The transcript is
+  // counted in the database rather than taken from durationMs, so a client
+  // under-reporting a real 90-minute lecture still reconciles.
+  const { count: storedSegments } = await current.supabase
+    .from("transcript_segments")
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", body.sessionId);
+  const recordedSomething = segments.length > 0 || (storedSegments ?? 0) > 0;
+  const durationSeconds = recordedSomething ? Math.min(10_800, Math.max(0, Math.ceil(elapsedMs / 1_000))) : 0;
   if (durationSeconds > 0) {
     const { error: creditError } = await current.supabase.rpc("consume_lecture_credits", {
       p_session_id: body.sessionId,

@@ -14,7 +14,7 @@ type Call = {
   filters: string[];
 };
 
-type Outcome = { data?: unknown; error?: unknown };
+type Outcome = { data?: unknown; error?: unknown; count?: number };
 type SegmentRow = { client_id: string; start_ms: number; end_ms: number; text: string };
 
 let calls: Call[] = [];
@@ -57,7 +57,7 @@ function queryBuilder(table: string) {
     upsert(payload: unknown, options?: unknown) { call.op = "upsert"; call.payload = payload; call.options = options; calls.push(call); return api; },
     update(payload: unknown) { call.op = "update"; call.payload = payload; calls.push(call); return api; },
     delete() { call.op = "delete"; calls.push(call); return api; },
-    select(columns?: string) { if (call.op === "select") { call.payload = columns; calls.push(call); } return api; },
+    select(columns?: string, options?: unknown) { if (call.op === "select") { call.payload = columns; call.options = options; calls.push(call); } return api; },
     eq(column: string, value: unknown) { call.filters.push(`eq:${column}=${String(value)}`); return api; },
     lt(column: string, value: unknown) { call.filters.push(`lt:${column}=${String(value)}`); return api; },
     gt(column: string, value: unknown) { call.filters.push(`gt:${column}=${String(value)}`); return api; },
@@ -120,7 +120,7 @@ class FakeOpenAI {
 
 mock.module("openai", { defaultExport: FakeOpenAI });
 
-const { GET, POST } = await import("./route.ts");
+const { GET, POST, PATCH } = await import("./route.ts");
 
 function request(url: string, init?: RequestInit) {
   return new Request(url, init);
@@ -273,4 +273,82 @@ test("reconcile leaves an already-indexed completed lecture alone", async () => 
   assert.equal(embeddingsCalls.length, 0, "no transcript read, no embedding, for a lecture that already has chunks");
   const transcriptReads = calls.filter((call) => call.table === "transcript_segments");
   assert.deepEqual(transcriptReads, []);
+});
+
+test("completing a lecture that is already completed neither charges nor re-embeds", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = {
+    data: { id: sessionId, classroom_id: null, started_at: "2026-08-27T00:00:00.000Z", status: "completed" },
+    error: null,
+  };
+
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
+    method: "PATCH",
+    body: JSON.stringify({
+      sessionId,
+      durationMs: 0,
+      segments: Array.from({ length: 50 }, (_, index) => ({ id: `pad-${index}`, startMs: 0, endMs: 1_000, text: "x".repeat(200) })),
+    }),
+  }));
+
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { completed: true, indexed: false });
+  assert.equal(embeddingsCalls.length, 0);
+  assert.equal(calls.filter((call) => call.op === "rpc").length, 0);
+  assert.equal(calls.filter((call) => call.table === "transcript_segments" && call.op === "upsert").length, 0);
+  assert.equal(calls.filter((call) => call.table === "lecture_sessions" && call.op === "update").length, 0);
+});
+
+test("a start that failed before the first sample is closed at zero and costs no credit", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = {
+    // started_at is a minute old: billing off the clock alone would charge one
+    // lecture-minute for a lecture that never recorded a sample.
+    data: { id: sessionId, classroom_id: null, started_at: new Date(Date.now() - 60_000).toISOString(), status: "recording" },
+    error: null,
+  };
+  outcomes["transcript_segments.select"] = { data: null, error: null, count: 0 };
+  outcomes["lecture_sessions.update"] = { data: null, error: null };
+
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
+    method: "PATCH",
+    body: JSON.stringify({ sessionId, durationMs: 0, segments: [] }),
+  }));
+
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  assert.equal(calls.filter((call) => call.table === "rpc:consume_lecture_credits").length, 0);
+  const update = calls.find((call) => call.table === "lecture_sessions" && call.op === "update");
+  assert.equal((update?.payload as { duration_seconds: number }).duration_seconds, 0);
+  assert.equal((update?.payload as { status: string }).status, "completed");
+});
+
+test("a lecture whose transcript is already in the database still reconciles its credits", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = {
+    // 30s past the minute, not on it: the billable minute is derived with
+    // Math.ceil, so an exact boundary lands on either side of it depending on
+    // how long the test itself takes.
+    data: { id: sessionId, classroom_id: null, started_at: new Date(Date.now() - (90 * 60_000 + 30_000)).toISOString(), status: "recording" },
+    error: null,
+  };
+  // The client under-reports: durationMs 0 and an empty segment list. The rows
+  // it saved live during the lecture are what the server counts instead.
+  outcomes["transcript_segments.select"] = { data: null, error: null, count: 120 };
+  outcomes["lecture_sessions.update"] = { data: null, error: null };
+
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
+    method: "PATCH",
+    body: JSON.stringify({ sessionId, durationMs: 0, segments: [] }),
+  }));
+
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  const charge = calls.find((call) => call.table === "rpc:consume_lecture_credits");
+  assert.ok(charge, "a 90-minute lecture with a stored transcript must still be charged");
+  assert.equal((charge.payload as { p_minute_index: number }).p_minute_index, 90);
+  const update = calls.find((call) => call.table === "lecture_sessions" && call.op === "update");
+  const stored = (update?.payload as { duration_seconds: number }).duration_seconds;
+  assert.ok(stored >= 5_430 && stored < 5_440, `duration_seconds ${stored} should track the elapsed 90m30s`);
 });

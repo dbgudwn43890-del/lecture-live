@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isUuid } from "../../lib/billing";
 import { getCreditStatus } from "../../lib/credit-status";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -15,6 +16,14 @@ async function current(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return { response: NextResponse.json({ error: message(request, "로그인이 필요합니다.", "Sign-in is required.") }, { status: 401 }) };
+  }
+  // A recording tab ticks once a minute; anything past this is a loop.
+  const rateLimit = await checkSharedRateLimit(`credits:${user.id}`, 60, 60_000);
+  if (!rateLimit.allowed) {
+    return { response: NextResponse.json(
+      { error: message(request, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.", "Too many requests. Try again shortly.") },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    ) };
   }
   return { supabase };
 }
