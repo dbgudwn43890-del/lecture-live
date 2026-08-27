@@ -707,18 +707,24 @@ export async function POST(request: Request) {
 
   const classroomId = isUuid(body.classroomId) ? body.classroomId : null;
   const lectureSessionId = requestedSessionId;
+  const contextStartedAt = Date.now();
+  // The transcript read and the classroom retrieval need nothing from each
+  // other, and each is a network round trip the learner waits through before
+  // the first token. Running them together removes the slower one's tail from
+  // the wait instead of adding it (PRD 36.3.4).
   // Without a session id there is nothing to read back, so fall back to
   // whatever the request carried (the pre-existing behavior).
-  const segments = lectureSessionId
-    ? mergeSegments(await fetchStoredSegments(supabase, lectureSessionId), unconfirmedSegments)
-    : unconfirmedSegments;
+  const [storedSegments, earlier] = await Promise.all([
+    lectureSessionId ? fetchStoredSegments(supabase, lectureSessionId) : Promise.resolve<Segment[]>([]),
+    classroomId && lectureSessionId
+      ? findClassroomContext(userId, classroomId, lectureSessionId, question)
+      : Promise.resolve({ ...EMPTY_CLASSROOM_CONTEXT, admin: null }),
+  ]);
+  const segments = lectureSessionId ? mergeSegments(storedSegments, unconfirmedSegments) : unconfirmedSegments;
+  const contextMs = Date.now() - contextStartedAt;
   if (segments.length > 5_000) {
     return NextResponse.json({ error: isEnglish ? "The transcript is too long." : "스크립트가 너무 깁니다." }, { status: 413 });
   }
-
-  const earlier = classroomId && lectureSessionId
-    ? await findClassroomContext(userId, classroomId, lectureSessionId, question)
-    : { ...EMPTY_CLASSROOM_CONTEXT, admin: null };
 
   const transcript = segments
     .map((segment) => `[${formatTime(segment.startMs)}] ${segment.text}`)
@@ -751,12 +757,18 @@ export async function POST(request: Request) {
       // Enqueueing to a stream whose reader has gone away throws. Swallow it:
       // the listener is gone, and letting it escape would turn a closed tab
       // into an unhandled rejection that also skips the save below.
+      const startedAt = Date.now();
+      let firstTokenMs: number | null = null;
       const send = (line: unknown) => {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
         } catch {
           /* reader closed */
         }
+      };
+      const onDelta = (delta: string) => {
+        if (firstTokenMs === null) firstTokenMs = Date.now() - startedAt;
+        send({ delta });
       };
       try {
         let result: AnswerResult;
@@ -768,7 +780,7 @@ export async function POST(request: Request) {
             safetyIdentifier,
             instructions,
             "low",
-            (delta) => send({ delta }),
+            onDelta,
           );
         } else if (personalLlm.provider === "openai") {
           result = await askOpenAI(
@@ -778,12 +790,12 @@ export async function POST(request: Request) {
             safetyIdentifier,
             instructions,
             "medium",
-            (delta) => send({ delta }),
+            onDelta,
           );
         } else if (personalLlm.provider === "anthropic") {
-          result = await askAnthropic(personalLlm.apiKey!, personalLlm.model, input, instructions, (delta) => send({ delta }));
+          result = await askAnthropic(personalLlm.apiKey!, personalLlm.model, input, instructions, onDelta);
         } else {
-          result = await askGoogle(personalLlm.apiKey!, personalLlm.model, input, instructions, (delta) => send({ delta }));
+          result = await askGoogle(personalLlm.apiKey!, personalLlm.model, input, instructions, onDelta);
         }
 
         const cleanedAnswer = cleanAnswerText(result.answer);
@@ -807,6 +819,8 @@ export async function POST(request: Request) {
             cache_write_tokens: result.usage?.cacheWriteTokens,
             output_tokens: result.usage?.outputTokens,
             web_search_calls: result.usage?.webSearchCalls,
+            context_ms: contextMs,
+            first_token_ms: firstTokenMs,
           });
           if (saveError) console.error("Lecture question save failed", saveError.code);
         }

@@ -175,7 +175,7 @@ export async function POST(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
 
-  let body: { action?: unknown; classroomId?: unknown; sessionId?: unknown; title?: unknown; segment?: unknown };
+  let body: { action?: unknown; classroomId?: unknown; sessionId?: unknown; title?: unknown; segment?: unknown; latencyMs?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
@@ -366,6 +366,11 @@ export async function POST(request: Request) {
       start_ms: Math.round(segment.startMs),
       end_ms: Math.round(segment.endMs),
       text: segment.text.trim(),
+      // Measured by the client around the transcription call, so the pilot can
+      // see the STT round trip per segment rather than guessing (PRD 36.3.4).
+      latency_ms: typeof body.latencyMs === "number" && Number.isFinite(body.latencyMs)
+        ? Math.min(600_000, Math.max(0, Math.round(body.latencyMs)))
+        : null,
     }, { onConflict: "session_id,client_id" });
     if (error) {
       console.error("Transcript segment save failed", error.code);

@@ -604,7 +604,11 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     formData.set("language", isEnglish ? "en" : "ko");
     if (whisperPreviousTextRef.current) formData.set("prompt", whisperPreviousTextRef.current.slice(-500));
 
+    const requestedAt = Date.now();
     const response = await fetch("/api/lecture-audio", { method: "POST", body: formData });
+    // The STT round trip per segment, measured where the wait actually is, so
+    // the pilot has real numbers to redesign against (PRD 36.3.4).
+    const latencyMs = Date.now() - requestedAt;
     const data = await response.json() as { text?: string; error?: string };
     if (!response.ok) {
       const failure = new Error(data.error ?? "") as Error & { status?: number };
@@ -633,7 +637,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     void fetch("/api/lecture-sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-      body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
+      body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment, latencyMs }),
     }).then((response) => {
       if (response.ok) confirmedSegmentIdsRef.current.add(id);
     });
