@@ -38,7 +38,6 @@ const content = {
       "주식은 회사의 일부를 소유할 권리이고, 채권은 빌려준 돈을 돌려받을 권리입니다.",
       "증권회사는 기업이 이런 증권을 발행하도록 돕고 투자자가 거래할 수 있게 연결합니다.",
     ],
-    roomsLabel: "내 강의실",
     roomsTitle: ["수업이 끝나도,", "질문한 맥락은 남게."],
     roomsDescription: "과목별 강의실에 수업 스크립트와 질문을 모아 둡니다. 새 수업에서 질문하면 같은 강의실의 지난 설명도 필요한 만큼 참고합니다.",
     roomsCta: "내 강의실로 이동",
@@ -113,7 +112,6 @@ const content = {
       "A share is ownership in a company. A bond is the right to be repaid money you lent.",
       "A brokerage helps companies issue securities and connects investors to the market where they trade.",
     ],
-    roomsLabel: "My classrooms",
     roomsTitle: ["Class may end.", "The context should not."],
     roomsDescription: "Keep each subject's transcripts and questions in one classroom. New questions can draw on relevant explanations from earlier lectures in that same classroom.",
     roomsCta: "Go to my classrooms",
@@ -232,7 +230,7 @@ export default function LandingPage({
       </section>
 
       <section className={styles.rooms} id="rooms" aria-labelledby={`rooms-title-${locale}`}>
-        <div className={`${styles.roomsCopy} ${styles.reveal}`}><p>{copy.roomsLabel}</p><h2 id={`rooms-title-${locale}`}>{copy.roomsTitle[0]}<br />{copy.roomsTitle[1]}</h2><span>{copy.roomsDescription}</span><Link href={`${base}/classroom`}>{copy.roomsCta} →</Link></div>
+        <div className={`${styles.roomsCopy} ${styles.reveal}`}><h2 id={`rooms-title-${locale}`}>{copy.roomsTitle[0]}<br />{copy.roomsTitle[1]}</h2><span>{copy.roomsDescription}</span><Link href={`${base}/classroom`}>{copy.roomsCta} →</Link></div>
         <div className={`${styles.roomShelf} ${styles.reveal}`}>
           <header><strong>{copy.roomsHeader}</strong><span>{copy.roomsComing}</span></header>
           {copy.rooms.map(([date, title, detail]) => <article key={title}><time>{date}</time><div><h3>{title}</h3><p>{detail}</p></div><span>→</span></article>)}

@@ -146,7 +146,6 @@
 }
 
 .heroLabel,
-.roomsCopy > p,
 .pricingIntro > p {
   margin: 0;
   color: var(--signal);
@@ -154,7 +153,7 @@
   letter-spacing: .05em;
 }
 
-.heroLabel { margin-bottom: 22px; animation: heroEnter .7s .05s both; }
+.heroLabel { margin-bottom: 22px; }
 
 .hero h1 {
   margin: 0;
@@ -162,7 +161,6 @@
   line-height: 1.04;
   /* deslop-ignore-next-line 11 -- 첫 화면의 짧은 두 줄 가치 제안을 브랜드 앵커로 사용 */
   letter-spacing: -.065em;
-  animation: heroEnter .8s .12s cubic-bezier(.16, 1, .3, 1) both;
 }
 
 .heroDescription {
@@ -171,14 +169,12 @@
   color: var(--muted);
   font-size: clamp(16px, 1.4vw, 19px);
   line-height: 1.8;
-  animation: heroEnter .8s .2s both;
 }
 
 .heroActions {
   justify-content: center;
   gap: 24px;
   margin-top: 38px;
-  animation: heroEnter .8s .28s both;
 }
 
 .primaryCta {
@@ -208,7 +204,7 @@
 .finalCta a:hover span,
 .planGrid a:hover span,
 .planGrid button:hover span { transform: translateX(4px); }
-.heroNote { margin: 14px 0 0; color: #818b8e; font-size: 11px; animation: heroEnter .8s .32s both; }
+.heroNote { margin: 14px 0 0; color: #818b8e; font-size: 11px; }
 
 .productFrame {
   overflow: hidden;
@@ -275,9 +271,8 @@
   padding: 128px max(30px, calc((100vw - 1160px) / 2));
   background: var(--wash);
 }
-.roomsCopy > p { color: var(--focus); }
 /* deslop-ignore-next-line 11 -- 저장 강의실의 핵심 효용을 두 줄 장 제목으로 사용 */
-.roomsCopy h2 { margin: 24px 0 0; font-size: clamp(42px, 4.7vw, 66px); line-height: 1.08; letter-spacing: -.05em; }
+.roomsCopy h2 { margin: 0; font-size: clamp(42px, 4.7vw, 66px); line-height: 1.08; letter-spacing: -.05em; }
 .roomsCopy > span { max-width: 490px; display: block; margin-top: 28px; color: var(--muted); font-size: 16px; line-height: 1.8; }
 .roomsCopy a { display: inline-flex; margin-top: 34px; padding-bottom: 7px; border-bottom: 1px solid var(--ink); font-size: 13px; font-weight: 800; }
 .roomShelf { overflow: hidden; background: var(--surface); border: 1px solid #aeb9bb; border-radius: 12px; box-shadow: 0 18px 45px rgba(23, 27, 29, .08); }
@@ -381,11 +376,6 @@
 .footer small { grid-column: 1 / -1; color: #7e898c; }
 
 .reveal { opacity: 1; transform: none; }
-
-@keyframes heroEnter {
-  from { opacity: 0; transform: translateY(18px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
 @keyframes productEnter {
   from { opacity: 0; transform: translateY(34px) scale(.985); }
