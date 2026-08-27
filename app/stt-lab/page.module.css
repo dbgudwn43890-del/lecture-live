@@ -149,7 +149,7 @@
 .intro > div > p,
 .controls time,
 .resultList article > header {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
 }
 .controls button {
   border: 2px solid var(--ink);

@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import localFont from "next/font/local";
+import { IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-
-// globals.css names "Pretendard" in its font stack, but nothing ever loaded it —
-// no @font-face, no next/font call, no file under public/ — so every page rendered
-// in the browser's default sans-serif. Self-host the variable font here instead of
-// pulling it from a CDN, per next/font's built-in self-hosting.
+// Pretendard as ~92 unicode-range subsets instead of one 2 MB file: a Korean page
+// pulls only the ranges it actually renders (tens of KB), and the browser fetches
+// more on demand. Self-hosted through the CSS pipeline so the woff2 come back
+// content-hashed and immutably cached.
 // Font: Pretendard Variable v1.3.9 (SIL Open Font License 1.1), see app/fonts/PRETENDARD-LICENSE.txt.
-// Weight range matches the upstream @font-face declaration (45 920).
-const pretendard = localFont({
-  src: "./fonts/PretendardVariable.woff2",
-  variable: "--font-pretendard",
-  weight: "45 920",
+import "./fonts/pretendard.css";
+
+// globals.css and two CSS modules asked for "IBM Plex Mono" while nothing loaded it,
+// so those labels fell through to whatever ui-monospace resolves to. next/font
+// self-hosts it at build time; --font-mono is what the stylesheets now name.
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-mono",
   display: "swap",
-  fallback: ["SUIT", "Noto Sans KR", "system-ui", "sans-serif"],
 });
 
 // Built from the locale rather than hardcoded, so /en/classroom, /en/billing
@@ -44,7 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   return (
-    <html lang={locale} className={pretendard.variable}>
+    <html lang={locale} className={mono.variable}>
       <body>{children}</body>
     </html>
   );

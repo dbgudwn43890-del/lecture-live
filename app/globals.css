@@ -20,7 +20,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-pretendard), "SUIT", "Noto Sans KR", system-ui, sans-serif;
+  font-family: "Pretendard Variable", "SUIT", "Noto Sans KR", system-ui, sans-serif;
   text-rendering: optimizeLegibility;
 }
 
@@ -107,7 +107,7 @@ a, button, summary, input, textarea, select {
 .session-state time {
   min-width: 46px;
   color: white;
-  font: 700 13px/1 "IBM Plex Mono", ui-monospace, monospace;
+  font: 700 13px/1 var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -572,7 +572,6 @@ a, button, summary, input, textarea, select {
   background: #fff;
   border: 1px solid #747775;
   border-radius: 8px;
-  font-family: "Google Sans", Roboto, Arial, sans-serif;
   font-size: 14px;
   font-weight: 600;
   transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
@@ -1222,7 +1221,7 @@ a, button, summary, input, textarea, select {
 
 .settings-choice legend,
 .classroom-unit header span {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
   letter-spacing: .08em;
 }
 

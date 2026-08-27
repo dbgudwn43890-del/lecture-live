@@ -108,7 +108,7 @@
 .header nav .classroomLink { border: 2px solid var(--legal-ink); box-shadow: 3px 3px 0 var(--legal-focus); }
 .hero { border-bottom: 2px solid var(--legal-ink); }
 .hero > p,
-.hero dt { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.hero dt { font-family: var(--font-mono), ui-monospace, monospace; }
 .content section { border-color: var(--legal-ink); }
 .tableWrap { border: 2px solid var(--legal-ink); }
 .content th,
