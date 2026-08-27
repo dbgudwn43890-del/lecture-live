@@ -1,12 +1,12 @@
 .page {
-  --paper: #f1f3f2;
+  --paper: #f5f7f6;
   --surface: #fbfcfb;
   --ink: #171b1d;
   --muted: #667176;
   --line: #c5cdcf;
   --signal: #e64f38;
   --focus: #145e72;
-  --wash: #dfe6e6;
+  --wash: #e7eeed;
   min-height: 100dvh;
   /* clip, not hidden: hidden would make this the sticky header's scroll
      container, and a container that never scrolls never sticks. */
@@ -62,9 +62,10 @@
 .languageLink:hover { color: var(--ink); }
 
 .headerCta {
-  padding: 10px 15px;
+  padding: 10px 16px;
   color: white !important;
   background: var(--ink);
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 800;
 }
@@ -99,7 +100,7 @@
   padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, .12);
 }
 .profilePanelHeader { display: flex; align-items: center; gap: 10px; }
@@ -134,7 +135,7 @@
   align-items: center;
   gap: 70px;
   margin: 0 auto;
-  padding: 112px 0 120px;
+  padding: 124px 0 136px;
 }
 
 .heroCopy {
@@ -191,6 +192,7 @@
   padding: 0 18px 0 22px;
   color: white !important;
   background: var(--focus);
+  border-radius: 10px;
   transition: background-color 140ms ease;
 }
 
@@ -211,7 +213,7 @@
   color: var(--ink);
   background: var(--surface);
   border: 1px solid #919ea1;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 10px 26px rgba(23, 27, 29, .1);
 }
 .heroProductFrame {
@@ -268,14 +270,14 @@
   grid-template-columns: minmax(320px, .76fr) minmax(540px, 1.24fr);
   align-items: center;
   gap: clamp(60px, 10vw, 150px);
-  padding: 128px max(30px, calc((100vw - 1160px) / 2));
+  padding: 142px max(30px, calc((100vw - 1160px) / 2));
   background: var(--wash);
 }
 /* deslop-ignore-next-line 11 -- 저장 강의실의 핵심 효용을 두 줄 장 제목으로 사용 */
 .roomsCopy h2 { margin: 0; font-size: clamp(42px, 4.7vw, 66px); line-height: 1.08; letter-spacing: -.05em; }
 .roomsCopy > span { max-width: 490px; display: block; margin-top: 28px; color: var(--muted); font-size: 16px; line-height: 1.8; }
 .roomsCopy a { display: inline-flex; margin-top: 34px; padding-bottom: 7px; border-bottom: 1px solid var(--ink); font-size: 13px; font-weight: 800; }
-.roomShelf { overflow: hidden; background: var(--surface); border: 1px solid #aeb9bb; border-radius: 12px; box-shadow: 0 18px 45px rgba(23, 27, 29, .08); }
+.roomShelf { overflow: hidden; background: var(--surface); border: 1px solid #aeb9bb; border-radius: 16px; box-shadow: 0 18px 45px rgba(23, 27, 29, .08); }
 .roomShelf > header { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 26px; color: white; background: var(--ink); }
 .roomShelf > header strong { font-size: 18px; }
 .roomShelf > header span { color: #9eaaac; font-size: 10px; }
@@ -290,8 +292,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 128px max(30px, calc((100vw - 1240px) / 2));
-  background: #edf0ef;
+  padding: 142px max(30px, calc((100vw - 1240px) / 2));
+  background: #f0f3f2;
 }
 .pricingIntro { max-width: 780px; text-align: center; }
 .pricingIntro > p { margin-bottom: 24px; }
@@ -299,10 +301,10 @@
 .pricingIntro h2 { margin: 0; font-size: clamp(48px, 5.6vw, 78px); line-height: 1.03; letter-spacing: -.055em; }
 .pricingIntro > span { display: block; max-width: 670px; margin: 27px auto 0; color: var(--muted); font-size: 16px; line-height: 1.8; }
 .planGrid { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 62px; }
-.planGrid article { position: relative; min-width: 0; min-height: 370px; display: flex; flex-direction: column; padding: 25px 22px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.planGrid article { position: relative; min-width: 0; min-height: 370px; display: flex; flex-direction: column; padding: 26px 22px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .planGrid article > div { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .planGrid article > div > span { font-size: 12px; font-weight: 850; }
-.planGrid article > div > b { padding: 6px 8px; color: white; background: var(--signal); font-size: 9px; }
+.planGrid article > div > b { padding: 6px 9px; color: white; background: var(--signal); border-radius: 6px; font-size: 9px; }
 .planGrid h3 { margin: 35px 0 0; font-size: 36px; letter-spacing: -.045em; }
 .comparePrice { min-height: 30px !important; justify-content: flex-start !important; gap: 9px !important; margin-top: 18px; color: var(--muted); }
 .comparePrice span { font-size: 9px !important; font-weight: 650 !important; }
@@ -313,7 +315,7 @@
 .planGrid article > p { margin: 15px 0 0; color: var(--focus); font-size: 11px; font-weight: 800; }
 .planGrid article > small { margin-top: 8px; color: var(--muted); font-size: 10px; }
 .planGrid article > a,
-.planGrid article > button { min-height: 45px; width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding: 0 14px; color: white; background: var(--ink); font-size: 11px; font-weight: 800; border: none; font-family: inherit; cursor: pointer; }
+.planGrid article > button { min-height: 45px; width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding: 0 14px; color: white; background: var(--ink); border-radius: 10px; font-size: 11px; font-weight: 800; border: none; font-family: inherit; cursor: pointer; }
 .planGrid .featuredPlan { color: white; background: var(--focus); border-color: var(--focus); }
 .planGrid .featuredPlan > p,
 .planGrid .featuredPlan > small { color: #c5e0e5; }
@@ -356,7 +358,7 @@
 }
 /* deslop-ignore-next-line 11 -- 마지막 행동 요청의 짧은 브랜드 문장 */
 .finalCta p { max-width: 760px; margin: 0; color: white; font-size: clamp(42px, 5vw, 68px); font-weight: 900; line-height: 1.06; letter-spacing: -.05em; }
-.finalCta a { min-width: 240px; min-height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px 0 24px; background: white; font-size: 14px; font-weight: 850; transition: background-color 140ms ease; }
+.finalCta a { min-width: 240px; min-height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px 0 24px; background: white; border-radius: 10px; font-size: 14px; font-weight: 850; transition: background-color 140ms ease; }
 
 .footer {
   min-height: 200px;

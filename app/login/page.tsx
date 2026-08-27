@@ -211,6 +211,9 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
             ) : (
               <>
               <div className="auth-heading">
+                <span className="auth-kicker">{mode === "signin"
+                  ? isEnglish ? "Live lecture assistant" : "현장 강의를 위한 실시간 조교"
+                  : isEnglish ? "7-day free trial" : "7일 무료 체험 · 180크레딧"}</span>
                 <h1 id="login-title">{mode === "signin"
                   ? isEnglish ? "Sign in to Lecue" : "Lecue에 로그인"
                   : isEnglish ? "Create your Lecue account" : "Lecue 계정 만들기"}</h1>
