@@ -68,9 +68,9 @@ export default function TermsPage() {
             <thead><tr><th>상품</th><th>이용 기간</th><th>포함 크레딧</th><th>결제 방식</th></tr></thead>
             <tbody>
               <tr><td>무료 체험</td><td>7일</td><td>180크레딧 · 여러 수업 · 계정당 한 번</td><td>체험 종료 후 월간 구독 전환</td></tr>
-              <tr><td>월간 구독</td><td>1개월</td><td>매 결제 주기 4,800크레딧</td><td>해지 전까지 매월 자동 갱신</td></tr>
-              <tr><td>4개월권</td><td>4개월</td><td>19,200크레딧</td><td>한 번 결제, 자동 갱신 없음</td></tr>
-              <tr><td>한 학기권</td><td>6개월</td><td>28,800크레딧</td><td>한 번 결제, 자동 갱신 없음</td></tr>
+              <tr><td>월간 구독</td><td>1개월</td><td>매 결제 주기 4,200크레딧</td><td>해지 전까지 매월 자동 갱신</td></tr>
+              <tr><td>4개월권</td><td>4개월</td><td>16,800크레딧</td><td>한 번 결제, 자동 갱신 없음</td></tr>
+              <tr><td>한 학기권</td><td>6개월</td><td>25,200크레딧</td><td>한 번 결제, 자동 갱신 없음</td></tr>
             </tbody>
           </table></div>
           <ul>

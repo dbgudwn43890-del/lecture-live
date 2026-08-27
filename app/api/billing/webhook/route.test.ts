@@ -4,6 +4,8 @@ import { registerHooks } from "node:module";
 import test, { mock } from "node:test";
 import { pathToFileURL } from "node:url";
 
+import { PLAN_CREDITS } from "../../../lib/billing.ts";
+
 // Every call the handler makes against Supabase, in order, so a test can assert
 // on what was written rather than on what the handler returned.
 type Call = {
@@ -149,8 +151,8 @@ test("grants exactly the plan's credits, keyed to the transaction so a retry is 
     source_type: "payment",
     source_id: "txn_1",
     plan_code: "term",
-    granted_credits: 19_200,
-    remaining_credits: 19_200,
+    granted_credits: PLAN_CREDITS.term,
+    remaining_credits: PLAN_CREDITS.term,
     starts_at: "2026-08-27T00:00:00.000Z",
     expires_at: "2026-12-27T00:00:00.000Z",
   });

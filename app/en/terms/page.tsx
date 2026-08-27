@@ -28,9 +28,9 @@ export default function EnglishTermsPage() {
       <section><h2>6. Plans and credits</h2><div>
         <div className={styles.tableWrap}><table><thead><tr><th>Plan</th><th>Term</th><th>Credits</th><th>Billing</th></tr></thead><tbody>
           <tr><td>Free trial</td><td>7 days</td><td>180 · multiple lectures · once per account</td><td>Converts to Monthly after trial</td></tr>
-          <tr><td>Monthly</td><td>1 month</td><td>4,800 each billing period</td><td>Renews monthly until cancelled</td></tr>
-          <tr><td>4-month pass</td><td>4 months</td><td>19,200</td><td>One-time purchase; no renewal</td></tr>
-          <tr><td>Semester</td><td>6 months</td><td>28,800</td><td>One-time purchase; no renewal</td></tr>
+          <tr><td>Monthly</td><td>1 month</td><td>4,200 each billing period</td><td>Renews monthly until cancelled</td></tr>
+          <tr><td>4-month pass</td><td>4 months</td><td>16,800</td><td>One-time purchase; no renewal</td></tr>
+          <tr><td>Semester</td><td>6 months</td><td>25,200</td><td>One-time purchase; no renewal</td></tr>
         </tbody></table></div>
         <ul>
           <li>Checkout shows the actual price, tax, promotion, first charge date, and renewal amount.</li>
