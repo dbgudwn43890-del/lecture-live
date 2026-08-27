@@ -122,6 +122,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(initial?.profile ?? null);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(initial?.creditStatus ?? null);
+  const [reportedKeys, setReportedKeys] = useState<string[]>([]);
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
   const sessionsById = useMemo(
@@ -354,6 +355,30 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         : isEnglish ? "Could not move the lecture." : "수업을 이동하지 못했습니다.");
     } finally {
       setClassroomPending(false);
+    }
+  }
+
+  // Pilot instrumentation (PRD 36.2). A report is a hint for the glossary and
+  // the context pipeline, never something the learner has to wait on — so it
+  // marks the row done immediately and only rolls back if the save fails.
+  async function reportIssue(kind: "stt_error" | "context_miss", targetText: string, key: string) {
+    if (!activeSessionIdRef.current || reportedKeys.includes(key)) return;
+    setReportedKeys((current) => [...current, key]);
+    try {
+      const response = await fetch("/api/lecture-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({
+          sessionId: activeSessionIdRef.current,
+          classroomId: activeClassroomId || null,
+          kind,
+          targetText,
+        }),
+      });
+      if (!response.ok) throw new Error();
+    } catch {
+      setReportedKeys((current) => current.filter((item) => item !== key));
+      setError(isEnglish ? "Could not send the report." : "신고를 보내지 못했습니다.");
     }
   }
 
@@ -1497,6 +1522,19 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                       )}
                     </div>
                   )}
+                  {message.role === "assistant" && !message.pending && activeSessionId && (
+                    <div className="message-report">
+                      <button
+                        type="button"
+                        disabled={reportedKeys.includes(`miss:${message.id}`)}
+                        onClick={() => void reportIssue("context_miss", message.text.slice(0, 2_000), `miss:${message.id}`)}
+                      >
+                        {reportedKeys.includes(`miss:${message.id}`)
+                          ? isEnglish ? "Thanks, noted" : "신고 접수됨"
+                          : isEnglish ? "Missed the lecture context" : "강의 맥락과 안 맞음"}
+                      </button>
+                    </div>
+                  )}
                   {message.lectureSources && message.lectureSources.length > 0 && (
                     <div className="lecture-sources">
                       <span>{isEnglish ? "Earlier lecture used" : "이전 수업 참고"}</span>
@@ -1564,9 +1602,25 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
               </div>
             ) : (
               <div className="transcript-copy">
-                {transcriptParagraphs.map((paragraph) => (
-                  <p key={`${paragraph.startMs}-${paragraph.endMs}`}>{paragraph.text}</p>
-                ))}
+                {transcriptParagraphs.map((paragraph) => {
+                  const key = `${paragraph.startMs}-${paragraph.endMs}`;
+                  const reported = reportedKeys.includes(`stt:${key}`);
+                  return (
+                    <div className="transcript-line" key={key}>
+                      <p>{paragraph.text}</p>
+                      <button
+                        type="button"
+                        className="line-report"
+                        disabled={reported || !activeSessionId}
+                        onClick={() => void reportIssue("stt_error", paragraph.text, `stt:${key}`)}
+                      >
+                        {reported
+                          ? isEnglish ? "Reported" : "신고됨"
+                          : isEnglish ? "Misheard" : "잘못 적힘"}
+                      </button>
+                    </div>
+                  );
+                })}
                 {interim && <p className="interim-line">{interim}</p>}
               </div>
             )}
