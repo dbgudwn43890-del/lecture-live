@@ -18,11 +18,16 @@ type Outcome = { data?: unknown; error?: unknown };
 type SegmentRow = { client_id: string; start_ms: number; end_ms: number; text: string };
 
 let calls: Call[] = [];
-let outcomes: Record<string, Outcome> = {};
+// A value may be a function when one table is queried more than once in a
+// single request and each query needs its own answer (reconcile selects
+// lecture_sessions twice: stale-recording, then completed-but-unindexed).
+let outcomes: Record<string, Outcome | ((call: Call) => Outcome)> = {};
 let segmentsBySession: Record<string, SegmentRow[]> = {};
 
 function outcomeFor(call: Call): Outcome {
-  return outcomes[`${call.table}.${call.op}`] ?? { data: null, error: null };
+  const outcome = outcomes[`${call.table}.${call.op}`];
+  if (typeof outcome === "function") return outcome(call);
+  return outcome ?? { data: null, error: null };
 }
 
 function filterValue(call: Call, prefix: string): string | undefined {
@@ -55,6 +60,7 @@ function queryBuilder(table: string) {
     select(columns?: string) { if (call.op === "select") { call.payload = columns; calls.push(call); } return api; },
     eq(column: string, value: unknown) { call.filters.push(`eq:${column}=${String(value)}`); return api; },
     lt(column: string, value: unknown) { call.filters.push(`lt:${column}=${String(value)}`); return api; },
+    gt(column: string, value: unknown) { call.filters.push(`gt:${column}=${String(value)}`); return api; },
     in(column: string, values: unknown[]) { call.filters.push(`in:${column}=${values.join(",")}`); return api; },
     order() { return api; },
     limit(n: number) { call.filters.push(`limit=${n}`); return api; },
@@ -210,4 +216,61 @@ test("reconcile skips re-embedding a session that already has chunks", async () 
   assert.equal(embeddingsCalls.length, 0);
   const body = await response.json() as { indexed: number };
   assert.equal(body.indexed, 0);
+});
+
+test("reconcile indexes a completed lecture that never got chunks, and stops once it has them", async () => {
+  const sessionId = randomUUID();
+  const classroomId = randomUUID();
+  // Nothing is stuck in "recording" — this lecture ended normally, but its
+  // indexing run failed or was deferred, so it has no chunks and the stale
+  // branch will never look at it again.
+  outcomes["lecture_sessions.select"] = (call) =>
+    call.filters.includes("eq:status=recording")
+      ? { data: [], error: null }
+      : { data: [{ id: sessionId, classroom_id: classroomId, user_id: USER_ID }], error: null };
+  segmentsBySession[sessionId] = [
+    { client_id: "a", start_ms: 0, end_ms: 1_000, text: "인덱싱이 빠진 채로 끝난 수업입니다." },
+    { client_id: "b", start_ms: 1_000, end_ms: 2_000, text: "다음 질문에서 검색되지 않으면 영구 누락입니다." },
+  ];
+  outcomes["lecture_chunks.select"] = { data: [], error: null };
+  outcomes["lecture_chunks.insert"] = { data: null, error: null };
+
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "reconcile" }),
+  }));
+
+  assert.ok(response);
+  const body = await response.json() as { reconciled: number; indexed: number };
+  assert.equal(body.reconciled, 0, "nothing was stuck recording");
+  assert.equal(body.indexed, 1, "the un-indexed completed lecture is picked up anyway");
+  assert.equal(embeddingsCalls.length, 1);
+
+  const catchUpSelect = calls.find((call) =>
+    call.table === "lecture_sessions" && call.op === "select" && call.filters.includes("eq:status=completed"));
+  assert.ok(catchUpSelect, "the catch-up query must be bounded by a recency window");
+  assert.ok(catchUpSelect!.filters.some((filter) => filter.startsWith("gt:ended_at=")));
+  assert.ok(catchUpSelect!.filters.includes("gt:duration_seconds=0"));
+});
+
+test("reconcile leaves an already-indexed completed lecture alone", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = (call) =>
+    call.filters.includes("eq:status=recording")
+      ? { data: [], error: null }
+      : { data: [{ id: sessionId, classroom_id: null, user_id: USER_ID }], error: null };
+  segmentsBySession[sessionId] = [
+    { client_id: "a", start_ms: 0, end_ms: 1_000, text: "이미 인덱싱된 수업입니다." },
+  ];
+  outcomes["lecture_chunks.select"] = { data: [{ session_id: sessionId }], error: null };
+
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "reconcile" }),
+  }));
+
+  assert.ok(response);
+  assert.equal(embeddingsCalls.length, 0, "no transcript read, no embedding, for a lecture that already has chunks");
+  const transcriptReads = calls.filter((call) => call.table === "transcript_segments");
+  assert.deepEqual(transcriptReads, []);
 });

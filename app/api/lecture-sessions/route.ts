@@ -210,6 +210,12 @@ export async function POST(request: Request) {
     // sessions — but the response reports it instead of hiding it, so this is
     // a rare, visible edge case rather than a silent, permanent one.
     const MAX_RECONCILE_CHUNKS = 1_000;
+    // ponytail: how far back to look for a completed lecture that never got
+    // indexed. A window rather than "all of them" because a lecture whose
+    // transcript is genuinely empty produces no chunks and would otherwise be
+    // re-checked on every page load forever. A week is long enough to cover a
+    // deferred batch or an OpenAI outage and short enough to stop retrying.
+    const INDEX_CATCH_UP_MS = 7 * 86_400_000;
 
     const abandonedBefore = new Date(Date.now() - MAX_LECTURE_MS).toISOString();
     const { data: stale, error } = await current.supabase
@@ -248,6 +254,50 @@ export async function POST(request: Request) {
           userId: session.user_id,
           segments: segments.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })),
         });
+      }
+    }
+
+    // A completed lecture with no chunks never comes back through the stale
+    // branch above — its status is no longer "recording" — so an indexing run
+    // that failed or was deferred left it permanently unsearchable. Pick those
+    // up here instead.
+    const catchUpAfter = new Date(Date.now() - INDEX_CATCH_UP_MS).toISOString();
+    const { data: recent, error: recentError } = await current.supabase
+      .from("lecture_sessions")
+      .select("id,classroom_id,user_id")
+      .eq("status", "completed")
+      .gt("ended_at", catchUpAfter)
+      .gt("duration_seconds", 0)
+      .order("ended_at", { ascending: false })
+      .limit(MAX_RECONCILE_SESSIONS);
+    if (recentError) console.error("Indexing catch-up lookup failed", recentError.code);
+
+    const closedNow = new Set(toIndex.map((entry) => entry.sessionId));
+    const candidates = (recent ?? []).filter((session) => !closedNow.has(session.id));
+    if (candidates.length) {
+      // Check for chunks before reading transcripts: the point of the catch-up
+      // is the handful with none, and reading every recent lecture's segments
+      // to discover that would cost far more than it saves.
+      const { data: chunked } = await current.supabase
+        .from("lecture_chunks")
+        .select("session_id")
+        .in("session_id", candidates.map((session) => session.id));
+      const hasChunks = new Set((chunked ?? []).map((row) => row.session_id));
+      for (const session of candidates) {
+        if (hasChunks.has(session.id)) continue;
+        const { rows: segments, error: segmentsError } = await fetchAllSegments(current.supabase, session.id, 5_000);
+        if (segmentsError) {
+          console.error("Catch-up transcript read failed", segmentsError.code);
+          continue;
+        }
+        if (segments?.length) {
+          toIndex.push({
+            sessionId: session.id,
+            classroomId: session.classroom_id,
+            userId: session.user_id,
+            segments: segments.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })),
+          });
+        }
       }
     }
 
