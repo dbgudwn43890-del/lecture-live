@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getOAuthFallbackNext, getSafeAuthNext } from "./app/lib/auth-redirect.ts";
+import { getOAuthFallbackNext, getSafeAuthNext, localePathFor } from "./app/lib/auth-redirect.ts";
 
 test("recovers an OAuth code that Supabase sends to the landing page", async () => {
   assert.equal(getOAuthFallbackNext("/", null, true), "/classroom");
@@ -30,4 +30,27 @@ test("keeps only approved post-auth destinations", () => {
   assert.equal(getSafeAuthNext("/en/classrooms", "/en/classroom"), "/en/classrooms");
   assert.equal(getSafeAuthNext("https://attacker.example", "/classroom"), "/classroom");
   assert.equal(getSafeAuthNext("//attacker.example", "/classroom"), "/classroom");
+});
+
+test("sends a Korean visitor to the Korean twin of an English page", () => {
+  // Switching back to Korean used to set the cookie and leave the visitor on
+  // the English page, because only the /en direction was enforced.
+  assert.equal(localePathFor("/en/classroom", false), "/classroom");
+  assert.equal(localePathFor("/en/billing", false), "/billing");
+  assert.equal(localePathFor("/classroom", true), "/en/classroom");
+});
+
+test("leaves a page that is already in the right language alone", () => {
+  assert.equal(localePathFor("/classroom", false), null);
+  assert.equal(localePathFor("/en/classroom", true), null);
+});
+
+test("moves only the pages that exist in both languages", () => {
+  // The landing page renders either language at "/", so it is never moved.
+  assert.equal(localePathFor("/", true), null);
+  assert.equal(localePathFor("/en", false), null);
+  assert.equal(localePathFor("/stt-lab", true), null);
+  assert.equal(localePathFor("/api/ask", true), null);
+  // A path that merely starts with the letters "en" is not an English page.
+  assert.equal(localePathFor("/enrollment", false), null);
 });

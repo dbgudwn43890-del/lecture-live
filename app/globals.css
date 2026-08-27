@@ -1567,6 +1567,22 @@ button:active,
   text-decoration: none;
 }
 
+.profile-language {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 2px;
+  color: #6f6a63;
+  border-bottom: 1px solid #ece9e3;
+  font-size: 10px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.profile-language strong { color: var(--focus); font-size: 11px; }
+.profile-language:hover strong { text-decoration: underline; }
+
 .profile-model-settings { display: grid; gap: 12px; padding: 15px 0; }
 .profile-model-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .profile-model-heading h3 { margin: 0; font-size: 12px; }

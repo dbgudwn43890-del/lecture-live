@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getOAuthFallbackNext } from "./app/lib/auth-redirect";
+import { getOAuthFallbackNext, localePathFor } from "./app/lib/auth-redirect";
 
 // Matches a path against a route prefix on segment boundaries, so a future
 // /authors or /loginhelp cannot inherit /auth's or /login's public status.
@@ -10,6 +10,7 @@ function isUnder(path: string, prefix: string) {
 }
 
 const LOCALE_COOKIE = "site-locale";
+const LOCALE_COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" } as const;
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -22,11 +23,7 @@ export async function proxy(request: NextRequest) {
     const cleanUrl = request.nextUrl.clone();
     cleanUrl.searchParams.delete("lang");
     const redirect = NextResponse.redirect(cleanUrl);
-    redirect.cookies.set(LOCALE_COOKIE, requestedLocale, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-      sameSite: "lax",
-    });
+    redirect.cookies.set(LOCALE_COOKIE, requestedLocale, LOCALE_COOKIE_OPTIONS);
     return redirect;
   }
 
@@ -52,16 +49,24 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
-  const localizablePaths = ["/", "/login", "/classroom", "/classrooms", "/billing", "/privacy", "/terms"];
-  if (
-    prefersEnglish &&
-    path !== "/" &&
-    !path.startsWith("/en") &&
-    localizablePaths.includes(path)
-  ) {
-    const englishUrl = request.nextUrl.clone();
-    englishUrl.pathname = path === "/" ? "/en" : `/en${path}`;
-    return NextResponse.redirect(englishUrl);
+  // Whichever language this visitor gets, remember it. Without this the choice
+  // was re-derived from the IP header on every request, so a Korean visitor
+  // whose next request was geolocated elsewhere — a VPN, a mobile carrier
+  // routed abroad, a missing header — landed in the English classroom after
+  // reading the Korean landing page.
+  const rememberLocale = <T extends NextResponse>(target: T) => {
+    if (!chosenLocale) target.cookies.set(LOCALE_COOKIE, prefersEnglish ? "en" : "ko", LOCALE_COOKIE_OPTIONS);
+    return target;
+  };
+
+  // Both directions: into /en when English is preferred, back out of it when
+  // Korean is. Only the first was enforced, so the language switch could set
+  // the cookie and leave the visitor sitting on the English page.
+  const localeTarget = localePathFor(path, prefersEnglish);
+  if (localeTarget) {
+    const localeUrl = request.nextUrl.clone();
+    localeUrl.pathname = localeTarget;
+    return rememberLocale(NextResponse.redirect(localeUrl));
   }
 
   const requestHeaders = new Headers(request.headers);
@@ -109,10 +114,10 @@ export async function proxy(request: NextRequest) {
     loginUrl.pathname = path.startsWith("/en/") ? "/en/login" : "/login";
     loginUrl.search = "";
     loginUrl.searchParams.set("next", `${path}${request.nextUrl.search}`);
-    return NextResponse.redirect(loginUrl);
+    return rememberLocale(NextResponse.redirect(loginUrl));
   }
 
-  return response;
+  return rememberLocale(response);
 }
 
 export const config = {

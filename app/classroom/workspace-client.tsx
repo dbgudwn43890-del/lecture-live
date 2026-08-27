@@ -1306,6 +1306,14 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
               </div>
               <Link className="profile-billing-link" href={`${basePath}/billing`}>{isEnglish ? "View plan and billing" : "요금제 및 결제 관리"}<span aria-hidden="true">→</span></Link>
 
+              {/* A plain anchor, not a Link: the language lives in a cookie the
+                  proxy sets on this request and acts on for the next one, and a
+                  client-side navigation would skip that round trip. */}
+              <a className="profile-language" href={isEnglish ? "?lang=ko" : "?lang=en"}>
+                <span>{isEnglish ? "Language" : "언어"}</span>
+                <strong>{isEnglish ? "한국어로 보기" : "View in English"}</strong>
+              </a>
+
               <section className="profile-model-settings" aria-labelledby="profile-model-title">
                 <div className="profile-model-heading">
                   <h3 id="profile-model-title">{isEnglish ? "Answer model" : "답변 모델"}</h3>
