@@ -877,7 +877,7 @@ export async function POST(request: Request) {
           if (saveError) console.error("Lecture question save failed", saveError.code);
         }
 
-        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, materialSources: earlier.materialSources, screenSource: earlier.screenSource, provider, model } });
+        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, materialSources: earlier.materialSources, screenSource: earlier.screenSource, provider, model, usage: result.usage } });
       } catch (error) {
         send({ error: askErrorMessage(error, personalLlm, isEnglish) });
       } finally {

@@ -3,6 +3,55 @@ const authCookie = process.env.ASK_EVAL_COOKIE;
 const endpoint = new URL("/api/ask", baseUrl);
 const segment = (startMs, text) => ({ startMs, endMs: startMs + 5_000, text });
 
+// 지시어 질문은 자료가 올라간 실제 강의실이 있어야 의미가 있다. 넷 다 채워졌을
+// 때만 앵커 시나리오를 돌린다. ASK_EVAL_ANCHOR에는 그 슬라이드를 설명하는 실제
+// 강의 발화 한 토막을, ASK_EVAL_ANCHOR_PAGE에는 그때 화면에 있던 쪽 번호를 넣는다.
+const anchorClassroomId = process.env.ASK_EVAL_CLASSROOM_ID;
+const anchorSessionId = process.env.ASK_EVAL_SESSION_ID;
+const anchorText = process.env.ASK_EVAL_ANCHOR;
+const anchorPage = Number(process.env.ASK_EVAL_ANCHOR_PAGE);
+const anchorQuestion = process.env.ASK_EVAL_ANCHOR_QUESTION ?? "이거 왜 이렇게 되는 거예요?";
+const anchorReady = Boolean(anchorClassroomId && anchorSessionId && anchorText) && Number.isFinite(anchorPage);
+
+const onExpectedPage = (data) =>
+  data.screenSource !== null &&
+  data.screenSource !== undefined &&
+  data.screenSource.startPage <= anchorPage &&
+  data.screenSource.endPage >= anchorPage;
+
+const anchorScenarios = !anchorReady ? [] : [
+  {
+    // 대조군. 이게 통과해야 아래 시나리오가 앵커 덕분이라고 말할 수 있다.
+    // 실패하면 질문만으로도 쪽이 잡힌다는 뜻이므로 더 어려운 케이스로 바꿔야 한다.
+    name: "지시어 질문 · 앵커 없음(대조군)",
+    body: {
+      question: anchorQuestion,
+      questionAtMs: 600_000,
+      segments: [],
+      classroomId: anchorClassroomId,
+      lectureSessionId: anchorSessionId,
+    },
+    checks: [
+      ["앵커 없이는 쪽을 못 찾음", (data) => !onExpectedPage(data)],
+    ],
+  },
+  {
+    name: "지시어 질문 · 앵커 있음",
+    body: {
+      question: anchorQuestion,
+      questionAtMs: 600_000,
+      segments: [],
+      anchor: anchorText,
+      classroomId: anchorClassroomId,
+      lectureSessionId: anchorSessionId,
+    },
+    checks: [
+      [`화면 쪽 p.${anchorPage} 적중`, onExpectedPage],
+      ["자료 근거 표시", (data) => data.materialSources.length > 0],
+    ],
+  },
+];
+
 const scenarios = [
   {
     name: "강의 근거 회상",
@@ -164,6 +213,29 @@ const scenarios = [
   },
 ];
 
+scenarios.push(...anchorScenarios);
+
+/**
+ * /api/ask는 줄마다 하나씩 {"delta"}를 흘리고 마지막에 {"done"}으로 닫는다.
+ * 마지막 done 프레임이 정리된 답과 출처, 사용량을 모두 담고 있다.
+ */
+async function readNdjsonAnswer(response) {
+  const body = await response.text();
+  let done = null;
+  for (const line of body.split("\n")) {
+    if (!line.trim()) continue;
+    let frame;
+    try {
+      frame = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (frame.error) return { error: frame.error };
+    if (frame.done) done = frame.done;
+  }
+  return done ?? { error: "no done frame" };
+}
+
 function noWebSearch(data) {
   return data.usage?.webSearchCalls === 0 && data.sources.length === 0;
 }
@@ -203,7 +275,7 @@ for (const scenario of scenarios) {
     body: JSON.stringify(scenario.body),
   });
   const latencyMs = Math.round(performance.now() - startedAt);
-  const data = await response.json();
+  const data = response.ok ? await readNdjsonAnswer(response) : await response.json().catch(() => ({}));
   totalLatency += latencyMs;
 
   if (!response.ok || typeof data.answer !== "string" || !Array.isArray(data.sources)) {
