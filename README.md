@@ -13,6 +13,20 @@
    - `supabase/migrations/20260825000000_optional_classrooms.sql`
    - `supabase/migrations/20260825010000_fix_credit_consumption.sql`
    - `supabase/migrations/20260825020000_flexible_trial_term.sql`
+   - `supabase/migrations/20260827000000_server_side_metering.sql`
+   - `supabase/migrations/20260827010000_question_counts.sql`
+   - `supabase/migrations/20260827020000_bound_ask_credit_gate.sql`
+   - `supabase/migrations/20260828000000_pilot_reports.sql`
+   - `supabase/migrations/20260828010000_classroom_glossary.sql`
+   - `supabase/migrations/20260828020000_lecture_materials.sql`
+   - `supabase/migrations/20260828030000_latency_metrics.sql`
+   - `supabase/migrations/20260828040000_material_files.sql`
+
+   목록은 `supabase/migrations/`의 파일 이름 순서와 같습니다. 새 마이그레이션이
+   생기면 이 목록에도 추가하고, 기존 프로젝트에는 새로 생긴 것만 실행합니다.
+   `20260828040000_material_files.sql`은 `storage.objects`에 정책을 만들기 때문에
+   프로젝트 권한 설정에 따라 SQL Editor에서 거부될 수 있습니다. 그때는 Dashboard의
+   **Storage → Policies**에서 `materials` 버킷에 같은 조건의 정책을 직접 만듭니다.
 4. **Settings → API Keys**의 backend-only Secret Key를 `.env.local`의
    `SUPABASE_SECRET_KEY`에 입력합니다. 이 키에는 `NEXT_PUBLIC_`을 붙이지 않습니다.
 5. 다음 명령을 실행합니다.
