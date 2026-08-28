@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
+import { listenUrl } from "../../lib/deepgram";
+import { mergeKeyterms, parseGlossary } from "../../lib/glossary";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -46,7 +48,16 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const { data: statusData, error: statusError } = await supabase.rpc("get_credit_status");
+  // The glossary read rides along with the credit preflight: it is the same
+  // round trip budget, and the socket cannot open before both come back.
+  const [{ data: statusData, error: statusError }, { data: sessionRow }] = await Promise.all([
+    supabase.rpc("get_credit_status"),
+    supabase
+      .from("lecture_sessions")
+      .select("classrooms(glossary, material_documents(keyterms))")
+      .eq("id", body.sessionId)
+      .maybeSingle(),
+  ]);
   const creditStatus = Array.isArray(statusData) ? statusData[0] : statusData;
   if (statusError) {
     console.error("Credit preflight failed", statusError.code);
@@ -93,8 +104,20 @@ export async function POST(request: Request) {
     }, { status: 402 });
   }
 
+  // 자료에서 뽑은 용어가 손으로 넣은 용어집을 이어받는다. 학생이 아무것도 입력하지
+  // 않아도 업로드한 슬라이드가 그 과목의 어휘집 노릇을 한다 (PRD 36.3.1).
+  const classroom = (sessionRow as { classrooms?: { glossary?: string; material_documents?: Array<{ keyterms?: string }> } | null })?.classrooms;
+  const keyterms = mergeKeyterms(
+    parseGlossary(classroom?.glossary),
+    (classroom?.material_documents ?? []).flatMap((document) => parseGlossary(document.keyterms)),
+  );
+
   return NextResponse.json(
-    { accessToken: data.access_token, credits: Number(credit.remaining_credits) },
+    {
+      accessToken: data.access_token,
+      credits: Number(credit.remaining_credits),
+      listenUrl: listenUrl({ language: isEnglish ? "en" : "ko", keyterms, sessionId: body.sessionId }),
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

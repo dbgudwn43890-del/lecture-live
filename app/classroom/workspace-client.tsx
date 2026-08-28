@@ -6,7 +6,6 @@ import Link from "next/link";
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
-import { parseGlossary } from "../lib/glossary";
 import { utteranceSegment } from "../lib/deepgram";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
@@ -960,8 +959,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
         body: JSON.stringify({ sessionId: sessionData.session.id }),
       });
-      const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; error?: string };
-      if (!tokenResponse.ok || !tokenData.accessToken) {
+      const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; error?: string };
+      if (!tokenResponse.ok || !tokenData.accessToken || !tokenData.listenUrl) {
         throw new Error(tokenData.error ?? (isEnglish
           ? "Could not obtain a speech-recognition token."
           : "음성 인식 토큰을 받지 못했습니다."));
@@ -971,26 +970,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         ? { ...current, credits: tokenData.credits }
         : current);
 
-      const params = new URLSearchParams({
-        model: "nova-3",
-        language: isEnglish ? "en" : "ko",
-        smart_format: "true",
-        punctuate: "true",
-        interim_results: "true",
-        endpointing: "500",
-        utterance_end_ms: "1000",
-        mip_opt_out: "true",
-      });
-      // Nova-3 takes the classroom glossary as repeated keyterm values, the
-      // streaming counterpart to the initial_prompt hint the Whisper path
-      // sends (PRD 36.3.1).
-      for (const term of parseGlossary(classrooms.find((room) => room.id === activeClassroomId)?.glossary).slice(0, 20)) {
-        params.append("keyterm", term);
-      }
-      const socket = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?${params.toString()}`,
-        ["bearer", tokenData.accessToken],
-      );
+      // 파라미터도 용어집도 서버가 정한다 (app/lib/deepgram.ts). 클라이언트를 다시
+      // 배포하지 않고 모델·엔드포인팅·keyterm 예산을 조정하기 위해서다.
+      const socket = new WebSocket(tokenData.listenUrl, ["bearer", tokenData.accessToken]);
       socketRef.current = socket;
 
       socket.onopen = () => {

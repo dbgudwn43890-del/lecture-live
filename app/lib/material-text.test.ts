@@ -24,3 +24,8 @@ test("packs short pages together and splits one that is too long", () => {
   assert.deepEqual(split.map((chunk) => chunk.startPage), [4, 4, 4]);
   assert.equal(split.map((chunk) => chunk.text).join(""), "다".repeat(250));
 });
+
+test("stops collecting when a section that is not a page begins", () => {
+  const pages = splitPages("## p.1\n첫 장\n## TERMS\n한계효용, 기회비용\n");
+  assert.deepEqual(pages, [{ page: 1, text: "첫 장" }]);
+});

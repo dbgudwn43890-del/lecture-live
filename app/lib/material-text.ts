@@ -15,6 +15,12 @@ export function splitPages(markdown: string): MaterialPage[] {
       current = { page: Number(header[1]), text: "" };
       continue;
     }
+    // 페이지가 아닌 머리글(## TERMS 등)이 나오면 그 아래는 페이지 본문이 아니다.
+    if (/^#{1,3}\s+\S/.test(line.trim())) {
+      if (current?.text.trim()) pages.push({ ...current, text: current.text.trim() });
+      current = null;
+      continue;
+    }
     // 머리글이 나오기 전 줄은 어느 페이지의 것인지 알 수 없으므로 버린다.
     if (current) current.text += `${line}\n`;
   }

@@ -21,6 +21,7 @@
    - `supabase/migrations/20260828020000_lecture_materials.sql`
    - `supabase/migrations/20260828030000_latency_metrics.sql`
    - `supabase/migrations/20260828040000_material_files.sql`
+   - `supabase/migrations/20260828050000_material_keyterms.sql`
 
    목록은 `supabase/migrations/`의 파일 이름 순서와 같습니다. 새 마이그레이션이
    생기면 이 목록에도 추가하고, 기존 프로젝트에는 새로 생긴 것만 실행합니다.

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { isUuid } from "../../lib/billing";
+import { splitTerms } from "../../lib/glossary";
 import { chunkPages, splitPages } from "../../lib/material-text";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
@@ -23,6 +24,8 @@ const EXTRACTION_PROMPT = [
   "수식은 읽어서 이해할 수 있는 말과 기호로 적는다. 표는 행 단위로 풀어 쓴다.",
   "그림·도표는 무엇을 보여 주는지 한두 문장으로 서술한다.",
   "장식, 페이지 번호, 머리말, 꼬리말은 생략한다. 없는 내용을 지어내지 않는다.",
+  "마지막 줄에 '## TERMS' 머리글을 쓰고, 그 아래 한 줄에 이 자료의 전문용어·고유명사·약어를",
+  "쉼표로 구분해 최대 40개 적는다. 받아쓰기가 틀리기 쉬운 말을 고른다. 일반 단어는 넣지 않는다.",
 ].join("\n");
 
 async function context(request: Request) {
@@ -168,6 +171,7 @@ export async function POST(request: Request) {
   }
 
   const pages = splitPages(markdown);
+  const keyterms = splitTerms(markdown);
   const chunks = chunkPages(pages);
   if (!chunks.length) {
     return NextResponse.json({ error: isEnglish ? "No readable text was found in this PDF." : "이 PDF에서 읽을 수 있는 내용을 찾지 못했습니다." }, { status: 422 });
@@ -206,6 +210,7 @@ export async function POST(request: Request) {
       user_id: userId,
       filename,
       page_count: Math.min(500, pages.at(-1)?.page ?? pages.length),
+      keyterms: keyterms.join(", "),
       storage_path: storagePath,
     })
     .select("id,classroom_id,filename,page_count,created_at,storage_path")

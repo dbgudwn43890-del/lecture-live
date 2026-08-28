@@ -36,3 +36,31 @@ export function glossaryPrompt(terms: string[], maxLength = 400): string {
   }
   return prompt ? `${prompt}.` : "";
 }
+
+/**
+ * 학생이 손으로 넣은 용어집과 자료에서 뽑은 용어를 하나의 keyterm 목록으로 합친다.
+ * 손으로 넣은 쪽이 먼저다 — 의도가 추출보다 우선하고, 예산이 모자라면 추출분이 잘린다.
+ */
+export function mergeKeyterms(manual: string[], material: string[], limit = MAX_TERMS): string[] {
+  const seen = new Set<string>();
+  const terms: string[] = [];
+  for (const term of [...manual, ...material]) {
+    const clean = term.trim().replace(/\s+/g, " ").slice(0, MAX_TERM_LENGTH);
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    terms.push(clean);
+    if (terms.length >= limit) break;
+  }
+  return terms;
+}
+
+/**
+ * 색인 모델이 본문 뒤에 붙이는 `## TERMS` 목록. 강의 자료가 곧 그 과목의 어휘집이므로
+ * 학생이 손으로 넣지 않아도 STT keyterm을 채울 수 있다. 블록이 없으면 빈 배열이다.
+ */
+export function splitTerms(markdown: string): string[] {
+  const block = /^#{1,3}\s*TERMS\b[^\n]*\n([\s\S]*?)(?=\n#{1,3}\s|$)/im.exec(markdown);
+  return block ? parseGlossary(block[1]) : [];
+}
