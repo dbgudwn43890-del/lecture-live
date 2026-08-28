@@ -13,6 +13,7 @@
     "test:answer": "node --experimental-strip-types --test app/lib/answer-format.test.ts",
     "test:glossary": "node --experimental-strip-types --test app/lib/glossary.test.ts",
     "test:materials": "node --experimental-strip-types --test app/lib/material-text.test.ts",
+    "test:anchor": "node --experimental-strip-types --test app/lib/material-anchor.test.ts",
     "test:audio": "node --experimental-strip-types --test app/lib/audio.test.ts",
     "test:billing": "node --experimental-strip-types --test app/lib/billing.test.ts",
     "eval:ask": "node scripts/eval-ask.mjs",

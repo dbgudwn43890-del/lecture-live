@@ -279,7 +279,8 @@ a, button, summary, input, textarea, select {
 }
 
 .chat-pane { border-right: 1px solid var(--line-strong); }
-.transcript-pane { grid-template-rows: auto minmax(0, 1fr); background: var(--paper); }
+/* 머리글 · 슬라이드 패널 · 스크립트. 패널이 없으면 가운데 줄은 0으로 접힌다. */
+.transcript-pane { grid-template-rows: auto auto minmax(0, 1fr); background: var(--paper); }
 
 .pane-heading {
   min-height: 88px;
@@ -491,7 +492,112 @@ a, button, summary, input, textarea, select {
 .transcript-line .line-report:not(:disabled):hover { color: var(--signal); border-color: var(--signal); }
 .transcript-line .line-report:disabled { color: var(--muted); opacity: .7; }
 
-.material-sources em { padding: 4px 7px; color: var(--focus); background: var(--soft-blue); font-style: normal; font-size: 11px; font-weight: 750; }
+.material-sources button {
+  padding: 4px 7px;
+  color: var(--focus);
+  background: var(--soft-blue);
+  border: 1px solid #b9cfd5;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 750;
+}
+.material-sources button:hover { background: #cfe0e4; }
+
+.slide-hint {
+  margin: 0;
+  padding: 9px 24px;
+  color: var(--muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.slide-panel {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.slide-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+}
+
+.slide-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--focus);
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slide-bar button {
+  padding: 4px 9px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  font-size: 11px;
+}
+.slide-bar button:hover:not(:disabled) { background: var(--soft-blue); }
+
+/* 스크립트가 주인공이므로 슬라이드는 이 높이를 넘지 않는다. 자세히 볼 때는 확대. */
+.slide-frame {
+  height: 208px;
+  padding: 0 24px 12px;
+}
+.slide-frame iframe {
+  width: 100%;
+  height: 100%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.slide-frame p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+  padding: 0 16px;
+  color: var(--muted);
+  text-align: center;
+  background: var(--paper);
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.slide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(23, 27, 29, .62);
+}
+
+.slide-overlay-inner {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1180px, 94vw);
+  height: min(880px, 92vh);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.slide-overlay-inner iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
 
 .message-report { margin-top: 8px; }
 .message-report button {
@@ -1155,6 +1261,7 @@ a, button, summary, input, textarea, select {
   .topbar > button { grid-column: 2; grid-row: 4; }
   .panes { grid-template-columns: 1fr; }
   .chat-pane, .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
+  .slide-frame { height: 168px; }
   .panes { gap: 14px; padding: 12px; }
   .chat-pane { border-right: 1px solid var(--line-strong); }
   .footnote { min-height: 58px; align-items: flex-start; flex-direction: column; justify-content: center; gap: 7px; }

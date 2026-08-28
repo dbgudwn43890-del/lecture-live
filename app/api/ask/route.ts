@@ -27,6 +27,7 @@ type AskBody = {
   questionAtMs?: number;
   segments?: Segment[];
   interim?: string;
+  anchor?: unknown;
   personalLlm?: unknown;
   locale?: unknown;
   classroomId?: unknown;
@@ -67,6 +68,7 @@ const koreanInstructions = [
   "강의에 없는 보편적 배경지식은 보충할 수 있지만 강의에서 직접 말한 내용처럼 표현하지 않는다.",
   "같은 강의실의 이전 수업 내용이 제공되면 현재 수업을 이해하는 보조 맥락으로만 사용한다. 현재 수업에서 말한 내용과 혼동하지 않는다.",
   "강의 자료 발췌가 제공되면 강사가 화면에 띄운 수식·표·그림의 내용으로 보고 활용한다. 음성 스크립트에 빠진 기호나 값은 자료 쪽을 우선한다. 자료에 없는 쪽 번호나 내용을 지어내지 않는다.",
+  "'이거', '저 식', '방금 그 표'처럼 가리키는 대상이 생략된 질문은 '지금 화면에 떠 있을 가능성이 높은 강의 자료'를 먼저 본다. 그 자료로 설명이 되면 그것을 대상으로 삼고, 맞지 않으면 강의 흐름으로 다시 판단한다.",
   "강의 내용으로 충분하면 검색하지 않는다. 최신 정보나 검증이 필요하면 웹 검색을 사용한다.",
   "검색할 때는 질문의 핵심 사실 하나를 겨냥한 좁은 검색어로 먼저 한 번만 검색한다. 신뢰할 만한 근거가 부족할 때만 한 번 더 검색하고, 충분하면 즉시 멈춘다.",
   "공식 자료나 원문처럼 결정적인 근거를 우선하고, 답변에 실제로 사용한 소수의 출처만 인용한다.",
@@ -88,6 +90,7 @@ const englishInstructions = [
   "You may add general background knowledge that was not stated in the lecture, but do not present it as something the lecturer said.",
   "When excerpts from earlier lectures in the same classroom are provided, use them only as supporting context and do not present them as statements from the current lecture.",
   "When excerpts from lecture materials are provided, treat them as the formulas, tables, and figures shown on screen. Prefer them over the audio transcript for symbols and values the transcript dropped, and never invent a page number or content that is not there.",
+  "For questions whose target is left out — 'why is this', 'that formula', 'the table just now' — look first at the material the lecture is most likely on screen right now. Use it as the referent when it fits, and fall back to the lecture flow when it does not.",
   "Do not search when the lecture and stable background knowledge are enough. Search the web when current or independently verified information is needed.",
   "Start with one narrow search query aimed at the single fact needed to answer. Search once more only if trustworthy evidence is still missing, and stop as soon as the evidence is sufficient.",
   "Prefer decisive primary or official sources and cite only the small set actually used in the answer.",
@@ -207,17 +210,25 @@ const EMPTY_CLASSROOM_CONTEXT = {
   text: "",
   sources: [] as LectureSource[],
   materialText: "",
+  screenText: "",
   materialSources: [] as MaterialSource[],
+  screenSource: null as MaterialSource | null,
 };
 
-// One embedding of the question serves both retrievals: earlier lectures in
-// this classroom, and the slides uploaded to it (PRD 36.3.2). Embedding twice
-// would double the pre-answer latency for no better match.
+/** 자료 검색 결과를 화면에 띄울 만큼 믿을 수 있는지 가르는 선. */
+const MATERIAL_MIN_SIMILARITY = 0.3;
+
+// One embeddings call serves every retrieval here. The question vector finds
+// earlier lectures and slides that match what was asked; the anchor vector —
+// the last minute of the lecture — finds the slide the room is actually looking
+// at, which is the only thing that answers "why is this like this?" (PRD
+// 36.3.2). Batching both into a single request keeps this at one round trip.
 async function findClassroomContext(
   userId: string,
   classroomId: string,
   sessionId: string,
   question: string,
+  anchor: string,
 ) {
   const admin = createAdminClient();
   const apiKey = process.env.OPENAI_API_KEY;
@@ -258,9 +269,17 @@ async function findClassroomContext(
     // so a hung provider rode to the platform timeout and returned a raw 504
     // instead of the localized error the catch block below produces.
     const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
-    const embedding = await openai.embeddings.create({ model: "text-embedding-3-small", input: question });
-    const queryEmbedding = embedding.data[0].embedding;
-    const [lecture, material] = await Promise.all([
+    const useAnchor = Boolean(anchor) && Boolean(anyMaterial);
+    const embedding = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: useAnchor ? [question, anchor] : [question],
+    });
+    // The API echoes an index per row and does not promise array order.
+    const vectors = [...embedding.data].sort((a, b) => a.index - b.index).map((row) => row.embedding);
+    const queryEmbedding = vectors[0];
+    const anchorEmbedding = useAnchor ? vectors[1] : null;
+
+    const [lecture, material, screen] = await Promise.all([
       anyChunk
         ? admin.rpc("match_lecture_chunks", {
             p_user_id: userId,
@@ -278,32 +297,56 @@ async function findClassroomContext(
             p_match_count: 4,
           })
         : Promise.resolve({ data: [], error: null }),
+      anchorEmbedding
+        ? admin.rpc("match_material_chunks", {
+            p_user_id: userId,
+            p_classroom_id: classroomId,
+            p_query_embedding: anchorEmbedding,
+            // The room is on one slide, not four. More rows here only dilute
+            // the context and slow the answer down.
+            p_match_count: 2,
+          })
+        : Promise.resolve({ data: [], error: null }),
     ]);
     if (lecture.error) throw lecture.error;
     if (material.error) throw material.error;
+    if (screen.error) throw screen.error;
 
-    const matches = (Array.isArray(lecture.data) ? lecture.data : []).filter((item) => Number(item.similarity) >= 0.3);
+    const matches = (Array.isArray(lecture.data) ? lecture.data : []).filter((item) => Number(item.similarity) >= MATERIAL_MIN_SIMILARITY);
     const sources = matches.map((item) => ({
       sessionId: String(item.session_id),
       title: String(item.session_title),
       startMs: Number(item.start_ms),
       endMs: Number(item.end_ms),
     }));
-    const materialMatches = (Array.isArray(material.data) ? material.data : []).filter((item) => Number(item.similarity) >= 0.3);
-    const materialSources = materialMatches.map((item) => ({
+
+    const keepMaterial = (rows: unknown) =>
+      (Array.isArray(rows) ? rows : []).filter((item) => Number(item.similarity) >= MATERIAL_MIN_SIMILARITY);
+    const screenMatches = keepMaterial(screen.data);
+    // A chunk the anchor already pulled in is the same slide; carrying it twice
+    // would pay for the same text in both blocks of the prompt.
+    const screenIds = new Set(screenMatches.map((item) => String(item.chunk_id)));
+    const materialMatches = keepMaterial(material.data).filter((item) => !screenIds.has(String(item.chunk_id)));
+
+    const toSource = (item: { document_id: unknown; filename: unknown; start_page: unknown; end_page: unknown }) => ({
       documentId: String(item.document_id),
       filename: String(item.filename),
       startPage: Number(item.start_page),
       endPage: Number(item.end_page),
-    }));
+    });
+    const asBlock = (rows: typeof materialMatches) => rows
+      .map((item) => `[${item.filename} p.${item.start_page}${item.end_page !== item.start_page ? `-${item.end_page}` : ""}] ${item.text}`)
+      .join("\n\n");
+    const materialSources = [...screenMatches, ...materialMatches].map(toSource);
 
     return {
       text: matches.map((item) => `[${item.session_title}] ${item.text}`).join("\n\n"),
       sources: [...new Map(sources.map((source) => [`${source.sessionId}:${source.startMs}`, source])).values()],
-      materialText: materialMatches
-        .map((item) => `[${item.filename} p.${item.start_page}${item.end_page !== item.start_page ? `-${item.end_page}` : ""}] ${item.text}`)
-        .join("\n\n"),
+      materialText: asBlock(materialMatches),
+      screenText: asBlock(screenMatches),
       materialSources: [...new Map(materialSources.map((source) => [`${source.documentId}:${source.startPage}`, source])).values()],
+      // What the panel jumps to, so the learner sees the slide the answer read.
+      screenSource: screenMatches[0] ? toSource(screenMatches[0]) : null,
       admin,
     };
   } catch (error) {
@@ -706,6 +749,10 @@ export async function POST(request: Request) {
   }
 
   const classroomId = isUuid(body.classroomId) ? body.classroomId : null;
+  // The client already holds the whole transcript, so it sends the last minute
+  // of it rather than making the server read the segments back first — that
+  // read runs in parallel with this retrieval and could not feed it in time.
+  const anchor = typeof body.anchor === "string" ? body.anchor.slice(0, 2_000).trim() : "";
   const lectureSessionId = requestedSessionId;
   const contextStartedAt = Date.now();
   // The transcript read and the classroom retrieval need nothing from each
@@ -717,7 +764,7 @@ export async function POST(request: Request) {
   const [storedSegments, earlier] = await Promise.all([
     lectureSessionId ? fetchStoredSegments(supabase, lectureSessionId) : Promise.resolve<Segment[]>([]),
     classroomId && lectureSessionId
-      ? findClassroomContext(userId, classroomId, lectureSessionId, question)
+      ? findClassroomContext(userId, classroomId, lectureSessionId, question, anchor)
       : Promise.resolve({ ...EMPTY_CLASSROOM_CONTEXT, admin: null }),
   ]);
   const segments = lectureSessionId ? mergeSegments(storedSegments, unconfirmedSegments) : unconfirmedSegments;
@@ -743,9 +790,14 @@ export async function POST(request: Request) {
       ? `\n\nRelevant excerpts from lecture materials uploaded to this classroom:\n${earlier.materialText}`
       : `\n\n이 강의실에 올린 강의 자료 중 관련 내용:\n${earlier.materialText}`
     : "";
+  const screenBlock = earlier.screenText
+    ? locale === "en"
+      ? `\n\nMaterial the lecture is most likely on screen right now:\n${earlier.screenText}`
+      : `\n\n지금 화면에 떠 있을 가능성이 높은 강의 자료:\n${earlier.screenText}`
+    : "";
   const input = locale === "en"
-    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}${materialBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
-    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}${materialBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
+    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}${screenBlock}${materialBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
+    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}${screenBlock}${materialBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
 
   // Everything above this line is validation (auth, rate limit, credits, body
   // shape); only once all of it has passed does the response start streaming.
@@ -825,7 +877,7 @@ export async function POST(request: Request) {
           if (saveError) console.error("Lecture question save failed", saveError.code);
         }
 
-        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, materialSources: earlier.materialSources, provider, model } });
+        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, materialSources: earlier.materialSources, screenSource: earlier.screenSource, provider, model } });
       } catch (error) {
         send({ error: askErrorMessage(error, personalLlm, isEnglish) });
       } finally {

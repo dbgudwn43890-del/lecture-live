@@ -7,6 +7,7 @@ import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import { parseGlossary } from "../lib/glossary";
+import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
 
@@ -126,6 +127,13 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const [profile, setProfile] = useState<UserProfile | null>(initial?.profile ?? null);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(initial?.creditStatus ?? null);
   const [reportedKeys, setReportedKeys] = useState<string[]>([]);
+  // "없음"과 "원본이 없음"은 다른 상태다. 이 변경 전에 올라온 자료는 텍스트만
+  // 색인되어 있어 답변에는 쓰이지만 슬라이드로 보여 줄 수는 없다.
+  const [materialState, setMaterialState] = useState<"none" | "text-only" | "viewable">("none");
+  const [slidePage, setSlidePage] = useState<MaterialSource | null>(null);
+  const [slideUrl, setSlideUrl] = useState<{ documentId: string; url: string; expiresAt: number } | null>(null);
+  const [slideCollapsed, setSlideCollapsed] = useState(false);
+  const [slideZoomed, setSlideZoomed] = useState(false);
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
   const sessionsById = useMemo(
@@ -162,6 +170,11 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const whisperFlushTimerRef = useRef<number | null>(null);
   const whisperPendingRef = useRef(false);
   const whisperFlushRef = useRef<Promise<void> | null>(null);
+  const slideUrlRef = useRef<{ documentId: string; url: string; expiresAt: number } | null>(null);
+  // A page the learner or an answer put on screen wins over the follower for a
+  // while. Without this the next 30s tick drags the panel back to whatever the
+  // lecturer is saying, mid-read.
+  const slidePinnedUntilRef = useRef(0);
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -191,6 +204,108 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+  useEffect(() => { slideUrlRef.current = slideUrl; }, [slideUrl]);
+
+  // Whether this classroom has a slide deck at all decides both the follower
+  // below and what the panel says when it has nothing to show.
+  useEffect(() => {
+    setSlidePage(null);
+    setSlideZoomed(false);
+    if (!activeClassroomId) {
+      setMaterialState("none");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/materials?classroomId=${encodeURIComponent(activeClassroomId)}`, {
+          headers: { "X-Site-Locale": locale },
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { documents?: Array<{ storage_path?: string | null }> };
+        const documents = data.documents ?? [];
+        if (!cancelled) {
+          setMaterialState(documents.some((document) => document.storage_path)
+            ? "viewable"
+            : documents.length > 0 ? "text-only" : "none");
+        }
+      } catch {
+        // 자료 유무 확인 실패는 강의 진행을 막지 않는다.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeClassroomId, locale]);
+
+  // The slide follows the lecture on its own, so the panel is not an empty box
+  // for everyone who has not asked anything yet. Nothing is shown unless the
+  // match clears the server's threshold; a weak match leaves the last page up.
+  useEffect(() => {
+    if (status !== "recording" || !activeClassroomId || materialState !== "viewable") return;
+    let cancelled = false;
+    async function follow() {
+      if (Date.now() < slidePinnedUntilRef.current) return;
+      const anchor = buildAnchor(segmentsRef.current, Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current));
+      if (!anchor) return;
+      try {
+        const response = await fetch("/api/material-page", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ classroomId: activeClassroomId, anchor }),
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { page: MaterialSource | null };
+        if (cancelled || !data.page) return;
+        const next = data.page;
+        setSlidePage((current) =>
+          current && current.documentId === next.documentId && current.startPage === next.startPage ? current : next);
+      } catch {
+        // 슬라이드 추종은 보조 기능이다. 실패해도 스크립트와 질문은 그대로 굴러간다.
+      }
+    }
+    void follow();
+    const timer = window.setInterval(() => void follow(), 30_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [status, activeClassroomId, materialState, locale]);
+
+  // The bucket is private, so every view goes through a short-lived signed URL.
+  // Re-signing only near expiry keeps the viewer from reloading the PDF — and
+  // losing the reader's zoom — every time the page changes.
+  useEffect(() => {
+    if (!slidePage) return;
+    const held = slideUrlRef.current;
+    if (held && held.documentId === slidePage.documentId && held.expiresAt > Date.now() + 120_000) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/materials?documentId=${encodeURIComponent(slidePage.documentId)}`, {
+          headers: { "X-Site-Locale": locale },
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("sign failed");
+        const data = await response.json() as { url: string; expiresInSeconds?: number };
+        if (cancelled) return;
+        setSlideUrl({
+          documentId: slidePage.documentId,
+          url: data.url,
+          expiresAt: Date.now() + (data.expiresInSeconds ?? 900) * 1_000,
+        });
+      } catch {
+        if (!cancelled) setSlideUrl(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [slidePage, locale]);
+
+  // Esc closes the enlarged slide, the way every other overlay in the app does.
+  useEffect(() => {
+    if (!slideZoomed) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setSlideZoomed(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [slideZoomed]);
 
   // Every <details> menu in the shell closes the same way, and the sidebar now
   // has one per lecture, so this queries them rather than holding a ref each.
@@ -1023,6 +1138,13 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     void submitQuestion(question, true);
   }
 
+  /** 학습자나 답변이 직접 지정한 쪽. 잠깐은 자동 추종보다 우선한다. */
+  function pinSlide(source: MaterialSource) {
+    slidePinnedUntilRef.current = Date.now() + 120_000;
+    setSlidePage(source);
+    setSlideCollapsed(false);
+  }
+
   // Typing during a lecture is itself a distraction, so a transcript paragraph
   // can send its own question with one press (PRD 36.3.3). Both entry points
   // land here; only the composer clears itself, or a half-typed draft would
@@ -1074,6 +1196,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         body: JSON.stringify({
           question: cleanQuestion,
           questionAtMs: askedAt,
+          // 질문 문장만으로는 "이거", "방금 그 식"이 무엇을 가리키는지 알 수 없다.
+          // 직전 1분의 강의 내용을 같이 보내 그 시점의 슬라이드를 찾게 한다.
+          anchor: buildAnchor(segments, askedAt, interim),
           // Only the tail the server hasn't confirmed saved yet — everything
           // else it reads back from transcript_segments itself.
           segments: segments.filter((segment) => !confirmedSegmentIdsRef.current.has(segment.id)),
@@ -1103,7 +1228,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       let buffer = "";
       let streamedText = "";
       let streamError: string | null = null;
-      let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[]; materialSources?: MaterialSource[] } | null = null;
+      let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[]; materialSources?: MaterialSource[]; screenSource?: MaterialSource | null } | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -1130,7 +1255,10 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
 
       if (streamError) throw new Error(streamError);
       if (!finalDone) throw new Error(isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다.");
-      const { answer, sources, lectureSources, materialSources } = finalDone;
+      const { answer, sources, lectureSources, materialSources, screenSource } = finalDone;
+      // 답이 무엇을 보고 쓰였는지 읽기 전에 보이도록, 근거가 된 쪽을 바로 띄운다.
+      if (screenSource) pinSlide(screenSource);
+      else if (materialSources?.[0]) pinSlide(materialSources[0]);
 
       setMessages((current) =>
         current.map((message) =>
@@ -1561,11 +1689,16 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
                   {message.materialSources && message.materialSources.length > 0 && (
                     <div className="lecture-sources material-sources">
                       <span>{isEnglish ? "Material used" : "강의 자료 참고"}</span>
+                      {/* 답과 근거를 잇는 고리. 누르면 옆 패널이 그 쪽으로 간다. */}
                       {message.materialSources.map((source) => (
-                        <em key={`${source.documentId}-${source.startPage}`}>
+                        <button
+                          type="button"
+                          key={`${source.documentId}-${source.startPage}`}
+                          onClick={() => pinSlide(source)}
+                        >
                           {source.filename} p.{source.startPage}
                           {source.endPage !== source.startPage ? `-${source.endPage}` : ""}
-                        </em>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -1616,6 +1749,57 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
             </div>
             <span className="count">{sentenceCount}{isEnglish ? " sentences" : "개 문장"}</span>
           </div>
+
+          {activeClassroomId && materialState === "none" && (
+            <p className="slide-hint">{isEnglish
+              ? "Upload the slide deck to this classroom and answers will read the formulas and tables on screen too."
+              : "이 강의실에 강의 자료(PDF)를 올리면 화면 속 수식·표까지 보고 답합니다."}</p>
+          )}
+
+          {activeClassroomId && materialState === "text-only" && (
+            <p className="slide-hint">{isEnglish
+              ? "This classroom's materials were indexed before originals were kept. Answers still use them; upload them again to see the slides."
+              : "이 강의실의 자료는 원본을 보관하기 전에 올라왔습니다. 답변에는 그대로 쓰이지만, 슬라이드를 보려면 다시 올려 주세요."}</p>
+          )}
+
+          {activeClassroomId && materialState === "viewable" && (
+            <div className={`slide-panel${slideCollapsed ? " collapsed" : ""}`}>
+              <div className="slide-bar">
+                <span className="slide-label">
+                  {slidePage
+                    ? `${slidePage.filename} p.${slidePage.startPage}${slidePage.endPage !== slidePage.startPage ? `-${slidePage.endPage}` : ""}`
+                    : isEnglish ? "Finding the page the lecture is on" : "지금 강의가 지나는 쪽을 찾는 중"}
+                </span>
+                <button type="button" onClick={() => setSlideZoomed(true)} disabled={!slidePage || slideUrl?.documentId !== slidePage?.documentId}>
+                  {isEnglish ? "Enlarge" : "크게 보기"}
+                </button>
+                <button type="button" onClick={() => setSlideCollapsed((collapsed) => !collapsed)}>
+                  {slideCollapsed
+                    ? isEnglish ? "Show" : "펼치기"
+                    : isEnglish ? "Hide" : "접기"}
+                </button>
+              </div>
+              {!slideCollapsed && (
+                <div className="slide-frame">
+                  {slidePage && slideUrl?.documentId === slidePage.documentId ? (
+                    /* ponytail: 브라우저 내장 PDF 뷰어의 #page 프래그먼트에 기댄다.
+                       Chrome·Edge(1차 지원 환경)는 따르지만 Safari는 무시한다.
+                       현장에서 문제가 되면 pdf.js 캔버스 렌더로 올린다. */
+                    <iframe
+                      title={isEnglish ? "Slide the lecture is on" : "지금 강의가 지나는 슬라이드"}
+                      src={`${slideUrl.url}#page=${slidePage.startPage}&view=Fit`}
+                    />
+                  ) : (
+                    <p>{slidePage
+                      ? isEnglish ? "Opening the slide…" : "슬라이드를 여는 중입니다"
+                      : isEnglish
+                        ? "The slide appears once the lecture reaches a page in the deck."
+                        : "강의가 자료의 어느 쪽에 닿으면 그 슬라이드가 여기 뜹니다."}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* The live region is the newest line only. On the scrollback
               container a screen reader re-read the entire lecture every time a
@@ -1671,6 +1855,24 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           </div>
           </section>
         </section>
+
+        {slideZoomed && slidePage && slideUrl?.documentId === slidePage.documentId && (
+          <div className="slide-overlay" role="dialog" aria-modal="true" onClick={() => setSlideZoomed(false)}>
+            <div className="slide-overlay-inner" onClick={(event) => event.stopPropagation()}>
+              <div className="slide-bar">
+                <span className="slide-label">
+                  {slidePage.filename} p.{slidePage.startPage}
+                  {slidePage.endPage !== slidePage.startPage ? `-${slidePage.endPage}` : ""}
+                </span>
+                <button type="button" onClick={() => setSlideZoomed(false)}>{isEnglish ? "Close" : "닫기"}</button>
+              </div>
+              <iframe
+                title={isEnglish ? "Slide, enlarged" : "슬라이드 크게 보기"}
+                src={`${slideUrl.url}#page=${slidePage.startPage}&view=Fit`}
+              />
+            </div>
+          </div>
+        )}
 
         <footer className="footnote">
           <span>{isEnglish ? "AI transcription · errors may occur" : "AI 자동 변환 · 오류가 있을 수 있습니다"}</span>
