@@ -6,7 +6,8 @@ import Link from "next/link";
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
-import { utteranceSegment } from "../lib/deepgram";
+import type { DeepgramFinal } from "../lib/deepgram";
+import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
@@ -49,13 +50,14 @@ type Message = {
   assistantLabel?: string;
 };
 
-type DeepgramResult = {
+type DeepgramResult = DeepgramFinal & {
   type?: string;
-  start?: number;
-  duration?: number;
   is_final?: boolean;
-  channel?: { alternatives?: Array<{ transcript?: string }> };
+  speech_final?: boolean;
 };
+
+/** 끊긴 소켓을 다시 여는 간격. 마지막 값은 포기하지 않고 계속 되풀이한다. */
+const RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 30_000];
 
 /** Closes the <details> menu that a clicked menu item sits inside. */
 function closeMenu(event: { currentTarget: HTMLElement }) {
@@ -158,6 +160,14 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   // Deepgram's stream clock restarts at 0 on every socket, so a reconnect would
   // collide with earlier segments without this.
   const streamOffsetMsRef = useRef(0);
+  // 확정된 조각은 문장이 끝날 때까지 여기 모인다. 세그먼트 하나가 온전한 발화가
+  // 되어야 buildAnchor의 창과 문단 묶기가 조각난 반 문장을 다루지 않는다.
+  const finalBufferRef = useRef<DeepgramResult[]>([]);
+  const interimRef = useRef("");
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const keepAliveTimerRef = useRef<number | null>(null);
+  const lastSentAtRef = useRef(0);
   const initialRouteRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -237,7 +247,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     let cancelled = false;
     async function follow() {
       if (Date.now() < slidePinnedUntilRef.current) return;
-      const anchor = buildAnchor(segmentsRef.current, Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current));
+      // 발화 단위로 저장하므로 긴 문장 중에는 방금 한 말이 아직 세그먼트가 아니다.
+      const anchor = buildAnchor(segmentsRef.current, Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current), interimRef.current);
       if (!anchor) return;
       try {
         const response = await fetch("/api/material-page", {
@@ -508,12 +519,12 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
    * 경과 시간 기준으로 크레딧을 차감한다. 그래서 402와 409는 저장 실패가 아니라
    * 강의 종료 사유다.
    */
-  async function saveSegment(segment: Segment) {
+  async function saveSegment(segment: Segment, latencyMs?: number) {
     try {
       const response = await fetch("/api/lecture-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
+        body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment, latencyMs }),
       });
       if (response.ok) {
         confirmedSegmentIdsRef.current.add(segment.id);
@@ -623,7 +634,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         { id: `${item.id}-q`, role: "user" as const, text: item.question },
         { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerText(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
       ]));
-      setInterim("");
+      showInterim("");
       setElapsedMs(data.session.duration_seconds * 1_000);
       setStatus("ended");
     } catch (caught) {
@@ -641,7 +652,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     segmentIdsRef.current.clear();
     confirmedSegmentIdsRef.current.clear();
     setMessages([]);
-    setInterim("");
+    showInterim("");
     setElapsedMs(0);
     saveFailuresRef.current = 0;
     setStatus("idle");
@@ -870,6 +881,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
       confirmedSegmentIdsRef.current.clear();
+      finalBufferRef.current = [];
+      showInterim("");
       setMessages([]);
 
       const context = new AudioContext();
@@ -915,6 +928,173 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     }
   }
 
+  /** 자막과 앵커가 같은 문장을 본다. 추종기는 상태가 아니라 이 ref를 읽는다. */
+  function showInterim(text: string) {
+    interimRef.current = text;
+    setInterim(text);
+  }
+
+  /** 버퍼에 모인 발화를 세그먼트 하나로 확정하고 저장한다. */
+  function flushUtterance() {
+    const finals = finalBufferRef.current;
+    finalBufferRef.current = [];
+    showInterim("");
+    if (!finals.length) return;
+    const segment = utteranceSegment(finals, streamOffsetMsRef.current);
+    if (!segment || segmentIdsRef.current.has(segment.id)) return;
+    segmentIdsRef.current.add(segment.id);
+    setSegments((current) => {
+      const next = [...current, segment];
+      segmentsRef.current = next;
+      return next;
+    });
+    // 말이 끝난 시각과 지금의 차이가 곧 확정 지연이다 (PRD 36.3.4).
+    void saveSegment(segment, Math.max(0, Date.now() - (startedAtRef.current + segment.endMs)));
+  }
+
+  function stopKeepAlive() {
+    if (keepAliveTimerRef.current !== null) {
+      window.clearInterval(keepAliveTimerRef.current);
+      keepAliveTimerRef.current = null;
+    }
+  }
+
+  /**
+   * 강의실 와이파이는 3시간을 버티지 못한다. 끊기면 강의를 끝내지 않고 같은
+   * MediaStream에 새 소켓을 연다. 자동 종료는 하지 않는다 — 언제 그만둘지는
+   * 수업을 듣는 사람이 정한다.
+   *
+   * ponytail: 재연결 사이의 1~2초 발화는 잃는다. WebM은 초기화 세그먼트가 첫
+   * 청크에만 있어 중간부터 다시 흘릴 수 없다. 손실이 한 문장을 넘으면 linear16
+   * PCM + 링 버퍼로 올라가야 한다.
+   */
+  function scheduleReconnect() {
+    const stream = streamRef.current;
+    if (!stream || finishingRef.current || startedAtRef.current === 0) return;
+    const attempt = reconnectAttemptRef.current;
+    reconnectAttemptRef.current = attempt + 1;
+    setError(attempt < RECONNECT_DELAYS_MS.length - 1
+      ? (isEnglish ? "The connection dropped. Reconnecting…" : "연결이 끊겨 다시 연결하는 중입니다…")
+      : (isEnglish
+        ? "Still reconnecting. You can end the lecture and keep everything transcribed so far."
+        : "계속 다시 연결하고 있습니다. 지금까지 받아쓴 내용을 남기고 수업을 종료해도 됩니다."));
+    reconnectTimerRef.current = window.setTimeout(() => {
+      void connectDeepgram(stream).catch(() => scheduleReconnect());
+    }, RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)]);
+  }
+
+  /**
+   * 토큰을 받아 소켓을 연다. 첫 연결과 재연결이 같은 경로를 쓴다 — grant는 30초
+   * 만에 만료되고 주소는 매번 서버가 다시 만들어 주므로 재사용할 것이 없다.
+   */
+  async function connectDeepgram(stream: MediaStream) {
+    const tokenResponse = await fetch("/api/deepgram-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+      body: JSON.stringify({ sessionId: activeSessionIdRef.current }),
+    });
+    const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; error?: string };
+    if (!tokenResponse.ok || !tokenData.accessToken || !tokenData.listenUrl) {
+      throw new Error(tokenData.error ?? (isEnglish
+        ? "Could not obtain a speech-recognition token."
+        : "음성 인식 토큰을 받지 못했습니다."));
+    }
+    setCreditStatus((current) => current && typeof tokenData.credits === "number"
+      ? { ...current, credits: tokenData.credits }
+      : current);
+
+    // 파라미터도 용어집도 서버가 정한다 (app/lib/deepgram.ts). 클라이언트를 다시
+    // 배포하지 않고 모델·엔드포인팅·keyterm 예산을 조정하기 위해서다.
+    const socket = new WebSocket(tokenData.listenUrl, ["bearer", tokenData.accessToken]);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      reconnectAttemptRef.current = 0;
+      setError("");
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+          socket.send(event.data);
+          lastSentAtRef.current = Date.now();
+        }
+      };
+      recorder.onstop = () => {
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "CloseStream" }));
+      };
+      recorder.start(250);
+      if (startedAtRef.current === 0) {
+        startedAtRef.current = Date.now();
+        setElapsedMs(0);
+        setStatus("recording");
+      } else {
+        // 새 소켓의 시계는 0에서 다시 시작한다. 이 값을 더하지 않으면 재연결 뒤
+        // 세그먼트가 강의 첫머리와 겹쳐 순서와 앵커가 함께 무너진다.
+        streamOffsetMsRef.current = Date.now() - startedAtRef.current;
+      }
+      // 백그라운드 탭이나 절전으로 레코더가 멎으면 Deepgram이 10초쯤 뒤 소켓을 닫는다.
+      lastSentAtRef.current = Date.now();
+      keepAliveTimerRef.current = window.setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN && Date.now() - lastSentAtRef.current > 5_000) {
+          socket.send(JSON.stringify({ type: "KeepAlive" }));
+        }
+      }, 5_000);
+    };
+
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data as string) as DeepgramResult;
+      // utterance_end_ms를 요청해 놓고 버리던 신호다. speech_final이 뜨지 않는
+      // 발화를 끊어 주는 안전망이자, 실시간 자막이 멈춰 보이지 않게 하는 장치다.
+      if (message.type === "UtteranceEnd") {
+        flushUtterance();
+        return;
+      }
+      if (message.type !== "Results") return;
+      const text = message.channel?.alternatives?.[0]?.transcript?.trim() ?? "";
+
+      if (message.is_final) {
+        if (text) finalBufferRef.current.push(message);
+        if (message.speech_final || utteranceOverflowed(finalBufferRef.current)) flushUtterance();
+        else showInterim(utteranceSegment(finalBufferRef.current)?.text ?? "");
+        return;
+      }
+      if (!text) return;
+      // 진행 중인 문장 전체를 보여 준다. 마지막 조각만 띄우면 말이 길어질수록
+      // 화면이 앞말을 잃는다.
+      const buffered = utteranceSegment(finalBufferRef.current)?.text ?? "";
+      showInterim(buffered ? `${buffered} ${text}` : text);
+    };
+
+    socket.onerror = () => {
+      // 강의가 이미 돌고 있으면 onclose의 재연결이 처리한다. 시작도 못 한
+      // 연결만 여기서 실패로 끝낸다.
+      if (startedAtRef.current > 0) return;
+      if (activeSessionIdRef.current) {
+        void fetch("/api/lecture-sessions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
+        }).then(() => loadCredits());
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      setError(isEnglish
+        ? "Speech recognition could not connect. Check the network and API settings."
+        : "음성 인식 연결에 실패했습니다. 네트워크와 API 설정을 확인해 주세요.");
+      setStatus("error");
+    };
+
+    socket.onclose = () => {
+      stopKeepAlive();
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      if (finishingRef.current || startedAtRef.current === 0) return;
+      flushUtterance();
+      scheduleReconnect();
+    };
+  }
+
   async function startLectureDeepgram() {
     setError("");
     startedAtRef.current = 0;
@@ -952,101 +1132,12 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
       confirmedSegmentIdsRef.current.clear();
+      finalBufferRef.current = [];
+      showInterim("");
       setMessages([]);
 
-      const tokenResponse = await fetch("/api/deepgram-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ sessionId: sessionData.session.id }),
-      });
-      const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; error?: string };
-      if (!tokenResponse.ok || !tokenData.accessToken || !tokenData.listenUrl) {
-        throw new Error(tokenData.error ?? (isEnglish
-          ? "Could not obtain a speech-recognition token."
-          : "음성 인식 토큰을 받지 못했습니다."));
-      }
       streamOffsetMsRef.current = 0;
-      setCreditStatus((current) => current && typeof tokenData.credits === "number"
-        ? { ...current, credits: tokenData.credits }
-        : current);
-
-      // 파라미터도 용어집도 서버가 정한다 (app/lib/deepgram.ts). 클라이언트를 다시
-      // 배포하지 않고 모델·엔드포인팅·keyterm 예산을 조정하기 위해서다.
-      const socket = new WebSocket(tokenData.listenUrl, ["bearer", tokenData.accessToken]);
-      socketRef.current = socket;
-
-      socket.onopen = () => {
-        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm";
-        const recorder = new MediaRecorder(stream, { mimeType });
-        recorderRef.current = recorder;
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) socket.send(event.data);
-        };
-        recorder.onstop = () => {
-          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "CloseStream" }));
-          stream.getTracks().forEach((track) => track.stop());
-        };
-        recorder.start(250);
-        startedAtRef.current = Date.now();
-        setElapsedMs(0);
-        setStatus("recording");
-      };
-
-      socket.onmessage = (event) => {
-        const result = JSON.parse(event.data as string) as DeepgramResult;
-        if (result.type !== "Results") return;
-        const text = result.channel?.alternatives?.[0]?.transcript?.trim() ?? "";
-        if (!text) return;
-
-        if (result.is_final) {
-          // The id used to carry the whole transcript, which pushed long
-          // utterances past the server's 2200-character client_id limit and
-          // had them silently rejected. utteranceSegment owns that cap.
-          const segment = utteranceSegment([result], streamOffsetMsRef.current);
-          if (segment && !segmentIdsRef.current.has(segment.id)) {
-            segmentIdsRef.current.add(segment.id);
-            setSegments((current) => {
-              const next = [...current, segment];
-              segmentsRef.current = next;
-              return next;
-            });
-            void saveSegment(segment);
-          }
-          setInterim("");
-        } else {
-          setInterim(text);
-        }
-      };
-
-      socket.onerror = () => {
-        if (startedAtRef.current === 0 && activeSessionIdRef.current) {
-          void fetch("/api/lecture-sessions", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-            body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
-          }).then(() => loadCredits());
-          stream.getTracks().forEach((track) => track.stop());
-        }
-        setError(isEnglish
-          ? "Speech recognition could not connect. Check the network and API settings."
-          : "음성 인식 연결에 실패했습니다. 네트워크와 API 설정을 확인해 주세요.");
-        setStatus("error");
-      };
-
-      socket.onclose = () => {
-        if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-        // A mid-lecture drop (a Wi-Fi handoff in a lecture hall) used to leave
-        // the UI saying 기록 중 while the timer kept charging credits against a
-        // transcript that had stopped. End the lecture and say so.
-        if (startedAtRef.current > 0 && !finishingRef.current) {
-          setError(isEnglish
-            ? "The connection dropped, so the lecture was saved and ended. Start again to keep recording."
-            : "연결이 끊겨 수업을 저장하고 종료했습니다. 이어서 기록하려면 다시 시작해 주세요.");
-          void finishLecture();
-        }
-      };
+      await connectDeepgram(stream);
     } catch (caught) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (activeSessionIdRef.current && startedAtRef.current === 0) {
@@ -1064,7 +1155,16 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   async function finishLecture() {
     if (finishingRef.current) return;
     finishingRef.current = true;
+    if (reconnectTimerRef.current !== null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    stopKeepAlive();
+    flushUtterance();
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    // 마이크는 여기서 놓는다. 재연결이 같은 스트림을 다시 쓰므로 레코더가 멈출
+    // 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.
+    streamRef.current?.getTracks().forEach((track) => track.stop());
     if (sttProvider === "whisper") {
       // A flush in flight makes flushWhisperChunk() a no-op, so awaiting it
       // alone would drop everything buffered behind that upload.
