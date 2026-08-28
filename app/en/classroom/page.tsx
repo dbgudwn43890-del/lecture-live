@@ -1,13 +1,12 @@
 import LectureWorkspace from "../../classroom/workspace-client";
 import { getClassroomData } from "../../lib/classroom-data";
 import { getCreditStatus } from "../../lib/credit-status";
-import { getSttProvider } from "../../lib/stt-provider";
 import { createClient } from "../../lib/supabase/server";
 
 export default async function EnglishClassroomPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return <LectureWorkspace locale="en" sttProvider={getSttProvider()} />;
+  if (!user) return <LectureWorkspace locale="en" />;
 
   const [data, creditStatus] = await Promise.all([
     getClassroomData(supabase, user),
@@ -17,7 +16,6 @@ export default async function EnglishClassroomPage() {
   return (
     <LectureWorkspace
       locale="en"
-      sttProvider={getSttProvider()}
       initial={{
         profile: "error" in data ? null : data.profile,
         classrooms: "error" in data ? [] : data.classrooms,

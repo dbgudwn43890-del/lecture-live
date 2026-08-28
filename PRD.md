@@ -1585,8 +1585,7 @@ Luna low가 품질 목표를 통과하면 기본으로 채택한다. 통과하�
 두고, 인식 요청마다 그 용어집을 함께 보낸다.
 
 - 용어집은 강의실 속성이다. 사용자가 직접 입력하며 최대 60개 용어, 용어당 40자로 제한한다.
-- Whisper 경로에서는 `initial_prompt` 앞에 용어집을 붙인다.
-- Deepgram Nova-3 경로에서는 `keyterm` 파라미터로 전달한다.
+- Deepgram Nova-3 요청의 `keyterm` 파라미터로 전달한다.
 - 신고된 오인식 패턴이 용어집 후보의 1차 출처가 된다.
 - 음향 잡음 제거 전처리는 브라우저의 `echoCancellation`, `noiseSuppression`,
   `autoGainControl`을 우선 사용하고, 파일럿에서 이것으로 부족하다는 근거가 나온 뒤에만

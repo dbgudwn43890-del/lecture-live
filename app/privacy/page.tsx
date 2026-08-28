@@ -77,7 +77,6 @@ export default function PrivacyPage() {
               <tbody>
                 <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>계정 인증과 서비스 데이터 보관: 이메일, 계정 정보, 강의 기록, 저장을 선택한 암호화된 API 키</td><td className={styles.placeholder}>프로젝트 리전 입력 필요 / 가입·저장 시 / 삭제 또는 탈퇴 시까지</td></tr>
                 <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>실시간 음성 인식: 마이크 음성</td><td>미국 / 기록 중 / 사업자 정책에 따른 처리 기간</td></tr>
-                <tr><td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noreferrer">Cloudflare, Inc.</a></td><td>선택형 음성 인식 기능: 마이크 음성</td><td className={styles.placeholder}>사업자 처리 국가 확인 필요 / 해당 기능 이용 중 / 사업자 정책에 따른 처리 기간</td></tr>
                 <tr><td><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI, L.L.C.</a></td><td>AI 답변, 필요한 웹 검색과 관련 강의 내용 확인: 스크립트, 질문, 관련 강의 기록</td><td>미국 등 사업자 처리 국가 / 질문 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">Anthropic, PBC</a></td><td>이용자가 선택한 AI 답변: 스크립트, 질문, 개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google LLC</a></td><td>Google 로그인 또는 이용자가 선택한 AI 답변: 계정 정보 또는 스크립트·질문·개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>

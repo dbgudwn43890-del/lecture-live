@@ -1,6 +1,6 @@
 -- Recording credits were only ever consumed when the browser chose to call
 -- /api/credits. A client that simply never made that call could stream audio
--- to /api/lecture-audio indefinitely on a single credit. Derive the billable
+-- to the transcription endpoint indefinitely on a single credit. Derive the billable
 -- minute from the session's own started_at so the server, not the client,
 -- decides how much has been used.
 create or replace function public.consume_lecture_credits_elapsed(

@@ -1,5 +1,5 @@
 /**
- * /stt-lab is an internal transcription-tuning tool that spends the Cloudflare
+ * /stt-lab is an internal transcription-tuning tool that spends the Deepgram
  * Workers AI quota. Signing in is not enough to reach it: in production the
  * user id must be listed in STT_LAB_USER_IDS.
  */

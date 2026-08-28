@@ -89,3 +89,10 @@ test("builds a listen url with repeated keyterm and no encoding", () => {
   assert.ok(url.includes("language=ko"));
   assert.ok(url.includes("tag=session-abc"));
 });
+
+test("describes raw PCM explicitly for the browser worklet", () => {
+  const url = listenUrl({ language: "ko", keyterms: [], sessionId: "lab", pcm: true });
+  assert.ok(url.includes("encoding=linear16"));
+  assert.ok(url.includes("sample_rate=16000"));
+  assert.ok(url.includes("channels=1"));
+});

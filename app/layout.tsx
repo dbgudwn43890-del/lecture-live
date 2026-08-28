@@ -19,8 +19,8 @@ const mono = IBM_Plex_Mono({
   display: "swap",
 });
 
-// Built from the locale rather than hardcoded, so /en/classroom, /en/billing
-// and /en/classrooms — none of which export metadata of their own — stop
+// Built from the locale rather than hardcoded, so /en/classroom and /en/billing
+// — neither of which exports metadata of its own — stop
 // showing a Korean description in an English speaker's tab and shares.
 export async function generateMetadata(): Promise<Metadata> {
   const isEnglish = (await headers()).get("x-site-locale") === "en";

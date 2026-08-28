@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import LectureWorkspace from "./workspace-client";
 import { getClassroomData } from "../lib/classroom-data";
 import { getCreditStatus } from "../lib/credit-status";
-import { getSttProvider } from "../lib/stt-provider";
 import { createClient } from "../lib/supabase/server";
 
 export default async function ClassroomPage() {
@@ -13,7 +12,7 @@ export default async function ClassroomPage() {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return <LectureWorkspace locale={locale} sttProvider={getSttProvider()} />;
+  if (!user) return <LectureWorkspace locale={locale} />;
 
   const [data, creditStatus] = await Promise.all([
     getClassroomData(supabase, user),
@@ -23,7 +22,6 @@ export default async function ClassroomPage() {
   return (
     <LectureWorkspace
       locale={locale}
-      sttProvider={getSttProvider()}
       initial={{
         profile: "error" in data ? null : data.profile,
         classrooms: "error" in data ? [] : data.classrooms,

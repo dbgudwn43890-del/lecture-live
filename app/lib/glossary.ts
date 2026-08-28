@@ -23,21 +23,6 @@ export function parseGlossary(raw: unknown): string[] {
 }
 
 /**
- * Whisper의 initial_prompt 앞에 붙일 힌트. 프롬프트는 500자로 잘려 서버에 오므로
- * 용어집이 직전 문장을 밀어내지 않도록 이 문자열 자체도 상한을 둔다.
- */
-export function glossaryPrompt(terms: string[], maxLength = 400): string {
-  if (!terms.length) return "";
-  let prompt = "";
-  for (const term of terms) {
-    const next = prompt ? `${prompt}, ${term}` : term;
-    if (next.length > maxLength) break;
-    prompt = next;
-  }
-  return prompt ? `${prompt}.` : "";
-}
-
-/**
  * 학생이 손으로 넣은 용어집과 자료에서 뽑은 용어를 하나의 keyterm 목록으로 합친다.
  * 손으로 넣은 쪽이 먼저다 — 의도가 추출보다 우선하고, 예산이 모자라면 추출분이 잘린다.
  */

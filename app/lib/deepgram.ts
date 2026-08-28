@@ -9,6 +9,8 @@ export type ListenOptions = {
   language: "ko" | "en";
   keyterms: string[];
   sessionId: string;
+  /** 컨테이너 없는 16kHz PCM을 보낼 때만. /stt-lab이 워클릿 출력을 그대로 흘린다. */
+  pcm?: boolean;
 };
 
 /** transcript_segments.client_id는 2200자까지다. 본문은 2000자까지. */
@@ -50,7 +52,7 @@ export function keytermBudget(terms: string[]): string[] {
  * 막지는 못하지만, 용어가 오래된 클라이언트 배열이 아니라 DB에서 오고, 파라미터를
  * 클라이언트 재빌드 없이 한 파일에서 조정할 수 있다.
  */
-export function listenUrl({ language, keyterms, sessionId }: ListenOptions): string {
+export function listenUrl({ language, keyterms, sessionId, pcm = false }: ListenOptions): string {
   const params = new URLSearchParams({
     model: "nova-3",
     language,
@@ -68,7 +70,12 @@ export function listenUrl({ language, keyterms, sessionId }: ListenOptions): str
     tag: `session-${sessionId}`,
   });
   // 컨테이너(WebM/Opus)는 Deepgram이 스스로 알아낸다. encoding을 같이 주면
-  // 디코딩이 깨지므로 넣지 않는다.
+  // 디코딩이 깨지므로 넣지 않는다. 반대로 raw PCM은 스스로 알아낼 헤더가 없다.
+  if (pcm) {
+    params.set("encoding", "linear16");
+    params.set("sample_rate", "16000");
+    params.set("channels", "1");
+  }
   for (const term of keytermBudget(keyterms)) params.append("keyterm", term);
   return `wss://api.deepgram.com/v1/listen?${params.toString()}`;
 }

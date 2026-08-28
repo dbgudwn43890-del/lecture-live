@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
-import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import type { DeepgramFinal } from "../lib/deepgram";
 import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
@@ -24,6 +23,7 @@ type Segment = {
 type Source = { title: string; url: string };
 type LectureSource = { sessionId: string; title: string; startMs: number; endMs: number };
 type MaterialSource = { documentId: string; filename: string; startPage: number; endPage: number };
+type MaterialDocument = { id: string; classroom_id: string; filename: string; page_count: number; storage_path?: string | null };
 type SessionSummary = {
   id: string;
   classroom_id: string | null;
@@ -71,13 +71,6 @@ const providerNames: Record<PersonalProvider, string> = {
 };
 
 const MAX_LECTURE_MS = 10_800_000;
-const WHISPER_CHUNK_MS = 5_000;
-// /api/lecture-audio rejects anything over 500,000 bytes, which at 16kHz
-// 16-bit mono is 15.6s of audio. Browsers throttle background timers to about
-// one tick a minute, so a backgrounded tab would otherwise build a chunk far
-// past that and have every upload rejected — silently, for the rest of the
-// lecture. Send the backlog as slices that each fit, with a safety margin.
-const WHISPER_MAX_UPLOAD_MS = 14_000;
 
 function formatTime(milliseconds: number) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -96,7 +89,7 @@ type InitialData = {
   creditStatus: CreditStatus | null;
 };
 
-export default function LectureWorkspace({ locale = "ko", initial, sttProvider = "whisper" }: { locale?: "ko" | "en"; initial?: InitialData; sttProvider?: "deepgram" | "whisper" }) {
+export default function LectureWorkspace({ locale = "ko", initial }: { locale?: "ko" | "en"; initial?: InitialData }) {
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
   const statusCopy: Record<Status, string> = isEnglish
@@ -122,6 +115,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const [activeSessionId, setActiveSessionId] = useState("");
   const [classroomPending, setClassroomPending] = useState(false);
   const [newClassroomTitle, setNewClassroomTitle] = useState("");
+  const [editingClassroomId, setEditingClassroomId] = useState("");
+  const [editingClassroomTitle, setEditingClassroomTitle] = useState("");
+  const [editingGlossary, setEditingGlossary] = useState("");
   const [titleEditing, setTitleEditing] = useState(false);
   const [renamingSessionId, setRenamingSessionId] = useState("");
   const [dragSessionId, setDragSessionId] = useState("");
@@ -132,6 +128,9 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   // "없음"과 "원본이 없음"은 다른 상태다. 이 변경 전에 올라온 자료는 텍스트만
   // 색인되어 있어 답변에는 쓰이지만 슬라이드로 보여 줄 수는 없다.
   const [materialState, setMaterialState] = useState<"none" | "text-only" | "viewable">("none");
+  const [materials, setMaterials] = useState<MaterialDocument[]>([]);
+  const [materialPending, setMaterialPending] = useState(false);
+  const [materialDragOver, setMaterialDragOver] = useState(false);
   const [slidePage, setSlidePage] = useState<MaterialSource | null>(null);
   const [slideUrl, setSlideUrl] = useState<{ documentId: string; url: string; expiresAt: number } | null>(null);
   const [slideCollapsed, setSlideCollapsed] = useState(false);
@@ -169,19 +168,6 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const keepAliveTimerRef = useRef<number | null>(null);
   const lastSentAtRef = useRef(0);
   const initialRouteRef = useRef(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const audioSinkRef = useRef<GainNode | null>(null);
-  const whisperChunksRef = useRef<Float32Array[]>([]);
-  const whisperSamplesRef = useRef(0);
-  const whisperFailuresRef = useRef(0);
-  const whisperSampleRateRef = useRef(16_000);
-  const whisperCursorMsRef = useRef(0);
-  const whisperPreviousTextRef = useRef("");
-  const whisperFlushTimerRef = useRef<number | null>(null);
-  const whisperPendingRef = useRef(false);
-  const whisperFlushRef = useRef<Promise<void> | null>(null);
   const slideUrlRef = useRef<{ documentId: string; url: string; expiresAt: number } | null>(null);
   // A page the learner or an answer put on screen wins over the follower for a
   // while. Without this the next 30s tick drags the panel back to whatever the
@@ -215,6 +201,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     setSlideZoomed(false);
     if (!activeClassroomId) {
       setMaterialState("none");
+      setMaterials([]);
       return;
     }
     let cancelled = false;
@@ -225,9 +212,10 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           cache: "no-store",
         });
         if (!response.ok) return;
-        const data = await response.json() as { documents?: Array<{ storage_path?: string | null }> };
+        const data = await response.json() as { documents?: MaterialDocument[] };
         const documents = data.documents ?? [];
         if (!cancelled) {
+          setMaterials(documents);
           setMaterialState(documents.some((document) => document.storage_path)
             ? "viewable"
             : documents.length > 0 ? "text-only" : "none");
@@ -238,6 +226,65 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     })();
     return () => { cancelled = true; };
   }, [activeClassroomId, locale]);
+
+  async function uploadMaterial(file: File) {
+    if (!activeClassroomId) {
+      setError(isEnglish ? "Choose a classroom before adding material." : "자료를 넣을 강의실을 먼저 선택해 주세요.");
+      return;
+    }
+    if (materialPending) return;
+    setMaterialPending(true);
+    setError("");
+    setNotice(isEnglish ? "Reading the PDF…" : "PDF를 읽는 중입니다…");
+    try {
+      const formData = new FormData();
+      formData.set("classroomId", activeClassroomId);
+      formData.set("file", file);
+      const response = await fetch("/api/materials", {
+        method: "POST",
+        headers: { "X-Site-Locale": locale },
+        body: formData,
+      });
+      const data = await response.json() as { document?: MaterialDocument; error?: string };
+      if (!response.ok || !data.document) throw new Error(data.error);
+      setMaterials((current) => [data.document!, ...current]);
+      setMaterialState(data.document.storage_path ? "viewable" : "text-only");
+      setNotice(isEnglish ? "The material is ready." : "강의 자료를 준비했습니다.");
+    } catch (caught) {
+      setNotice("");
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not upload this material." : "강의 자료를 올리지 못했습니다.");
+    } finally {
+      setMaterialPending(false);
+    }
+  }
+
+  async function deleteMaterial(documentId: string) {
+    if (materialPending) return;
+    setMaterialPending(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/materials?documentId=${encodeURIComponent(documentId)}`, {
+        method: "DELETE",
+        headers: { "X-Site-Locale": locale },
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      const next = materials.filter((document) => document.id !== documentId);
+      setMaterials(next);
+      setMaterialState(next.some((document) => document.storage_path)
+        ? "viewable"
+        : next.length ? "text-only" : "none");
+      if (slidePage?.documentId === documentId) setSlidePage(null);
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not delete this material." : "강의 자료를 삭제하지 못했습니다.");
+    } finally {
+      setMaterialPending(false);
+    }
+  }
 
   // The slide follows the lecture on its own, so the panel is not an empty box
   // for everyone who has not asked anything yet. Nothing is shown unless the
@@ -314,7 +361,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   // has one per lecture, so this queries them rather than holding a ref each.
   useEffect(() => {
     function openMenus() {
-      return document.querySelectorAll<HTMLDetailsElement>("details.profile-menu[open], details.session-menu[open]");
+      return document.querySelectorAll<HTMLDetailsElement>("details.profile-menu[open], details.session-menu[open], details.classroom-menu[open]");
     }
     function closeIfOutside(event: PointerEvent) {
       for (const menu of openMenus()) {
@@ -344,7 +391,6 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       recorderRef.current?.stop();
       socketRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      stopWhisperNodes();
     },
     [],
   );
@@ -609,6 +655,31 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     }
   }
 
+  async function updateClassroom(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = editingClassroomTitle.trim();
+    if (!editingClassroomId || !title || classroomPending) return;
+    setClassroomPending(true);
+    setError("");
+    try {
+      const response = await fetch("/api/classrooms", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ classroomId: editingClassroomId, title, glossary: editingGlossary }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      setEditingClassroomId("");
+      await loadClassrooms(editingClassroomId);
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not save the classroom." : "강의실 정보를 저장하지 못했습니다.");
+    } finally {
+      setClassroomPending(false);
+    }
+  }
+
   async function openSession(sessionId: string) {
     if (status === "recording" || status === "connecting") return;
     setClassroomPending(true);
@@ -707,224 +778,6 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         : isEnglish ? "Could not remove the saved API key." : "저장된 API 키를 삭제하지 못했습니다.");
     } finally {
       setCredentialPending(false);
-    }
-  }
-
-  function stopWhisperNodes() {
-    if (whisperFlushTimerRef.current !== null) window.clearInterval(whisperFlushTimerRef.current);
-    whisperFlushTimerRef.current = null;
-    workletNodeRef.current?.disconnect();
-    audioSourceRef.current?.disconnect();
-    audioSinkRef.current?.disconnect();
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    void audioContextRef.current?.close();
-    workletNodeRef.current = null;
-    audioSourceRef.current = null;
-    audioSinkRef.current = null;
-    streamRef.current = null;
-    audioContextRef.current = null;
-  }
-
-  async function uploadWhisperSlice(samples: Float32Array, startMs: number, durationMs: number) {
-    const wav = encodeWav(downsampleAudio(samples, whisperSampleRateRef.current));
-    const formData = new FormData();
-    formData.set("audio", new File([wav], "chunk.wav", { type: "audio/wav" }));
-    formData.set("sessionId", activeSessionIdRef.current);
-    formData.set("language", isEnglish ? "en" : "ko");
-    if (whisperPreviousTextRef.current) formData.set("prompt", whisperPreviousTextRef.current.slice(-500));
-
-    const requestedAt = Date.now();
-    const response = await fetch("/api/lecture-audio", { method: "POST", body: formData });
-    // The STT round trip per segment, measured where the wait actually is, so
-    // the pilot has real numbers to redesign against (PRD 36.3.4).
-    const latencyMs = Date.now() - requestedAt;
-    const data = await response.json() as { text?: string; error?: string };
-    if (!response.ok) {
-      const failure = new Error(data.error ?? "") as Error & { status?: number };
-      failure.status = response.status;
-      throw failure;
-    }
-
-    const text = data.text?.trim().slice(0, 2_000);
-    if (!text) return;
-
-    whisperPreviousTextRef.current = text;
-    const endMs = startMs + durationMs;
-    // The server rejects an id over 2200 chars or text over 2000 to match the
-    // column constraints, and the save below never reads its response — so an
-    // over-long chunk used to render, be rejected with an unseen 400, and
-    // vanish on the next reload.
-    const id = `${startMs}-${endMs}-${text.slice(0, 120)}`;
-    if (segmentIdsRef.current.has(id)) return;
-    segmentIdsRef.current.add(id);
-    const segment = { id, startMs, endMs, text };
-    setSegments((current) => {
-      const next = [...current, segment];
-      segmentsRef.current = next;
-      return next;
-    });
-    void fetch("/api/lecture-sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-      body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment, latencyMs }),
-    }).then((response) => {
-      if (response.ok) confirmedSegmentIdsRef.current.add(id);
-    });
-  }
-
-  async function flushWhisperChunk() {
-    if (whisperPendingRef.current) return;
-    const sampleCount = whisperSamplesRef.current;
-    const sampleRate = whisperSampleRateRef.current;
-    if (sampleCount < sampleRate * 0.5) return;
-    whisperPendingRef.current = true;
-
-    const merged = new Float32Array(sampleCount);
-    let offset = 0;
-    for (const chunk of whisperChunksRef.current) {
-      merged.set(chunk, offset);
-      offset += chunk.length;
-    }
-    whisperChunksRef.current = [];
-    whisperSamplesRef.current = 0;
-
-    setInterim(isEnglish ? "Transcribing…" : "받아쓰는 중…");
-    const sliceSamples = Math.floor(sampleRate * (WHISPER_MAX_UPLOAD_MS / 1_000));
-
-    // The cursor advances across the whole backlog before any upload. Doing it
-    // per slice inside the loop meant one failure discarded the remaining
-    // slices without their durations, shifting every later timestamp earlier
-    // for the rest of the lecture.
-    const slices: Array<{ samples: Float32Array; startMs: number; durationMs: number }> = [];
-    for (let start = 0; start < sampleCount; start += sliceSamples) {
-      const samples = merged.subarray(start, Math.min(sampleCount, start + sliceSamples));
-      const durationMs = Math.round((samples.length / sampleRate) * 1_000);
-      slices.push({ samples, startMs: whisperCursorMsRef.current, durationMs });
-      whisperCursorMsRef.current += durationMs;
-    }
-
-    try {
-      for (const slice of slices) {
-        try {
-          await uploadWhisperSlice(slice.samples, slice.startMs, slice.durationMs);
-          whisperFailuresRef.current = 0;
-        } catch (caught) {
-          const status = (caught as { status?: number }).status;
-          // Out of credits is terminal: retrying just repeats the rejection
-          // every few seconds while the UI still claims to be recording.
-          if (status === 402 || status === 409) throw caught;
-          // Anything else costs one caption. A run of them means the
-          // transcript has stopped and the user cannot otherwise tell.
-          whisperFailuresRef.current += 1;
-          if (whisperFailuresRef.current >= 3) {
-            setError(caught instanceof Error && caught.message
-              ? caught.message
-              : isEnglish
-                ? "The transcript has stopped updating. Check your connection."
-                : "받아쓰기가 멈췄습니다. 네트워크 상태를 확인해 주세요.");
-          }
-        }
-      }
-    } catch (caught) {
-      setError(caught instanceof Error && caught.message
-        ? caught.message
-        : isEnglish ? "Recording stopped." : "기록이 중단됐습니다.");
-      void finishLecture();
-    } finally {
-      setInterim("");
-      whisperPendingRef.current = false;
-    }
-  }
-
-  async function startLecture() {
-    if (sttProvider === "deepgram") return startLectureDeepgram();
-    return startLectureWhisper();
-  }
-
-  async function startLectureWhisper() {
-    setError("");
-    startedAtRef.current = 0;
-    activeSessionIdRef.current = "";
-    saveFailuresRef.current = 0;
-    setActiveSessionId("");
-    setStatus("connecting");
-
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error(isEnglish ? "This browser does not support microphone input." : "이 브라우저는 마이크 입력을 지원하지 않습니다.");
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      streamRef.current = stream;
-
-      const sessionResponse = await fetch("/api/lecture-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({
-          action: "start",
-          classroomId: activeClassroomId || null,
-          title: lectureTitle.trim() || (isEnglish ? `Lecture ${new Date().toLocaleDateString("en-US")}` : `${new Date().toLocaleDateString("ko-KR")} 수업`),
-        }),
-      });
-      const sessionData = await sessionResponse.json() as { session?: SessionSummary; error?: string };
-      if (!sessionResponse.ok || !sessionData.session) throw new Error(sessionData.error);
-      setActiveSessionId(sessionData.session.id);
-      activeSessionIdRef.current = sessionData.session.id;
-      setLectureTitle(sessionData.session.title);
-      setSegments([]);
-      segmentsRef.current = [];
-      segmentIdsRef.current.clear();
-      confirmedSegmentIdsRef.current.clear();
-      finalBufferRef.current = [];
-      showInterim("");
-      setMessages([]);
-
-      const context = new AudioContext();
-      await context.audioWorklet.addModule("/pcm-capture-worklet.js");
-      await context.resume();
-      const source = context.createMediaStreamSource(stream);
-      const worklet = new AudioWorkletNode(context, "pcm-capture");
-      const sink = context.createGain();
-      sink.gain.value = 0;
-      source.connect(worklet).connect(sink).connect(context.destination);
-
-      audioContextRef.current = context;
-      audioSourceRef.current = source;
-      workletNodeRef.current = worklet;
-      audioSinkRef.current = sink;
-      whisperSampleRateRef.current = context.sampleRate;
-      whisperChunksRef.current = [];
-      whisperSamplesRef.current = 0;
-      whisperCursorMsRef.current = 0;
-      whisperPreviousTextRef.current = "";
-
-      worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-        const chunk = new Float32Array(event.data);
-        whisperChunksRef.current.push(chunk);
-        whisperSamplesRef.current += chunk.length;
-      };
-
-      startedAtRef.current = Date.now();
-      setElapsedMs(0);
-      setStatus("recording");
-      whisperFlushTimerRef.current = window.setInterval(() => { whisperFlushRef.current = flushWhisperChunk(); }, WHISPER_CHUNK_MS);
-    } catch (caught) {
-      stopWhisperNodes();
-      if (activeSessionIdRef.current && startedAtRef.current === 0) {
-        void fetch("/api/lecture-sessions", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
-        });
-      }
-      setError(microphoneMessage(caught));
-      setStatus("error");
     }
   }
 
@@ -1095,7 +948,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     };
   }
 
-  async function startLectureDeepgram() {
+  async function startLecture() {
     setError("");
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
@@ -1104,6 +957,11 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     setStatus("connecting");
 
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(isEnglish
+          ? "This browser does not support microphone input."
+          : "이 브라우저는 마이크 입력을 지원하지 않습니다.");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -1165,13 +1023,6 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     // 마이크는 여기서 놓는다. 재연결이 같은 스트림을 다시 쓰므로 레코더가 멈출
     // 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.
     streamRef.current?.getTracks().forEach((track) => track.stop());
-    if (sttProvider === "whisper") {
-      // A flush in flight makes flushWhisperChunk() a no-op, so awaiting it
-      // alone would drop everything buffered behind that upload.
-      await whisperFlushRef.current;
-      await flushWhisperChunk();
-      stopWhisperNodes();
-    }
     setStatus("ended");
     const sessionId = activeSessionIdRef.current;
     if (sessionId) {
@@ -1453,7 +1304,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   }
 
   /** A classroom and its lectures. The whole group is a drop target. */
-  function renderClassroomGroup(key: string, label: string, sessions: SessionSummary[]) {
+  function renderClassroomGroup(key: string, label: string, sessions: SessionSummary[], glossary = "") {
     return (
       <div
         key={key || "unassigned"}
@@ -1473,18 +1324,45 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           if (sessionId) void moveSession(sessionId, key || null);
         }}
       >
-        <button
-          type="button"
-          className={activeClassroomId === key ? "sidebar-classroom active" : "sidebar-classroom"}
-          onClick={() => {
-            setActiveClassroomId(key);
-            prepareNewLecture();
-          }}
-          disabled={status === "recording" || status === "connecting"}
-        >
-          <span>{label}</span>
-          <small>{sessions.length}</small>
-        </button>
+        <div className="sidebar-classroom-row">
+          <button
+            type="button"
+            className={activeClassroomId === key ? "sidebar-classroom active" : "sidebar-classroom"}
+            onClick={() => {
+              setActiveClassroomId(key);
+              prepareNewLecture();
+            }}
+            disabled={status === "recording" || status === "connecting"}
+          >
+            <span>{label}</span>
+            <small>{sessions.length}</small>
+          </button>
+          {key && (
+            <details className="classroom-menu">
+              <summary
+                aria-label={isEnglish ? `${label} settings` : `${label} 설정`}
+                onClick={() => {
+                  setEditingClassroomId(key);
+                  setEditingClassroomTitle(label);
+                  setEditingGlossary(glossary);
+                }}
+              >⋯</summary>
+              <form onSubmit={updateClassroom}>
+                <label>
+                  <span>{isEnglish ? "Classroom name" : "강의실 이름"}</span>
+                  <input value={editingClassroomTitle} onChange={(event) => setEditingClassroomTitle(event.target.value)} maxLength={80} />
+                </label>
+                <label>
+                  <span>{isEnglish ? "Terms, separated by commas" : "전문용어, 쉼표로 구분"}</span>
+                  <textarea value={editingGlossary} onChange={(event) => setEditingGlossary(event.target.value)} maxLength={1_200} rows={3} />
+                </label>
+                <button type="submit" disabled={classroomPending || !editingClassroomTitle.trim()}>
+                  {classroomPending ? (isEnglish ? "Saving…" : "저장 중…") : (isEnglish ? "Save" : "저장")}
+                </button>
+              </form>
+            </details>
+          )}
+        </div>
         <div className="sidebar-sessions">{sessions.map(renderSessionRow)}</div>
       </div>
     );
@@ -1508,12 +1386,11 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         <div className="sidebar-library">
           <div className="sidebar-section-heading">
             <span>{isEnglish ? "Classrooms" : "강의실"}</span>
-            <Link href={`${basePath}/classrooms`}>{isEnglish ? "Manage" : "관리"}</Link>
           </div>
 
           <nav className="sidebar-classrooms" aria-label={isEnglish ? "Classrooms and lectures" : "강의실과 수업 목록"}>
             {renderClassroomGroup("", isEnglish ? "Unassigned" : "미분류 수업", unassignedSessions)}
-            {classrooms.map((classroom) => renderClassroomGroup(classroom.id, classroom.title, classroom.sessions))}
+            {classrooms.map((classroom) => renderClassroomGroup(classroom.id, classroom.title, classroom.sessions, classroom.glossary))}
           </nav>
 
           <form className="sidebar-create-classroom" onSubmit={createClassroom}>
@@ -1701,7 +1578,33 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         <div className="notice-banner" role="status">{notice}</div>
 
         <section className="panes">
-          <section className="chat-pane" aria-labelledby="chat-title">
+          <section
+            className={`chat-pane${materialDragOver ? " material-drop-active" : ""}`}
+            aria-labelledby="chat-title"
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes("Files")) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setMaterialDragOver(true);
+            }}
+            onDragLeave={(event) => {
+              if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+              setMaterialDragOver(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setMaterialDragOver(false);
+              const file = event.dataTransfer.files[0];
+              if (file) void uploadMaterial(file);
+            }}
+          >
+          {materialDragOver && (
+            <div className="material-drop-overlay">
+              {activeClassroomId
+                ? isEnglish ? "Drop the PDF into this classroom" : "PDF를 이 강의실에 놓으세요"
+                : isEnglish ? "Choose a classroom first" : "먼저 강의실을 선택해 주세요"}
+            </div>
+          )}
           <div className="pane-heading">
             <div>
               <h1 id="chat-title">{isEnglish ? "Ask about the lecture" : "강의에 질문하기"}</h1>
@@ -1828,6 +1731,48 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
               <h2 id="transcript-title">{isEnglish ? "Live transcript" : "실시간 스크립트"}</h2>
             </div>
             <span className="count">{sentenceCount}{isEnglish ? " sentences" : "개 문장"}</span>
+          </div>
+
+          <div className="material-toolbar">
+            <div>
+              <strong>{isEnglish ? "Lecture materials" : "강의 자료"}</strong>
+              <span>{activeClassroomId
+                ? isEnglish ? `${materials.length} PDFs · also improves term recognition` : `PDF ${materials.length}개 · 전문용어 인식에도 반영`
+                : isEnglish ? "Select a classroom to attach PDFs" : "PDF를 연결하려면 강의실을 선택하세요"}</span>
+            </div>
+            {activeClassroomId && (
+              <>
+                <label className="material-upload-button">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    disabled={materialPending}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) void uploadMaterial(file);
+                    }}
+                  />
+                  {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add PDF" : "PDF 추가")}
+                </label>
+                {materials.length > 0 && (
+                  <details className="material-list">
+                    <summary>{isEnglish ? "Manage" : "관리"}</summary>
+                    <ul>
+                      {materials.map((document) => (
+                        <li key={document.id}>
+                          <span>{document.filename}</span>
+                          <small>{document.page_count}{isEnglish ? " pages" : "쪽"}</small>
+                          <button type="button" disabled={materialPending} onClick={() => void deleteMaterial(document.id)}>
+                            {isEnglish ? "Remove" : "삭제"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
+            )}
           </div>
 
           {activeClassroomId && materialState === "none" && (

@@ -1,21 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
+import { listenUrl } from "../../lib/deepgram";
+import { parseGlossary } from "../../lib/glossary";
 import { canUseSttLab } from "../../lib/lab-access";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
-import { isWhisperConfigured, transcribeWithWhisper } from "../../lib/whisper";
 
 export const runtime = "nodejs";
-
-const MAX_AUDIO_BYTES = 360_000;
-
-function isWav(bytes: Uint8Array) {
-  if (bytes.byteLength < 44) return false;
-  return (
-    String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
-    String.fromCharCode(...bytes.slice(8, 12)) === "WAVE"
-  );
-}
 
 export async function GET() {
   const userId = await getAuthenticatedUserId();
@@ -24,22 +15,24 @@ export async function GET() {
   }
 
   return NextResponse.json(
-    { configured: isWhisperConfigured() },
+    { configured: Boolean(process.env.DEEPGRAM_API_KEY) },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
 
+/**
+ * 운영 강의와 같은 파라미터 집합으로 소켓을 연다. 크레딧은 차감하지 않는다 —
+ * 이 화면은 운영자 도구이고, 여기서 재는 것이 강의 경로의 설정을 정한다.
+ */
 export async function POST(request: Request) {
   const userId = await getAuthenticatedUserId();
   if (!canUseSttLab(userId)) {
     return NextResponse.json({ error: "찾을 수 없는 페이지입니다." }, { status: 404 });
   }
 
-  if (!isWhisperConfigured()) {
-    return NextResponse.json(
-      { error: "Cloudflare Workers AI 환경 변수가 설정되지 않았습니다." },
-      { status: 503 },
-    );
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "DEEPGRAM_API_KEY가 설정되지 않았습니다." }, { status: 503 });
   }
 
   const rateLimit = await checkSharedRateLimit(`transcribe-lab:${userId}`, 18, 60_000);
@@ -50,35 +43,39 @@ export async function POST(request: Request) {
     );
   }
 
-  let formData: FormData;
+  let body: { keyterms?: unknown; language?: unknown };
   try {
-    formData = await request.formData();
+    body = (await request.json()) as typeof body;
   } catch {
-    return NextResponse.json({ error: "올바른 음성 요청이 아닙니다." }, { status: 400 });
+    body = {};
   }
 
-  const audio = formData.get("audio");
-  const promptValue = formData.get("prompt");
-  const prompt = typeof promptValue === "string" ? promptValue.trim().slice(-500) : "";
-  if (!(audio instanceof File) || audio.size > MAX_AUDIO_BYTES) {
-    return NextResponse.json({ error: "10초 이하의 WAV 음성만 보낼 수 있습니다." }, { status: 400 });
+  const response = await fetch("https://api.deepgram.com/v1/auth/grant", {
+    method: "POST",
+    headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    console.error("Lab token grant failed", response.status);
+    return NextResponse.json({ error: "음성 인식 연결을 준비하지 못했습니다." }, { status: 502 });
   }
-
-  const audioBuffer = await audio.arrayBuffer();
-  const bytes = new Uint8Array(audioBuffer);
-  if (!isWav(bytes)) {
-    return NextResponse.json({ error: "WAV 형식의 음성이 필요합니다." }, { status: 400 });
-  }
-
-  const startedAt = Date.now();
-  const result = await transcribeWithWhisper(audioBuffer, { language: "ko", prompt: prompt || undefined });
-  if ("error" in result) {
-    console.error("Cloudflare transcription failed", result.error);
-    return NextResponse.json({ error: "한국어 음성 인식 요청에 실패했습니다." }, { status: result.status });
+  const data = (await response.json()) as { access_token?: string };
+  if (!data.access_token) {
+    return NextResponse.json({ error: "음성 인식 토큰이 비어 있습니다." }, { status: 502 });
   }
 
   return NextResponse.json(
-    { text: result.text, latencyMs: Date.now() - startedAt, language: result.language },
+    {
+      accessToken: data.access_token,
+      listenUrl: listenUrl({
+        language: body.language === "en" ? "en" : "ko",
+        keyterms: parseGlossary(body.keyterms),
+        sessionId: "lab",
+        pcm: true,
+      }),
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

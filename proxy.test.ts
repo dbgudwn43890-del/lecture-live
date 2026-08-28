@@ -25,9 +25,9 @@ test("an explicit language choice outranks the IP guess", async () => {
 
 test("keeps only approved post-auth destinations", () => {
   assert.equal(getSafeAuthNext("/billing?plan=monthly"), "/billing?plan=monthly");
-  assert.equal(getSafeAuthNext("/classrooms"), "/classrooms");
+  assert.equal(getSafeAuthNext("/classrooms"), "/classroom");
   assert.equal(getSafeAuthNext("/en/billing?plan=semester", "/en/classroom"), "/en/billing?plan=semester");
-  assert.equal(getSafeAuthNext("/en/classrooms", "/en/classroom"), "/en/classrooms");
+  assert.equal(getSafeAuthNext("/en/classrooms", "/en/classroom"), "/en/classroom");
   assert.equal(getSafeAuthNext("https://attacker.example", "/classroom"), "/classroom");
   assert.equal(getSafeAuthNext("//attacker.example", "/classroom"), "/classroom");
 });
