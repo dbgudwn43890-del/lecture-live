@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   KEYTERM_CHARACTER_BUDGET,
   MAX_KEYTERMS,
+  deepgramLanguage,
   keytermBudget,
   listenUrl,
   utteranceOverflowed,
@@ -88,6 +89,14 @@ test("builds a listen url with repeated keyterm and no encoding", () => {
   assert.ok(url.includes("model=nova-3"));
   assert.ok(url.includes("language=ko"));
   assert.ok(url.includes("tag=session-abc"));
+});
+
+test("accepts multilingual recognition and rejects unknown language values", () => {
+  assert.equal(deepgramLanguage("multi", "ko"), "multi");
+  assert.equal(deepgramLanguage("fr", "ko"), "ko");
+  const url = listenUrl({ language: "multi", keyterms: ["Lecue"], sessionId: "multi" });
+  assert.ok(url.includes("language=multi"));
+  assert.ok(url.includes("endpointing=100"));
 });
 
 test("describes raw PCM explicitly for the browser worklet", () => {

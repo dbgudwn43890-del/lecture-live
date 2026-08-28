@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
-import { listenUrl } from "../../lib/deepgram";
+import { deepgramLanguage, listenUrl } from "../../lib/deepgram";
 import { mergeKeyterms, parseGlossary } from "../../lib/glossary";
 import { createClient } from "../../lib/supabase/server";
 
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 });
   }
 
-  let body: { sessionId?: unknown };
+  let body: { sessionId?: unknown; language?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
@@ -116,7 +116,11 @@ export async function POST(request: Request) {
     {
       accessToken: data.access_token,
       credits: Number(credit.remaining_credits),
-      listenUrl: listenUrl({ language: isEnglish ? "en" : "ko", keyterms, sessionId: body.sessionId }),
+      listenUrl: listenUrl({
+        language: deepgramLanguage(body.language, isEnglish ? "en" : "ko"),
+        keyterms,
+        sessionId: body.sessionId,
+      }),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

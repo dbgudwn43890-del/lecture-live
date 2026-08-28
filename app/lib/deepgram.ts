@@ -5,8 +5,10 @@ export type DeepgramFinal = {
   channel?: { alternatives?: Array<{ transcript?: string; words?: DeepgramWord[] }> };
 };
 
+export type DeepgramLanguage = "ko" | "en" | "multi";
+
 export type ListenOptions = {
-  language: "ko" | "en";
+  language: DeepgramLanguage;
   keyterms: string[];
   sessionId: string;
   /** 컨테이너 없는 16kHz PCM을 보낼 때만. /stt-lab이 워클릿 출력을 그대로 흘린다. */
@@ -32,6 +34,10 @@ export const MAX_UTTERANCE_CHARACTERS = 600;
  */
 export const MAX_KEYTERMS = 50;
 export const KEYTERM_CHARACTER_BUDGET = 400;
+
+export function deepgramLanguage(value: unknown, fallback: "ko" | "en"): DeepgramLanguage {
+  return value === "ko" || value === "en" || value === "multi" ? value : fallback;
+}
 
 export function keytermBudget(terms: string[]): string[] {
   const kept: string[] = [];
@@ -62,7 +68,9 @@ export function listenUrl({ language, keyterms, sessionId, pcm = false }: Listen
     interim_results: "true",
     // 조각을 빨리 받아 버퍼에 넣기 위해 낮춘다. 문장 경계는 endpointing이 아니라
     // speech_final과 UtteranceEnd가 정한다.
-    endpointing: "300",
+    // Deepgram recommends 100ms for Nova-3 code-switching. The monolingual
+    // paths keep the less eager boundary that already works well for lectures.
+    endpointing: language === "multi" ? "100" : "300",
     utterance_end_ms: "1000",
     mip_opt_out: "true",
     // Deepgram 집계 분과 lecture_credit_usage를 대조하기 위한 꼬리표. 세그먼트를

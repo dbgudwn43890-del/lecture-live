@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
-import { listenUrl } from "../../lib/deepgram";
+import { deepgramLanguage, listenUrl } from "../../lib/deepgram";
 import { parseGlossary } from "../../lib/glossary";
 import { canUseSttLab } from "../../lib/lab-access";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     {
       accessToken: data.access_token,
       listenUrl: listenUrl({
-        language: body.language === "en" ? "en" : "ko",
+        language: deepgramLanguage(body.language, "ko"),
         keyterms: parseGlossary(body.keyterms),
         sessionId: "lab",
         pcm: true,

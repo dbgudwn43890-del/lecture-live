@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
-import type { DeepgramFinal } from "../lib/deepgram";
+import type { DeepgramFinal, DeepgramLanguage } from "../lib/deepgram";
 import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
@@ -106,6 +106,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [lectureTitle, setLectureTitle] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
+  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>(isEnglish ? "en" : "ko");
   const [personalApiKey, setPersonalApiKey] = useState("");
   const [savedCredentials, setSavedCredentials] = useState<SavedCredential[]>([]);
   const [credentialPending, setCredentialPending] = useState(false);
@@ -173,6 +174,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   // while. Without this the next 30s tick drags the panel back to whatever the
   // lecturer is saying, mid-read.
   const slidePinnedUntilRef = useRef(0);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("lecue-speech-language");
+    if (saved === "ko" || saved === "en" || saved === "multi") setSpeechLanguage(saved);
+  }, []);
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -844,7 +850,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     const tokenResponse = await fetch("/api/deepgram-token", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-      body: JSON.stringify({ sessionId: activeSessionIdRef.current }),
+      body: JSON.stringify({ sessionId: activeSessionIdRef.current, language: speechLanguage }),
     });
     const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; error?: string };
     if (!tokenResponse.ok || !tokenData.accessToken || !tokenData.listenUrl) {
@@ -1446,6 +1452,38 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 <span>{isEnglish ? "Language" : "언어"}</span>
                 <strong>{isEnglish ? "한국어로 보기" : "View in English"}</strong>
               </a>
+
+              <section className="profile-model-settings" aria-labelledby="profile-speech-title">
+                <div className="profile-model-heading">
+                  <h3 id="profile-speech-title">{isEnglish ? "Speech recognition" : "음성 인식 언어"}</h3>
+                  <span>{speechLanguage === "multi" ? (isEnglish ? "Auto multilingual" : "다국어 자동") : speechLanguage === "en" ? "English" : "한국어"}</span>
+                </div>
+                <fieldset className="settings-choice">
+                  <legend>{isEnglish ? "Lecture language" : "강의 언어"}</legend>
+                  <div className="settings-choice-list">
+                    {([
+                      { id: "ko", label: "한국어" },
+                      { id: "en", label: "English" },
+                      { id: "multi", label: isEnglish ? "Auto multilingual" : "다국어 자동" },
+                    ] as Array<{ id: DeepgramLanguage; label: string }>).map((option) => (
+                      <button
+                        type="button"
+                        key={option.id}
+                        className={speechLanguage === option.id ? "active" : undefined}
+                        aria-pressed={speechLanguage === option.id}
+                        disabled={status === "recording" || status === "connecting"}
+                        onClick={() => {
+                          setSpeechLanguage(option.id);
+                          window.localStorage.setItem("lecue-speech-language", option.id);
+                        }}
+                      >{option.label}</button>
+                    ))}
+                  </div>
+                </fieldset>
+                <p>{isEnglish
+                  ? "Auto multilingual handles supported mixed-language speech. Choose Korean for Korean lectures."
+                  : "다국어 자동은 지원 언어가 섞인 강의용입니다. 한국어 강의는 한국어를 선택하세요."}</p>
+              </section>
 
               <section className="profile-model-settings" aria-labelledby="profile-model-title">
                 <div className="profile-model-heading">
