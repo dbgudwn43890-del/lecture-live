@@ -7,6 +7,7 @@ import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { downsampleAudio, encodeWav } from "../lib/audio";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import { parseGlossary } from "../lib/glossary";
+import { utteranceSegment } from "../lib/deepgram";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
@@ -154,8 +155,10 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
   const segmentsRef = useRef<Segment[]>([]);
   const activeSessionIdRef = useRef("");
   const finishingRef = useRef(false);
-  const chargedMinuteRef = useRef(-1);
-  const creditChargePendingRef = useRef(false);
+  const saveFailuresRef = useRef(0);
+  // Deepgram's stream clock restarts at 0 on every socket, so a reconnect would
+  // collide with earlier segments without this.
+  const streamOffsetMsRef = useRef(0);
   const initialRouteRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -185,18 +188,8 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
       // string — 43,200 times over a three-hour lecture.
       setElapsedMs((current) =>
         Math.floor(current / 1_000) === Math.floor(elapsed / 1_000) ? current : elapsed);
-      const minuteIndex = Math.min(179, Math.floor(elapsed / 60_000));
-      if (activeSessionIdRef.current && minuteIndex > chargedMinuteRef.current && !creditChargePendingRef.current) {
-        // Deepgram only charges minute 0 server-side, so its lectures still
-        // need this ticker. Whisper meters every chunk in /api/lecture-audio
-        // from the DB clock; running both there would have two meters racing
-        // on each boundary, one of them on the client's clock.
-        if (sttProvider === "deepgram") void consumeCreditsThrough(activeSessionIdRef.current, minuteIndex);
-        else {
-          chargedMinuteRef.current = minuteIndex;
-          void loadCredits();
-        }
-      }
+      // Metering moved to the segment save, where the server decides the minute
+      // from the session's own started_at. This ticker only shows the clock.
       if (elapsed >= MAX_LECTURE_MS) void finishLecture();
     }, 250);
     return () => window.clearInterval(timer);
@@ -510,28 +503,39 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     }
   }
 
-  async function consumeCreditsThrough(sessionId: string, minuteIndex: number) {
-    if (creditChargePendingRef.current || minuteIndex <= chargedMinuteRef.current) return;
-    creditChargePendingRef.current = true;
+  /**
+   * 세그먼트 저장이 곧 과금 지점이다. 브라우저가 Deepgram 소켓을 직접 들고 있어
+   * 서버가 오디오를 못 보므로, 서버가 관측하는 유일한 사건인 이 저장에서
+   * 경과 시간 기준으로 크레딧을 차감한다. 그래서 402와 409는 저장 실패가 아니라
+   * 강의 종료 사유다.
+   */
+  async function saveSegment(segment: Segment) {
     try {
-      const response = await fetch("/api/credits", {
+      const response = await fetch("/api/lecture-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ sessionId, minuteIndex }),
+        body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
       });
-      const data = await response.json() as { credits?: number; chargedThrough?: number; error?: string };
-      if (!response.ok) throw new Error(data.error);
-      chargedMinuteRef.current = data.chargedThrough ?? minuteIndex;
-      setCreditStatus((current) => current ? { ...current, credits: data.credits ?? current.credits } : current);
-    } catch (caught) {
-      const creditError = caught instanceof Error && caught.message
-        ? caught.message
-        : isEnglish ? "Recording stopped because credits could not be verified." : "크레딧을 확인하지 못해 강의를 종료합니다.";
-      await finishLecture();
-      setError(creditError);
-      await loadCredits();
-    } finally {
-      creditChargePendingRef.current = false;
+      if (response.ok) {
+        confirmedSegmentIdsRef.current.add(segment.id);
+        saveFailuresRef.current = 0;
+        return;
+      }
+      const data = await response.json().catch(() => ({})) as { error?: string; credits?: number };
+      if (response.status === 402 || response.status === 409) {
+        await finishLecture();
+        setError(data.error ?? (isEnglish ? "Recording stopped because credits could not be verified." : "크레딧을 확인하지 못해 강의를 종료합니다."));
+        await loadCredits();
+        return;
+      }
+      throw new Error(data.error ?? "save failed");
+    } catch {
+      saveFailuresRef.current += 1;
+      // One dropped save is a blip; three in a row means the transcript is no
+      // longer being kept and the learner needs to know before the lecture ends.
+      if (saveFailuresRef.current >= 3) {
+        setError(isEnglish ? "Transcription stopped. Check the connection." : "받아쓰기가 멈췄습니다. 연결을 확인해 주세요.");
+      }
     }
   }
 
@@ -640,7 +644,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     setMessages([]);
     setInterim("");
     setElapsedMs(0);
-    chargedMinuteRef.current = -1;
+    saveFailuresRef.current = 0;
     setStatus("idle");
   }
 
@@ -831,7 +835,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     setError("");
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
-    chargedMinuteRef.current = -1;
+    saveFailuresRef.current = 0;
     setActiveSessionId("");
     setStatus("connecting");
 
@@ -916,7 +920,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
     setError("");
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
-    chargedMinuteRef.current = -1;
+    saveFailuresRef.current = 0;
     setActiveSessionId("");
     setStatus("connecting");
 
@@ -962,7 +966,7 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
           ? "Could not obtain a speech-recognition token."
           : "음성 인식 토큰을 받지 못했습니다."));
       }
-      chargedMinuteRef.current = 0;
+      streamOffsetMsRef.current = 0;
       setCreditStatus((current) => current && typeof tokenData.credits === "number"
         ? { ...current, credits: tokenData.credits }
         : current);
@@ -1015,24 +1019,18 @@ export default function LectureWorkspace({ locale = "ko", initial, sttProvider =
         if (!text) return;
 
         if (result.is_final) {
-          const startMs = Math.round((result.start ?? 0) * 1_000);
-          const endMs = Math.round(((result.start ?? 0) + (result.duration ?? 0)) * 1_000);
-          const id = `${startMs}-${endMs}-${text}`;
-          if (!segmentIdsRef.current.has(id)) {
-            segmentIdsRef.current.add(id);
-            const segment = { id, startMs, endMs, text };
+          // The id used to carry the whole transcript, which pushed long
+          // utterances past the server's 2200-character client_id limit and
+          // had them silently rejected. utteranceSegment owns that cap.
+          const segment = utteranceSegment([result], streamOffsetMsRef.current);
+          if (segment && !segmentIdsRef.current.has(segment.id)) {
+            segmentIdsRef.current.add(segment.id);
             setSegments((current) => {
               const next = [...current, segment];
               segmentsRef.current = next;
               return next;
             });
-            void fetch("/api/lecture-sessions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-              body: JSON.stringify({ action: "segment", sessionId: activeSessionIdRef.current, segment }),
-            }).then((response) => {
-              if (response.ok) confirmedSegmentIdsRef.current.add(id);
-            });
+            void saveSegment(segment);
           }
           setInterim("");
         } else {

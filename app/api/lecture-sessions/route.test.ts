@@ -352,3 +352,48 @@ test("a lecture whose transcript is already in the database still reconciles its
   const stored = (update?.payload as { duration_seconds: number }).duration_seconds;
   assert.ok(stored >= 5_430 && stored < 5_440, `duration_seconds ${stored} should track the elapsed 90m30s`);
 });
+
+test("segment save charges the lecture before writing, and refuses to write when credits run out", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = { data: { classroom_id: null }, error: null };
+  outcomes["rpc:consume_lecture_credits_elapsed.rpc"] = { data: [{ allowed: false, remaining_credits: 0 }], error: null };
+
+  const response = await POST(request("https://lecue.app/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "segment",
+      sessionId,
+      segment: { id: "seg-1", startMs: 0, endMs: 2_000, text: "크레딧이 없을 때의 발화" },
+    }),
+  }));
+
+  assert.ok(response);
+  assert.equal(response.status, 402);
+  // The whole point: a client that keeps a Deepgram socket open past its
+  // credits must not keep getting its transcript saved.
+  assert.equal(calls.filter((call) => call.table === "transcript_segments" && call.op === "upsert").length, 0);
+  assert.equal(calls.filter((call) => call.table === "rpc:consume_lecture_credits_elapsed").length, 1);
+});
+
+test("segment save meters from the session id alone, never from anything the client sent", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = { data: { classroom_id: null }, error: null };
+  outcomes["rpc:consume_lecture_credits_elapsed.rpc"] = { data: [{ allowed: true, remaining_credits: 40 }], error: null };
+  outcomes["transcript_segments.upsert"] = { data: null, error: null };
+
+  const response = await POST(request("https://lecue.app/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      action: "segment",
+      sessionId,
+      minuteIndex: 0,
+      segment: { id: "seg-1", startMs: 0, endMs: 2_000, text: "정상 발화" },
+    }),
+  }));
+
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  const rpc = calls.find((call) => call.table === "rpc:consume_lecture_credits_elapsed");
+  assert.deepEqual(rpc?.payload, { p_session_id: sessionId });
+  assert.equal(calls.filter((call) => call.table === "transcript_segments" && call.op === "upsert").length, 1);
+});

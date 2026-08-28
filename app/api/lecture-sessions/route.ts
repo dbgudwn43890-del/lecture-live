@@ -356,8 +356,27 @@ export async function POST(request: Request) {
 
   if (body.action === "segment" && validId(body.sessionId) && validSegment(body.segment)) {
     const segment = body.segment;
-    const { data: session } = await current.supabase.from("lecture_sessions").select("classroom_id").eq("id", body.sessionId).maybeSingle();
+    // The browser holds the Deepgram socket directly, so this save is the only
+    // event the server sees on a live lecture — which makes it the only place
+    // the meter can run. The minute index comes from the session's own
+    // started_at, so the client cannot supply it, and consumption is idempotent
+    // per minute, so several utterances inside one minute bill it once.
+    const [{ data: creditData, error: creditError }, { data: session }] = await Promise.all([
+      current.supabase.rpc("consume_lecture_credits_elapsed", { p_session_id: body.sessionId }),
+      current.supabase.from("lecture_sessions").select("classroom_id").eq("id", body.sessionId).maybeSingle(),
+    ]);
     if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
+    if (creditError) {
+      console.error("Credit consumption failed", creditError.code);
+      return NextResponse.json({ error: current.isEnglish ? "Could not use credits for this lecture." : "이 수업의 크레딧을 차감하지 못했습니다." }, { status: 409 });
+    }
+    const credit = Array.isArray(creditData) ? creditData[0] : creditData;
+    if (!credit?.allowed) {
+      return NextResponse.json({
+        error: current.isEnglish ? "You are out of credits. Choose a plan to continue." : "남은 크레딧이 없습니다. 요금제를 선택해 주세요.",
+        credits: Number(credit?.remaining_credits ?? 0),
+      }, { status: 402 });
+    }
     const { error } = await current.supabase.from("transcript_segments").upsert({
       session_id: body.sessionId,
       classroom_id: session.classroom_id,
