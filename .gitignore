@@ -7,3 +7,6 @@ out/
 *.tsbuildinfo
 .DS_Store
 .vercel
+
+# graphify 지식 그래프 산출물 — 캐시와 그래프는 로컬에서 다시 만든다.
+graphify-out/
