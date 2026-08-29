@@ -1,11 +1,12 @@
 .page {
-  --legal-paper: #f1f3f2;
-  --legal-surface: #fbfcfb;
-  --legal-ink: #171b1d;
-  --legal-muted: #667176;
-  --legal-line: #c5cdcf;
-  --legal-signal: #e64f38;
-  --legal-focus: #145e72;
+  /* Aliases, not a fourth palette — the values live in globals.css :root. */
+  --legal-paper: var(--paper);
+  --legal-surface: var(--surface);
+  --legal-ink: var(--ink);
+  --legal-muted: var(--muted);
+  --legal-line: var(--line);
+  --legal-signal: var(--signal);
+  --legal-focus: var(--focus);
   min-height: 100dvh;
   color: var(--legal-ink);
   background: var(--legal-paper);

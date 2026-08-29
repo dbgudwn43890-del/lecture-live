@@ -1,14 +1,25 @@
+/* One palette for the whole product. The landing page defined its own warm
+   paper set and the app a cooler grey-green one, so the same brand read as two
+   sites; landing.module.css now inherits these. */
 :root {
-  --paper: #f5f7f6;
-  --surface: #fbfcfb;
-  --ink: #171b1d;
-  --muted: #667176;
-  --line: #ccd3d4;
-  --line-strong: #9ca9ad;
-  --signal: #e64f38;
+  --paper: #f4f1eb;
+  --surface: #fffdf8;
+  --ink: #111111;
+  --muted: #625f59;
+  --line: rgba(17, 17, 17, .18);
+  --line-strong: rgba(17, 17, 17, .42);
+  --signal: #ed5a14;
   --signal-dark: #ba3523;
+  --status: #235c34;
+  --blue: #1e5fce;
   --focus: #145e72;
   --soft-blue: #dce8eb;
+  /* Two radii, not nine: quiet chrome and the hard-edged Variant surfaces. */
+  --radius: 8px;
+  --radius-hard: 2px;
+  --pop-shadow: 6px 6px 0 rgba(17, 17, 17, .12);
+  --brutal-border: 2px solid var(--ink);
+  --brutal-shadow: 5px 5px 0 var(--line-strong);
   color-scheme: light;
 }
 
@@ -80,7 +91,7 @@ a, button, summary, input, textarea, select {
   color: white;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 750;
 }
@@ -157,9 +168,9 @@ a, button, summary, input, textarea, select {
   min-height: 38px;
   padding: 7px 9px;
   color: var(--muted);
-  background: #f5f7f6;
+  background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 10px;
   font-weight: 750;
   text-align: left;
@@ -181,7 +192,7 @@ a, button, summary, input, textarea, select {
   color: var(--ink);
   background: white;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: var(--radius);
   font-size: 10px;
   font-weight: 800;
 }
@@ -197,7 +208,7 @@ a, button, summary, input, textarea, select {
   min-width: 104px;
   padding: 10px 16px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 13px;
   font-weight: 750;
   /* The brutalist hover/active offsets below move these 2px and 4px; without
@@ -293,7 +304,7 @@ a, button, summary, input, textarea, select {
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: 3px 4px 0 #c4cecf;
   overflow: hidden;
 }
@@ -380,7 +391,7 @@ a, button, summary, input, textarea, select {
   padding: 15px 16px;
   background: #e5e9e9;
   border: 1px solid #d4dada;
-  border-radius: 15px 15px 15px 5px;
+  border-radius: var(--radius);
   font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -390,7 +401,7 @@ a, button, summary, input, textarea, select {
   background: var(--ink);
   color: white;
   border-color: var(--ink);
-  border-radius: 15px 15px 5px 15px;
+  border-radius: var(--radius);
 }
 
 .message .pending { color: var(--muted); }
@@ -426,7 +437,7 @@ a, button, summary, input, textarea, select {
   color: var(--ink);
   background: #f1ead7;
   border: 1px solid #d9cdaa;
-  border-radius: 7px;
+  border-radius: var(--radius);
 }
 
 .question-form {
@@ -470,14 +481,14 @@ a, button, summary, input, textarea, select {
   color: var(--ink);
   background: white;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   line-height: 1.45;
 }
 
 .question-form button {
   width: 70px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--focus);
   color: white;
   font-weight: 750;
@@ -541,7 +552,7 @@ a, button, summary, input, textarea, select {
   color: var(--focus);
   background: var(--soft-blue);
   border: 1px solid #b9cfd5;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 11px;
   font-weight: 750;
 }
@@ -557,7 +568,7 @@ a, button, summary, input, textarea, select {
   color: var(--focus);
   background: rgb(248 247 242 / 94%);
   border: 2px dashed var(--focus);
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 15px;
   font-weight: 750;
   pointer-events: none;
@@ -581,7 +592,7 @@ a, button, summary, input, textarea, select {
   color: #494640;
   background: white;
   border: 1px solid #d9d6cf;
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 10px;
   font-weight: 650;
   cursor: pointer;
@@ -603,8 +614,8 @@ a, button, summary, input, textarea, select {
   padding: 8px;
   background: white;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(35 32 27 / 10%);
+  border-radius: var(--radius);
+  box-shadow: var(--pop-shadow);
   list-style: none;
 }
 .material-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 6px; }
@@ -649,7 +660,7 @@ a, button, summary, input, textarea, select {
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 11px;
 }
 .slide-bar button:hover:not(:disabled) { background: var(--soft-blue); }
@@ -664,7 +675,7 @@ a, button, summary, input, textarea, select {
   height: 100%;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 .slide-frame p {
   display: flex;
@@ -677,7 +688,7 @@ a, button, summary, input, textarea, select {
   text-align: center;
   background: var(--paper);
   border: 1px dashed var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 12px;
 }
 
@@ -699,7 +710,7 @@ a, button, summary, input, textarea, select {
   height: min(880px, 92vh);
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .slide-overlay-inner iframe {
@@ -784,7 +795,7 @@ a, button, summary, input, textarea, select {
   padding: 9px 14px;
   color: white !important;
   background: var(--ink);
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-weight: 800;
 }
 
@@ -802,8 +813,8 @@ a, button, summary, input, textarea, select {
   padding: 40px 38px 30px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: 16px;
-  box-shadow: 0 14px 38px rgba(23, 27, 29, .09);
+  border-radius: var(--radius);
+  box-shadow: var(--pop-shadow);
 }
 
 .auth-heading { margin-bottom: 26px; text-align: center; }
@@ -842,7 +853,7 @@ a, button, summary, input, textarea, select {
   color: #1f1f1f;
   background: white;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 700;
   transition: background-color 150ms ease, border-color 150ms ease;
@@ -891,7 +902,7 @@ a, button, summary, input, textarea, select {
   color: var(--ink);
   background: white;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
@@ -916,7 +927,7 @@ a, button, summary, input, textarea, select {
   color: white;
   background: var(--focus);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 800;
   transition: background-color 140ms ease;
@@ -1027,7 +1038,7 @@ a, button, summary, input, textarea, select {
   color: white;
   background: var(--focus);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-weight: 800;
 }
 
@@ -1120,8 +1131,8 @@ a, button, summary, input, textarea, select {
 
 .classroom-create label { font-size: 11px; font-weight: 850; }
 .classroom-create > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
-.classroom-create input { min-width: 0; min-height: 46px; padding: 10px 12px; color: var(--ink); background: white; border: 1px solid var(--line-strong); border-radius: 7px; }
-.classroom-create button { padding: 0 16px; color: white; background: var(--focus); border: 0; border-radius: 7px; font-size: 11px; font-weight: 850; }
+.classroom-create input { min-width: 0; min-height: 46px; padding: 10px 12px; color: var(--ink); background: white; border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.classroom-create button { padding: 0 16px; color: white; background: var(--focus); border: 0; border-radius: var(--radius); font-size: 11px; font-weight: 850; }
 
 .classrooms-error {
   width: min(1180px, calc(100% - 36px));
@@ -1157,7 +1168,7 @@ a, button, summary, input, textarea, select {
   background: var(--focus);
 }
 
-.classroom-unit-unassigned::before { background: #9ca9ad; }
+.classroom-unit-unassigned::before { background: var(--line-strong); }
 
 .classroom-unit > header {
   min-height: 92px;
@@ -1187,7 +1198,7 @@ a, button, summary, input, textarea, select {
   color: var(--ink);
   background: white;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 10px;
   font-weight: 800;
   text-decoration: none;
@@ -1208,8 +1219,8 @@ a, button, summary, input, textarea, select {
 }
 
 .classroom-rename label { color: var(--muted); font-size: 10px; font-weight: 800; }
-.classroom-rename input { min-height: 38px; padding: 7px 10px; color: var(--ink); background: white; border: 1px solid var(--line-strong); border-radius: 6px; }
-.classroom-rename button { min-height: 38px; padding: 0 13px; color: white; background: var(--focus); border: 0; border-radius: 6px; font-size: 10px; font-weight: 850; }
+.classroom-rename input { min-height: 38px; padding: 7px 10px; color: var(--ink); background: white; border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.classroom-rename button { min-height: 38px; padding: 0 13px; color: white; background: var(--focus); border: 0; border-radius: var(--radius); font-size: 10px; font-weight: 850; }
 
 /* The glossary reuses the rename row's shell but needs a text area and a
    caption line, so it takes the same grid over two rows. */
@@ -1221,7 +1232,7 @@ a, button, summary, input, textarea, select {
   color: var(--ink);
   background: white;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 12px;
   line-height: 1.6;
   resize: vertical;
@@ -1241,7 +1252,7 @@ a, button, summary, input, textarea, select {
   padding: 8px 10px;
   background: white;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 12px;
 }
 .classroom-materials li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1252,7 +1263,7 @@ a, button, summary, input, textarea, select {
   color: var(--muted);
   background: none;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 10px;
   font-weight: 800;
 }
@@ -1406,7 +1417,7 @@ a, button, summary, input, textarea, select {
   .login-nav > span { display: none; }
   .login-home-link { padding: 7px 10px; }
   .login-stage { padding: 24px 12px 36px; }
-  .login-panel { padding: 30px 22px 26px; border-radius: 14px; }
+  .login-panel { padding: 30px 22px 26px; border-radius: var(--radius); }
   .auth-heading h1 { font-size: 26px; }
   .classrooms-topbar { align-items: flex-start; flex-direction: column; gap: 12px; padding-top: 16px; padding-bottom: 16px; }
   .classrooms-topbar nav { width: 100%; justify-content: space-between; gap: 10px; }
@@ -1440,11 +1451,6 @@ a, button, summary, input, textarea, select {
 }
 
 /* Lecue brutalism: retain the brand palette, expose the product structure. */
-:root {
-  --brutal-border: 2px solid var(--ink);
-  --brutal-shadow: 5px 5px 0 var(--line-strong);
-}
-
 .lecture-title-field input,
 .settings-choice-list button,
 .credential-actions button,
@@ -1466,7 +1472,7 @@ a, button, summary, input, textarea, select {
 .classroom-rename input,
 .classroom-rename button,
 .classrooms-first-run a {
-  border-radius: 2px;
+  border-radius: var(--radius-hard);
 }
 
 .classroom-create {
@@ -1601,7 +1607,7 @@ button:active,
   color: #383631;
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 13px;
   font-weight: 650;
   text-align: left;
@@ -1647,7 +1653,7 @@ button:active,
   color: #403e39;
   background: transparent;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 12px;
   font-weight: 700;
   text-align: left;
@@ -1674,14 +1680,14 @@ button:active,
   padding: 12px;
   background: white;
   border: 1px solid #d8d4cb;
-  border-radius: 8px;
-  box-shadow: 0 10px 28px rgb(35 32 27 / 12%);
+  border-radius: var(--radius);
+  box-shadow: var(--pop-shadow);
 }
 .classroom-menu label { display: grid; gap: 5px; color: #77736c; font-size: 9px; }
 .classroom-menu input,
-.classroom-menu textarea { width: 100%; padding: 8px; color: var(--ink); background: #fbfaf7; border: 1px solid #dedbd3; border-radius: 6px; font: inherit; }
+.classroom-menu textarea { width: 100%; padding: 8px; color: var(--ink); background: #fbfaf7; border: 1px solid #dedbd3; border-radius: var(--radius); font: inherit; }
 .classroom-menu textarea { resize: vertical; }
-.classroom-menu form > button { padding: 7px 9px; color: white; background: var(--focus); border: 0; border-radius: 6px; font-size: 10px; font-weight: 650; }
+.classroom-menu form > button { padding: 7px 9px; color: white; background: var(--focus); border: 0; border-radius: var(--radius); font-size: 10px; font-weight: 650; }
 
 .sidebar-sessions {
   display: grid;
@@ -1700,7 +1706,7 @@ button:active,
   color: #77736c;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 11px;
   line-height: 1.35;
   text-align: left;
@@ -1729,7 +1735,7 @@ button:active,
   color: #302e2a;
   background: #faf9f6;
   border: 1px solid #d5d2ca;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 11px;
 }
 
@@ -1737,7 +1743,7 @@ button:active,
   color: white;
   background: var(--focus);
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 17px;
 }
 
@@ -1763,7 +1769,7 @@ button:active,
   align-items: center;
   gap: 9px;
   padding: 8px;
-  border-radius: 9px;
+  border-radius: var(--radius);
 }
 
 .sidebar-profile:hover { background: #e7e5de; }
@@ -1819,7 +1825,7 @@ button:active,
   min-height: 28px;
   padding: 0 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 12px;
   font-weight: 650;
   box-shadow: none;
@@ -1860,8 +1866,8 @@ button:active,
   color: #34322e;
   background: #fff;
   border: 1px solid #d8d4cc;
-  border-radius: 12px;
-  box-shadow: 0 18px 46px rgba(45, 42, 36, .16);
+  border-radius: var(--radius);
+  box-shadow: var(--pop-shadow);
 }
 
 .profile-menu-panel > header {
@@ -1886,7 +1892,7 @@ button:active,
   padding: 14px 0 10px;
 }
 
-.profile-plan > span { display: grid; gap: 4px; padding: 11px; background: #f6f5f1; border-radius: 8px; }
+.profile-plan > span { display: grid; gap: 4px; padding: 11px; background: #f6f5f1; border-radius: var(--radius); }
 .profile-plan small { color: #827d75; font-size: 9px; }
 .profile-plan strong { font-size: 12px; }
 
@@ -1922,7 +1928,7 @@ button:active,
 .profile-model-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .profile-model-heading h3 { margin: 0; font-size: 12px; }
 .profile-model-heading > span { color: var(--focus); font-size: 9px; font-weight: 750; }
-.profile-model-settings .settings-choice-list button { border-radius: 7px; }
+.profile-model-settings .settings-choice-list button { border-radius: var(--radius); }
 .profile-model-settings p { margin: 0; color: #807b73; font-size: 9px; line-height: 1.5; }
 
 .profile-api-key { display: grid; gap: 6px; }
@@ -1934,11 +1940,11 @@ button:active,
   color: var(--ink);
   background: #fff;
   border: 1px solid #d8d4cc;
-  border-radius: 7px;
+  border-radius: var(--radius);
 }
 
 .profile-signout { margin: 0; padding-top: 12px; border-top: 1px solid #ece9e3; }
-.profile-signout button { width: 100%; min-height: 34px; color: #6f6a63; background: transparent; border: 0; border-radius: 7px; font-size: 10px; font-weight: 700; text-align: left; }
+.profile-signout button { width: 100%; min-height: 34px; color: #6f6a63; background: transparent; border: 0; border-radius: var(--radius); font-size: 10px; font-weight: 700; text-align: left; }
 .profile-signout button:hover { color: #302e2a; background: #f1f0eb; }
 
 .workspace .panes { gap: 12px; padding: 14px 18px 16px; background: #f8f7f4; }
@@ -1947,7 +1953,7 @@ button:active,
 .workspace .transcript-pane {
   background: #fff;
   border: 1px solid #e0ddd6;
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: none;
 }
 
@@ -1955,11 +1961,11 @@ button:active,
 .workspace .pane-heading h1,
 .workspace .pane-heading h2 { font-size: clamp(18px, 1.65vw, 22px); font-weight: 760; letter-spacing: -.035em; }
 .workspace .messages { padding: 20px; }
-.workspace .message p { border-width: 1px; border-radius: 12px 12px 12px 4px; }
-.workspace .message-user p { border-radius: 12px 12px 4px 12px; }
+.workspace .message p { border-width: 1px; border-radius: var(--radius) 12px 12px 4px; }
+.workspace .message-user p { border-radius: var(--radius) 12px 4px 12px; }
 .workspace .question-form { border-color: #e6e3dc; background: #fff; }
 .workspace .question-form textarea,
-.workspace .question-form button { border-radius: 9px; }
+.workspace .question-form button { border-radius: var(--radius); }
 .workspace .question-form textarea { border-width: 1px; border-color: #d8d4cc; }
 .workspace .question-form button { background: var(--focus); }
 .workspace .transcript { padding: 20px 24px 42px; }
@@ -1971,7 +1977,7 @@ button:active,
   padding: 4px 8px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius);
   font-size: 15px;
   font-weight: 700;
 }
@@ -1990,7 +1996,7 @@ button:active,
   width: 20px;
   padding: 3px 0;
   color: #a29d94;
-  border-radius: 5px;
+  border-radius: var(--radius);
   font-size: 12px;
   line-height: 1;
   text-align: center;
@@ -2018,8 +2024,8 @@ button:active,
   overflow-y: auto;
   background: #fff;
   border: 1px solid #dedbd3;
-  border-radius: 9px;
-  box-shadow: 0 6px 18px rgba(38, 37, 33, .12);
+  border-radius: var(--radius);
+  box-shadow: var(--pop-shadow);
 }
 
 .session-menu-panel p {
@@ -2036,7 +2042,7 @@ button:active,
   width: 100%;
   padding: 6px 7px;
   color: #403e39;
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 11px;
 }
 
@@ -2049,11 +2055,11 @@ button:active,
   color: #302e2a;
   background: #fff;
   border: 1px solid #c9c4ba;
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 11px;
 }
 
-.sidebar-classroom-group.drop-target { background: #e4ece9; border-radius: 8px; outline: 1px dashed #8fa8a2; }
+.sidebar-classroom-group.drop-target { background: #e4ece9; border-radius: var(--radius); outline: 1px dashed #8fa8a2; }
 
 /* ---------------------------------------------------------------------------
    Quiet pass. The workspace had inherited two identities at once: the loud
@@ -2083,7 +2089,7 @@ button:active,
 }
 
 .workspace .chat-pane,
-.workspace .transcript-pane { border-color: #ece9e3; border-radius: 14px; }
+.workspace .transcript-pane { border-color: #ece9e3; border-radius: var(--radius); }
 
 .workspace .pane-heading {
   min-height: 0;
@@ -2257,7 +2263,7 @@ button:active,
   color: white;
   background: var(--ink);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 13px;
   font-weight: 750;
   font-family: inherit;

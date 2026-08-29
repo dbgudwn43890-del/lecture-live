@@ -1,13 +1,5 @@
+/* Palette lives in globals.css :root — this page used to fork it. */
 .page {
-  --paper: #f4f1eb;
-  --surface: #fffdf8;
-  --ink: #111111;
-  --muted: #625f59;
-  --line: rgba(17, 17, 17, .18);
-  --line-strong: rgba(17, 17, 17, .42);
-  --signal: #ed5a14;
-  --status: #235c34;
-  --blue: #1e5fce;
   min-height: 100dvh;
   overflow-x: clip;
   color: var(--ink);
