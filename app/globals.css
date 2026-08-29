@@ -233,6 +233,26 @@ a, button, summary, input, textarea, select {
   font-size: 13px;
 }
 
+.exam-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.exam-gate p { margin: 0; max-width: 62ch; }
+.exam-gate span { display: flex; align-items: center; gap: 12px; }
+.exam-gate button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--focus);
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+}
+
 .notice-banner:empty {
   padding: 0;
   border: 0;

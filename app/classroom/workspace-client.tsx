@@ -58,6 +58,7 @@ type DeepgramResult = DeepgramFinal & {
 
 /** 끊긴 소켓을 다시 여는 간격. 마지막 값은 포기하지 않고 계속 되풀이한다. */
 const RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 30_000];
+const EXAM_ACK_KEY = "lecue.exam-acknowledged";
 
 /** Closes the <details> menu that a clicked menu item sits inside. */
 function closeMenu(event: { currentTarget: HTMLElement }) {
@@ -103,6 +104,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [examGate, setExamGate] = useState(false);
   const [lectureTitle, setLectureTitle] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
@@ -971,6 +973,15 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   }
 
   async function startLecture() {
+    // 평가 중 사용을 막는 것은 학생을 못 믿어서가 아니라, 이 도구가 강의실에
+    // 들어와도 되는 물건으로 남기 위해서다. 교·강사가 차단할 수 있는 통로와 이
+    // 확인이 함께 있어야 그 약속이 말로 그치지 않는다 (app/policy).
+    // ponytail: 브라우저당 한 번. 계정에 남겨야 할 만큼 무거운 동의가 되면 그때
+    // 테이블로 올린다.
+    if (!examAcknowledged()) {
+      setExamGate(true);
+      return;
+    }
     setError("");
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
@@ -1077,6 +1088,26 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // A lecture that has ended has no start time.
     startedAtRef.current = 0;
     finishingRef.current = false;
+  }
+
+  function examAcknowledged() {
+    try {
+      return window.localStorage.getItem(EXAM_ACK_KEY) === "1";
+    } catch {
+      // 저장소가 막힌 브라우저에서는 매번 다시 확인받는다. 확인 없이 지나가는
+      // 쪽보다 낫다.
+      return false;
+    }
+  }
+
+  function acceptExamGate() {
+    try {
+      window.localStorage.setItem(EXAM_ACK_KEY, "1");
+    } catch {
+      /* 저장할 수 없으면 다음 강의에서 한 번 더 묻는다 */
+    }
+    setExamGate(false);
+    void startLecture();
   }
 
   function stopLecture() {
@@ -1654,6 +1685,17 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           )}
         </header>
 
+        {examGate && (
+          <div className="notice-banner exam-gate" role="alertdialog" aria-label={isEnglish ? "Before you record" : "녹음을 시작하기 전에"}>
+            <p>{isEnglish
+              ? "Lecue is for following a lecture, not for assessments. Do not use it during an exam, quiz, or graded assessment. Your instructor can have it blocked for a course at any time."
+              : "Lecue는 강의를 따라가기 위한 도구입니다. 시험·퀴즈 등 평가 중에는 사용할 수 없습니다. 교·강사는 언제든 해당 강좌의 사용 차단을 요청할 수 있습니다."}</p>
+            <span>
+              <Link href={`${basePath}/policy`}>{isEnglish ? "Instructor policy" : "교·강사 안내"}</Link>
+              <button type="button" onClick={acceptExamGate}>{isEnglish ? "This is a lecture — start" : "수업입니다 · 시작"}</button>
+            </span>
+          </div>
+        )}
         <div className="error-banner" role="alert">{error}</div>
         <div className="notice-banner" role="status">{notice}</div>
 
@@ -1988,6 +2030,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           <span className="footnote-links">
             <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
             <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
+            <Link href={`${basePath}/policy`}>{isEnglish ? "Classroom use policy" : "강의 사용 정책"}</Link>
             <span>{isEnglish ? "Confirm recording permission before use" : "현장 녹음 권한을 확인한 뒤 사용하세요"}</span>
           </span>
         </footer>
