@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
+import { bootstrapTerms } from "../../lib/bootstrap-terms";
 import { deepgramLanguage, listenUrl } from "../../lib/deepgram";
 import { mergeKeyterms, parseGlossary } from "../../lib/glossary";
 import { createClient } from "../../lib/supabase/server";
@@ -50,13 +51,21 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   // The glossary read rides along with the credit preflight: it is the same
   // round trip budget, and the socket cannot open before both come back.
-  const [{ data: statusData, error: statusError }, { data: sessionRow }] = await Promise.all([
+  const [{ data: statusData, error: statusError }, { data: sessionRow }, { data: spokenRows }] = await Promise.all([
     supabase.rpc("get_credit_status"),
     supabase
       .from("lecture_sessions")
       .select("classrooms(glossary, material_documents(keyterms))")
       .eq("id", body.sessionId)
       .maybeSingle(),
+    // 재연결이거나 어휘 갱신이면 이 수업의 앞부분이 이미 쌓여 있다. 첫 연결이면
+    // 빈 배열이 오고 부트스트랩은 그냥 아무것도 더하지 않는다.
+    supabase
+      .from("transcript_segments")
+      .select("text")
+      .eq("session_id", body.sessionId)
+      .order("start_ms", { ascending: true })
+      .limit(600),
   ]);
   const creditStatus = Array.isArray(statusData) ? statusData[0] : statusData;
   if (statusError) {
@@ -107,15 +116,22 @@ export async function POST(request: Request) {
   // 자료에서 뽑은 용어가 손으로 넣은 용어집을 이어받는다. 학생이 아무것도 입력하지
   // 않아도 업로드한 슬라이드가 그 과목의 어휘집 노릇을 한다 (PRD 36.3.1).
   const classroom = (sessionRow as { classrooms?: { glossary?: string; material_documents?: Array<{ keyterms?: string }> } | null })?.classrooms;
-  const keyterms = mergeKeyterms(
+  const declared = mergeKeyterms(
     parseGlossary(classroom?.glossary),
     (classroom?.material_documents ?? []).flatMap((document) => parseGlossary(document.keyterms)),
   );
+  // 자료도 용어집도 없는 수업은 여기서만 어휘를 얻는다. 남은 예산에만 들어가므로
+  // 손으로 넣은 용어와 슬라이드 용어를 밀어내지 않는다.
+  const spoken = (spokenRows ?? []).map((row) => String((row as { text?: unknown }).text ?? "")).join(" ");
+  const keyterms = mergeKeyterms(declared, bootstrapTerms(spoken, declared));
 
   return NextResponse.json(
     {
       accessToken: data.access_token,
       credits: Number(credit.remaining_credits),
+      // 자료도 용어집도 없는 수업에만, 한 번. 그때쯤이면 무엇에 대한 수업인지
+      // 스크립트에 드러나 있고, 남은 시간이 갱신값을 회수할 만큼 길다.
+      refreshInMs: declared.length ? null : 600_000,
       listenUrl: listenUrl({
         language: deepgramLanguage(body.language, isEnglish ? "en" : "ko"),
         keyterms,

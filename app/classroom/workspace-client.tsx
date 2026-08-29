@@ -167,6 +167,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const keepAliveTimerRef = useRef<number | null>(null);
+  const vocabularyTimerRef = useRef<number | null>(null);
+  const vocabularyRefreshedRef = useRef(false);
   const lastSentAtRef = useRef(0);
   const initialRouteRef = useRef(false);
   const slideUrlRef = useRef<{ documentId: string; url: string; expiresAt: number } | null>(null);
@@ -811,10 +813,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     void saveSegment(segment, Math.max(0, Date.now() - (startedAtRef.current + segment.endMs)));
   }
 
-  function stopKeepAlive() {
+  function stopSocketTimers() {
     if (keepAliveTimerRef.current !== null) {
       window.clearInterval(keepAliveTimerRef.current);
       keepAliveTimerRef.current = null;
+    }
+    if (vocabularyTimerRef.current !== null) {
+      window.clearTimeout(vocabularyTimerRef.current);
+      vocabularyTimerRef.current = null;
     }
   }
 
@@ -852,7 +858,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
       body: JSON.stringify({ sessionId: activeSessionIdRef.current, language: speechLanguage }),
     });
-    const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; error?: string };
+    const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; refreshInMs?: number | null; error?: string };
     if (!tokenResponse.ok || !tokenData.accessToken || !tokenData.listenUrl) {
       throw new Error(tokenData.error ?? (isEnglish
         ? "Could not obtain a speech-recognition token."
@@ -896,6 +902,16 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       }
       // 백그라운드 탭이나 절전으로 레코더가 멎으면 Deepgram이 10초쯤 뒤 소켓을 닫는다.
       lastSentAtRef.current = Date.now();
+      // 자료도 용어집도 없는 수업이면 서버가 갱신 시각을 함께 준다. keyterm은
+      // 소켓을 열 때만 붙으므로, 한 번 닫아 재연결 경로가 갱신된 용어로 다시
+      // 열게 한다. 그 사이 1~2초 발화는 잃는다 — 남은 한 시간의 전공어 표기와
+      // 맞바꾼다. 한 수업에 한 번만 한다.
+      if (typeof tokenData.refreshInMs === "number" && !vocabularyRefreshedRef.current) {
+        vocabularyTimerRef.current = window.setTimeout(() => {
+          vocabularyRefreshedRef.current = true;
+          if (!finishingRef.current) socketRef.current?.close();
+        }, tokenData.refreshInMs);
+      }
       keepAliveTimerRef.current = window.setInterval(() => {
         if (socket.readyState === WebSocket.OPEN && Date.now() - lastSentAtRef.current > 5_000) {
           socket.send(JSON.stringify({ type: "KeepAlive" }));
@@ -946,7 +962,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     };
 
     socket.onclose = () => {
-      stopKeepAlive();
+      stopSocketTimers();
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       if (finishingRef.current || startedAtRef.current === 0) return;
       flushUtterance();
@@ -959,6 +975,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     startedAtRef.current = 0;
     activeSessionIdRef.current = "";
     saveFailuresRef.current = 0;
+    vocabularyRefreshedRef.current = false;
     setActiveSessionId("");
     setStatus("connecting");
 
@@ -1023,7 +1040,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-    stopKeepAlive();
+    stopSocketTimers();
     flushUtterance();
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     // 마이크는 여기서 놓는다. 재연결이 같은 스트림을 다시 쓰므로 레코더가 멈출
@@ -1070,6 +1087,30 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     && !messages.some((message) => message.pending)
     && (creditStatus === null || creditStatus.credits > 0 || status === "recording");
 
+  /**
+   * 놓친 구간 복구. 질문을 문장으로 못 쓰는 순간이 강의에서는 훨씬 잦다 — 무엇을
+   * 물어야 할지 모르는 채로 흐름만 놓치기 때문이다. 서버가 창을 마지막 90초로
+   * 좁히고 검색을 끄므로 이 경로가 가장 빠르고 가장 싸다.
+   */
+  function askCatchup() {
+    void submitQuestion(
+      isEnglish ? "I missed that — what was just said?" : "방금 놓쳤어요. 지금까지 무슨 말이었나요?",
+      false,
+      "catchup",
+    );
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      // Alt+R. 타이핑 중에도 안전하도록 수식 키를 요구한다.
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.key.toLowerCase() !== "r") return;
+      event.preventDefault();
+      askCatchup();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   function askQuestion(event: FormEvent) {
     event.preventDefault();
     void submitQuestion(question, true);
@@ -1086,7 +1127,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   // can send its own question with one press (PRD 36.3.3). Both entry points
   // land here; only the composer clears itself, or a half-typed draft would
   // disappear when the learner tapped a paragraph instead.
-  async function submitQuestion(text: string, fromComposer = false) {
+  async function submitQuestion(text: string, fromComposer = false, mode?: "catchup") {
     const cleanQuestion = text.trim().slice(0, 1_000);
     if (!cleanQuestion || !canAsk || messages.some((message) => message.pending)) return;
     if (aiProvider !== "lecture-live" && !personalApiKey.trim() && !savedCredential) {
@@ -1133,6 +1174,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         body: JSON.stringify({
           question: cleanQuestion,
           questionAtMs: askedAt,
+          mode,
           // 질문 문장만으로는 "이거", "방금 그 식"이 무엇을 가리키는지 알 수 없다.
           // 직전 1분의 강의 내용을 같이 보내 그 시점의 슬라이드를 찾게 한다.
           anchor: buildAnchor(segments, askedAt, interim),
@@ -1739,6 +1781,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           </div>
 
           <form className="question-form" onSubmit={askQuestion}>
+            <button type="button" className="catchup-button" disabled={!canAsk} onClick={askCatchup}>
+              {isEnglish ? "I missed that · replay the last 90 seconds" : "방금 놓쳤어요 · 최근 90초 다시"}
+              <kbd>Alt+R</kbd>
+            </button>
             <label htmlFor="question" className="sr-only">{isEnglish ? "Enter a question" : "질문 입력"}</label>
             <textarea
               id="question"
