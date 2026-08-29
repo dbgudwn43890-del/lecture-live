@@ -258,3 +258,28 @@ test("emits an error line and skips the lecture_questions save when the provider
   assert.ok(typeof lines[0].error === "string" && lines[0].error.length > 0);
   assert.equal(insertedQuestions.length, 0);
 });
+
+test("catchup mode narrows the transcript to the last 90 seconds and turns the web search off", async () => {
+  // 200초짜리 강의. 복구 요청은 마지막 90초만 보아야 한다.
+  seedTranscript(SESSION_ID, 200);
+  openAiEvents = [
+    { type: "response.output_text.delta", delta: "ok" },
+    { type: "response.completed", response: { output: [], usage: null } },
+  ];
+
+  const response = await ask({
+    mode: "catchup",
+    questionAtMs: 200_000,
+    lectureSessionId: SESSION_ID,
+  });
+  await readNdjson(response);
+
+  const call = openAiCreateCalls[0];
+  const input = call.input as string;
+  assert.ok(input.includes("segment 199"), "the newest speech has to be there");
+  assert.ok(!input.includes("segment 100"), "anything older than the window must be dropped");
+  assert.deepEqual(call.tools, [], "복구는 강의 안에서 답한다 — 검색 도구를 붙이지 않는다");
+  assert.equal(call.tool_choice, "none");
+  // 질문을 쓰지 않아도 접수되어야 한다.
+  assert.equal(insertedQuestions.length, 1);
+});

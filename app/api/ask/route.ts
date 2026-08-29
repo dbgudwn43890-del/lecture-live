@@ -32,6 +32,7 @@ type AskBody = {
   locale?: unknown;
   classroomId?: unknown;
   lectureSessionId?: unknown;
+  mode?: unknown;
 };
 
 type PersonalLlm = {
@@ -100,6 +101,18 @@ const englishInstructions = [
   "If evidence for an external fact is insufficient, say what is missing instead of guessing.",
   "Answer in concise, natural English. Omit filler and repetition, but keep the definitions, mechanisms, and distinctions needed for understanding.",
 ].join("\n");
+
+/**
+ * 놓친 구간 복구. 질문을 문장으로 쓸 수 있는 학습자만 쓰는 제품에서 벗어나기 위한
+ * 두 번째 입구다 (PRD 36.3.3). 답이 강의 안에 이미 있으므로 검색하지 않고, 창도
+ * 마지막 90초로 좁혀 첫 글자까지의 시간을 줄인다.
+ */
+const CATCHUP_WINDOW_MS = 90_000;
+
+const catchupInstructions = {
+  ko: "\n학습자는 질문을 쓴 것이 아니라 '방금 놓쳤다'고 눌렀다. 마지막 구간에서 강사가 무슨 말을 했는지 흐름대로 짧게 복원하고, 그 안에서 처음 나온 용어나 건너뛴 단계만 풀어 준다. 웹 검색은 하지 않는다. 강의에 없는 이야기로 넘어가지 말고, 두세 문장과 필요하면 짧은 목록으로 끝낸다.",
+  en: "\nThe learner did not type a question; they pressed \"I missed that\". Reconstruct what the lecturer just said in order, briefly, and unpack only the terms or skipped steps inside it. Do not search the web. Stay inside the lecture and finish in two or three sentences plus a short list if needed.",
+};
 
 class ProviderRequestError extends Error {
   // Plain fields, not a TS parameter-property constructor: the latter needs a
@@ -365,6 +378,7 @@ async function askOpenAI(
   instructions: string,
   reasoningEffort: "low" | "medium",
   onDelta: DeltaSink,
+  webSearch = true,
 ): Promise<AnswerResult> {
   const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
   const stream = await openai.beta.responses.create({
@@ -376,8 +390,8 @@ async function askOpenAI(
     text: { verbosity: "low" },
     safety_identifier: safetyIdentifier,
     prompt_cache_key: safetyIdentifier,
-    tool_choice: "auto",
-    tools: [{ type: "web_search", search_context_size: "low" }],
+    tool_choice: webSearch ? "auto" : "none",
+    tools: webSearch ? [{ type: "web_search", search_context_size: "low" }] : [],
     include: ["web_search_call.action.sources"],
     instructions,
     input,
@@ -737,12 +751,20 @@ export async function POST(request: Request) {
     }
   }
 
-  const question = body.question?.trim() ?? "";
+  const catchup = body.mode === "catchup";
+  const question = catchup
+    ? (locale === "en"
+      ? "I missed the last stretch of the lecture. Recap what was just said."
+      : "방금 놓쳤어요. 마지막 구간에 무슨 말이 오갔는지 정리해 주세요.")
+    : body.question?.trim() ?? "";
   const unconfirmedSegments = Array.isArray(body.segments) ? body.segments.filter(isSegment) : [];
   const interim = typeof body.interim === "string" ? body.interim.trim().slice(0, 2_000) : "";
   const questionAtMs = Number.isFinite(body.questionAtMs) ? Math.max(0, body.questionAtMs!) : 0;
   const safetyIdentifier = createHash("sha256").update(userId).digest("hex");
-  const instructions = locale === "en" ? englishInstructions : koreanInstructions;
+  const baseInstructions = locale === "en" ? englishInstructions : koreanInstructions;
+  const instructions = catchup
+    ? `${baseInstructions}${locale === "en" ? catchupInstructions.en : catchupInstructions.ko}`
+    : baseInstructions;
 
   if (!question || question.length > 1_000) {
     return NextResponse.json({ error: isEnglish ? "Enter a question between 1 and 1,000 characters." : "질문은 1~1,000자로 입력해 주세요." }, { status: 400 });
@@ -763,7 +785,7 @@ export async function POST(request: Request) {
   // whatever the request carried (the pre-existing behavior).
   const [storedSegments, earlier] = await Promise.all([
     lectureSessionId ? fetchStoredSegments(supabase, lectureSessionId) : Promise.resolve<Segment[]>([]),
-    classroomId && lectureSessionId
+    classroomId && lectureSessionId && !catchup
       ? findClassroomContext(userId, classroomId, lectureSessionId, question, anchor)
       : Promise.resolve({ ...EMPTY_CLASSROOM_CONTEXT, admin: null }),
   ]);
@@ -773,7 +795,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "The transcript is too long." : "스크립트가 너무 깁니다." }, { status: 413 });
   }
 
-  const transcript = segments
+  // 복구 요청은 마지막 90초만 본다. 세 시간짜리 스크립트를 다시 넣어 봐야 답이
+  // 좋아지지 않고, 그 시간과 토큰이 그대로 학습자의 대기 시간이 된다.
+  const catchupUntilMs = questionAtMs || segments.at(-1)?.endMs || 0;
+  const inWindow = catchup
+    ? segments.filter((segment) => segment.endMs >= catchupUntilMs - CATCHUP_WINDOW_MS)
+    : segments;
+  const transcript = inWindow
     .map((segment) => `[${formatTime(segment.startMs)}] ${segment.text}`)
     .join("\n");
   const context = `${transcript}${interim ? `\n[${formatTime(questionAtMs)} · 임시] ${interim}` : ""}`;
@@ -833,6 +861,7 @@ export async function POST(request: Request) {
             instructions,
             "low",
             onDelta,
+            !catchup,
           );
         } else if (personalLlm.provider === "openai") {
           result = await askOpenAI(
