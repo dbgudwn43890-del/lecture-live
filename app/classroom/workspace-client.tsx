@@ -35,6 +35,13 @@ type SessionSummary = {
   question_count: number;
 };
 type Classroom = { id: string; title: string; locale: "ko" | "en"; glossary?: string; sessions: SessionSummary[] };
+type AudioUpload = {
+  id: string;
+  session_id: string;
+  status: "uploading" | "queued" | "processing" | "completed" | "failed" | "deleted";
+  filename: string;
+  error_code?: string | null;
+};
 type UserProfile = { displayName: string; email: string };
 type AiProvider = "lecture-live" | PersonalProvider;
 type SavedCredential = { provider: PersonalProvider; model: string; updated_at: string };
@@ -105,6 +112,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [examGate, setExamGate] = useState(false);
+  // null until the first check answers; the gate never flashes on a returning
+  // account that already agreed.
+  const [consentSatisfied, setConsentSatisfied] = useState<boolean | null>(null);
+  const [consentGate, setConsentGate] = useState(false);
+  const [consentAge, setConsentAge] = useState(false);
+  const [consentRecording, setConsentRecording] = useState(false);
+  const [consentPending, setConsentPending] = useState(false);
   const [lectureTitle, setLectureTitle] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
@@ -133,6 +147,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [materialState, setMaterialState] = useState<"none" | "text-only" | "viewable">("none");
   const [materials, setMaterials] = useState<MaterialDocument[]>([]);
   const [materialPending, setMaterialPending] = useState(false);
+  // UPL-03. The upload being watched right now, if any.
+  const [audioUpload, setAudioUpload] = useState<AudioUpload | null>(null);
   const [materialDragOver, setMaterialDragOver] = useState(false);
   const [slidePage, setSlidePage] = useState<MaterialSource | null>(null);
   const [slideUrl, setSlideUrl] = useState<{ documentId: string; url: string; expiresAt: number } | null>(null);
@@ -202,6 +218,40 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+
+  // Uploading or transcribing: the control is occupied either way.
+  const audioBusy = audioUpload?.status === "uploading" || audioUpload?.status === "processing" || audioUpload?.status === "queued";
+
+  // UPL-03. Deepgram answers on its own callback, so the only way this tab
+  // learns the transcript landed is to ask. Polling stops the moment the job
+  // reaches a terminal state, so an idle workspace makes no requests.
+  useEffect(() => {
+    if (!audioUpload || (audioUpload.status !== "processing" && audioUpload.status !== "queued")) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/lecture-audio?sessionId=${encodeURIComponent(audioUpload.session_id)}`, { headers: { "X-Site-Locale": locale } });
+        if (!response.ok) return;
+        const data = await response.json() as { uploads?: AudioUpload[] };
+        const current = data.uploads?.find((row) => row.id === audioUpload.id);
+        if (cancelled || !current || current.status === audioUpload.status) return;
+        setAudioUpload(current);
+        if (current.status === "completed") {
+          setNotice(isEnglish ? "The recording is transcribed." : "녹음 파일을 스크립트로 옮겼습니다.");
+          await loadClassrooms();
+        } else if (current.status === "failed") {
+          setNotice("");
+          setError(current.error_code === "empty"
+            ? isEnglish ? "No speech was found in this recording." : "이 녹음 파일에서 말소리를 찾지 못했습니다."
+            : isEnglish ? "Could not transcribe this recording." : "이 녹음 파일을 옮기지 못했습니다.");
+        }
+      } catch {
+        /* A missed poll is retried on the next tick. */
+      }
+    }, 10_000);
+    return () => { cancelled = true; clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUpload?.id, audioUpload?.status, locale, isEnglish]);
   useEffect(() => { slideUrlRef.current = slideUrl; }, [slideUrl]);
 
   // Whether this classroom has a slide deck at all decides both the follower
@@ -236,6 +286,66 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     })();
     return () => { cancelled = true; };
   }, [activeClassroomId, locale]);
+
+  /**
+   * UPL-01. Reads the length in the browser first: a file past the three-hour
+   * ceiling is refused here rather than after a 1GB upload, and the estimate
+   * lets the server turn away an account with no credits before it pays
+   * Deepgram to transcribe anything. The charge itself uses Deepgram\'s own
+   * measurement, so this number cannot buy a cheaper lecture.
+   */
+  async function readDurationMs(file: File): Promise<number> {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const probe = document.createElement("audio");
+      probe.preload = "metadata";
+      const done = (value: number) => { URL.revokeObjectURL(url); resolve(value); };
+      probe.onloadedmetadata = () => done(Number.isFinite(probe.duration) ? Math.round(probe.duration * 1_000) : 0);
+      // A container the browser cannot read is not necessarily one Deepgram
+      // cannot: send 0 and let the server decide.
+      probe.onerror = () => done(0);
+      probe.src = url;
+    });
+  }
+
+  async function uploadLectureAudio(file: File) {
+    if (audioUpload && (audioUpload.status === "processing" || audioUpload.status === "uploading")) return;
+    const durationMs = await readDurationMs(file);
+    if (durationMs > MAX_LECTURE_MS) {
+      setError(isEnglish ? "A lecture can be up to 3 hours long." : "한 수업은 최대 3시간까지 변환할 수 있습니다.");
+      return;
+    }
+
+    setError("");
+    setNotice(isEnglish ? "Uploading the recording…" : "녹음 파일을 올리는 중입니다…");
+    setAudioUpload({ id: "", session_id: "", status: "uploading", filename: file.name });
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("title", file.name.replace(/\.[^.]+$/, "").slice(0, 80) || (isEnglish ? "Uploaded lecture" : "올린 수업"));
+      formData.set("language", speechLanguage);
+      formData.set("durationMs", String(durationMs));
+      if (activeClassroomId) formData.set("classroomId", activeClassroomId);
+      // UPL-04. Stable for this file, so a retry after a dropped connection
+      // rejoins the job already running instead of paying for it twice.
+      formData.set("idempotencyKey", `${file.name}:${file.size}:${file.lastModified}`);
+
+      const response = await fetch("/api/lecture-audio", { method: "POST", headers: { "X-Site-Locale": locale }, body: formData });
+      const data = await response.json() as { upload?: AudioUpload; error?: string };
+      if (!response.ok || !data.upload) throw new Error(data.error);
+      setAudioUpload(data.upload);
+      setNotice(isEnglish
+        ? "Transcribing. You can leave this page — the lecture appears in the sidebar when it is done."
+        : "받아쓰는 중입니다. 이 화면을 떠나도 되며, 끝나면 왼쪽 목록에 수업이 나타납니다.");
+      await loadClassrooms();
+    } catch (caught) {
+      setNotice("");
+      setAudioUpload(null);
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not upload this recording." : "녹음 파일을 올리지 못했습니다.");
+    }
+  }
 
   async function uploadMaterial(file: File) {
     if (!activeClassroomId) {
@@ -530,6 +640,93 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       setError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not move the lecture." : "수업을 이동하지 못했습니다.");
+    } finally {
+      setClassroomPending(false);
+    }
+  }
+
+  /**
+   * HIS-03. Deleting takes the transcript, the questions and the search index
+   * with it (the child tables cascade), so it asks first. If the lecture being
+   * deleted is the one on screen, the workspace goes back to an empty new
+   * lecture rather than showing a transcript whose row no longer exists.
+   */
+  async function deleteSession(sessionId: string) {
+    const session = sessionsById.get(sessionId);
+    if (!session) return;
+    const confirmed = window.confirm(isEnglish
+      ? `Delete "${session.title}"? Its transcript and questions are deleted with it. This cannot be undone.`
+      : `"${session.title}" 수업을 삭제할까요? 스크립트와 질문 기록도 함께 지워지며 되돌릴 수 없습니다.`);
+    if (!confirmed) return;
+
+    setClassroomPending(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/lecture-sessions?sessionId=${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+        headers: { "X-Site-Locale": locale },
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      if (sessionId === activeSessionIdRef.current) prepareNewLecture();
+      await loadClassrooms();
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not delete the lecture." : "수업을 삭제하지 못했습니다.");
+    } finally {
+      setClassroomPending(false);
+    }
+  }
+
+  /**
+   * HIS-05. The learner's own copy, built in the browser and saved straight to
+   * disk — no share link, nothing that leaves the device. Any lecture in the
+   * sidebar can be exported, not just the open one, so the text is read back
+   * from the same GET the workspace uses to reopen a lecture.
+   */
+  async function exportSession(sessionId: string) {
+    const session = sessionsById.get(sessionId);
+    if (!session) return;
+    setClassroomPending(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/lecture-sessions?sessionId=${encodeURIComponent(sessionId)}`, { headers: { "X-Site-Locale": locale } });
+      const data = await response.json() as {
+        session?: SessionSummary;
+        segments?: Segment[];
+        questions?: Array<{ question: string; answer: string }>;
+        error?: string;
+      };
+      if (!response.ok || !data.session) throw new Error(data.error);
+
+      const lines = [
+        data.session.title,
+        new Date(data.session.started_at).toLocaleString(locale === "en" ? "en-US" : "ko-KR"),
+        "",
+        isEnglish ? "## Transcript" : "## 강의 스크립트",
+        "",
+        ...(data.segments ?? []).map((segment) => `[${formatTime(segment.startMs)}] ${segment.text}`),
+      ];
+      if (data.questions?.length) {
+        lines.push("", isEnglish ? "## Questions" : "## 질문과 답변", "");
+        for (const item of data.questions) {
+          lines.push(`Q. ${item.question}`, `A. ${cleanAnswerText(item.answer)}`, "");
+        }
+      }
+
+      const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      // Windows and macOS both reject these in a filename, and a lecture titled
+      // "3/12 quiz review" would otherwise save as a broken path or not at all.
+      link.download = `${data.session.title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 80) || "lecture"}.txt`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not export the lecture." : "수업 기록을 내보내지 못했습니다.");
     } finally {
       setClassroomPending(false);
     }
@@ -978,6 +1175,16 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // 확인이 함께 있어야 그 약속이 말로 그치지 않는다 (app/policy).
     // ponytail: 브라우저당 한 번. 계정에 남겨야 할 만큼 무거운 동의가 되면 그때
     // 테이블로 올린다.
+    // ACC-02/ACC-03: age and the recording notice are account-level and must be
+    // on record before the microphone opens, so they are checked ahead of the
+    // per-browser exam acknowledgement.
+    if (consentSatisfied !== true) {
+      const satisfied = await refreshConsent();
+      if (!satisfied) {
+        setConsentGate(true);
+        return;
+      }
+    }
     if (!examAcknowledged()) {
       setExamGate(true);
       return;
@@ -1088,6 +1295,46 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // A lecture that has ended has no start time.
     startedAtRef.current = 0;
     finishingRef.current = false;
+  }
+
+  /** ACC-02/ACC-03. Asks the server, which owns the wording version. */
+  async function refreshConsent() {
+    try {
+      const response = await fetch("/api/consents", { headers: { "X-Site-Locale": locale } });
+      if (!response.ok) return false;
+      const data = await response.json() as { satisfied?: boolean };
+      const satisfied = data.satisfied === true;
+      setConsentSatisfied(satisfied);
+      return satisfied;
+    } catch {
+      // Offline or a failed check does not get to wave a learner through: the
+      // gate stays and asking again is cheap.
+      return false;
+    }
+  }
+
+  async function acceptConsentGate() {
+    if (!consentAge || !consentRecording) return;
+    setConsentPending(true);
+    setError("");
+    try {
+      const response = await fetch("/api/consents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ types: ["age_14", "recording"] }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      setConsentSatisfied(true);
+      setConsentGate(false);
+      void startLecture();
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not save your agreement." : "동의 기록을 저장하지 못했습니다.");
+    } finally {
+      setConsentPending(false);
+    }
   }
 
   function examAcknowledged() {
@@ -1362,6 +1609,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <button type="button" onClick={(event) => { closeMenu(event); setRenamingSessionId(session.id); }}>
               {isEnglish ? "Rename" : "이름 변경"}
             </button>
+            <button type="button" onClick={(event) => { closeMenu(event); void exportSession(session.id); }}>
+              {isEnglish ? "Export as text" : "텍스트로 내보내기"}
+            </button>
+            <button
+              type="button"
+              className="session-menu-delete"
+              onClick={(event) => { closeMenu(event); void deleteSession(session.id); }}
+            >{isEnglish ? "Delete lecture" : "수업 삭제"}</button>
             <p>{isEnglish ? "Move to" : "이동"}</p>
             <button
               type="button"
@@ -1679,12 +1934,59 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               {isEnglish ? "End lecture" : "강의 종료"}
             </button>
           ) : (
-            <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
-              {isEnglish ? "Start lecture" : "강의 시작"}
-            </button>
+            <>
+              {/* UPL-01. A lecture already recorded on a phone takes the same
+                  path as a live one; it just arrives all at once. */}
+              <label className="audio-upload-button">
+                <input
+                  type="file"
+                  accept=".mp3,.m4a,.wav,.webm,.mp4,audio/*"
+                  disabled={audioBusy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void uploadLectureAudio(file);
+                  }}
+                />
+                {audioBusy
+                  ? isEnglish ? "Transcribing…" : "변환 중…"
+                  : isEnglish ? "Upload recording" : "녹음 파일"}
+              </label>
+              <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
+                {isEnglish ? "Start lecture" : "강의 시작"}
+              </button>
+            </>
           )}
         </header>
 
+        {consentGate && (
+          <div className="notice-banner consent-gate" role="alertdialog" aria-label={isEnglish ? "Before your first recording" : "첫 녹음을 시작하기 전에"}>
+            <p>{isEnglish
+              ? "Before Lecue records for the first time, confirm both. Your answer is stored on your account with the date and the wording version."
+              : "Lecue가 처음 녹음하기 전에 두 가지를 확인합니다. 확인한 문구의 버전과 시각이 계정에 기록됩니다."}</p>
+            <label>
+              <input type="checkbox" checked={consentAge} onChange={(event) => setConsentAge(event.target.checked)} />
+              {isEnglish ? "I am 14 years of age or older." : "만 14세 이상입니다."}
+            </label>
+            <label>
+              <input type="checkbox" checked={consentRecording} onChange={(event) => setConsentRecording(event.target.checked)} />
+              {isEnglish
+                ? "Lecue records this lecture through my microphone and sends the audio to an external AI service for transcription. The original audio is not kept after the transcript is made."
+                : "Lecue가 마이크로 이 강의를 녹음하고, 받아쓰기를 위해 음성을 외부 AI 서비스로 보내는 데 동의합니다. 원본 음성은 스크립트를 만든 뒤 보관하지 않습니다."}
+            </label>
+            <span>
+              <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
+              <Link href={`${basePath}/terms`}>{isEnglish ? "Terms" : "이용약관"}</Link>
+              <button
+                type="button"
+                onClick={() => void acceptConsentGate()}
+                disabled={!consentAge || !consentRecording || consentPending}
+              >{consentPending
+                ? isEnglish ? "Saving…" : "저장 중…"
+                : isEnglish ? "Agree and start" : "동의하고 시작"}</button>
+            </span>
+          </div>
+        )}
         {examGate && (
           <div className="notice-banner exam-gate" role="alertdialog" aria-label={isEnglish ? "Before you record" : "녹음을 시작하기 전에"}>
             <p>{isEnglish

@@ -18,6 +18,7 @@
     "test:cer": "node --experimental-strip-types --test app/lib/cer.test.ts",
     "test:audio": "node --experimental-strip-types --test app/lib/audio.test.ts",
     "test:billing": "node --experimental-strip-types --test app/lib/billing.test.ts",
+    "test:lecture-audio": "node --experimental-strip-types --test app/lib/lecture-audio.test.ts",
     "eval:ask": "node scripts/eval-ask.mjs",
     "lab:keyterm": "node scripts/keyterm-limit.mjs",
     "test:webhook": "node --experimental-test-module-mocks --test app/api/billing/webhook/route.test.ts",

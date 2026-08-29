@@ -244,7 +244,10 @@ a, button, summary, input, textarea, select {
   font-size: 13px;
 }
 
-.exam-gate {
+/* The consent gate is the same banner with checkboxes, so it shares the layout
+   rather than growing a second set of nearly identical rules. */
+.exam-gate,
+.consent-gate {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -252,12 +255,24 @@ a, button, summary, input, textarea, select {
   gap: 10px;
 }
 
-.exam-gate p { margin: 0; max-width: 62ch; }
-.exam-gate span { display: flex; align-items: center; gap: 12px; }
-.exam-gate button {
+.exam-gate p, .consent-gate p { margin: 0; max-width: 62ch; }
+.exam-gate span, .consent-gate span { display: flex; align-items: center; gap: 12px; }
+
+/* Each consent is its own line: two claims on one row read as one tick box. */
+.consent-gate label {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 76ch;
+  line-height: 1.6;
+}
+.consent-gate input { margin-top: 3px; flex: 0 0 auto; accent-color: var(--focus); }
+
+.exam-gate button, .consent-gate button {
   padding: 7px 14px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--focus);
   color: white;
   font-weight: 700;
@@ -458,7 +473,7 @@ a, button, summary, input, textarea, select {
   width: 100%;
   padding: 8px 12px;
   border: 1px dashed var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--muted);
   font-weight: 650;
@@ -2269,3 +2284,33 @@ button:active,
   font-family: inherit;
   text-decoration: none;
 }
+
+/* Delete is the one item in this menu that cannot be undone, so it carries the
+   product's signal colour rather than sitting in the same grey as Rename. */
+.sidebar-sessions .session-menu-panel button.session-menu-delete { color: var(--signal); }
+.sidebar-sessions .session-menu-panel button.session-menu-delete:hover:not(:disabled) {
+  color: white;
+  background: var(--signal);
+}
+
+/* UPL-01. Sits beside "Start lecture" in the topbar, so it reads as the other
+   way into the same thing rather than a separate feature. It stays quiet:
+   recording live is the primary action, uploading is the fallback. */
+.audio-upload-button {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  color: #4a4740;
+  background: transparent;
+  border: 1px solid #d9d6cf;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.audio-upload-button:hover { color: var(--ink); border-color: var(--line-strong); }
+.audio-upload-button:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
+/* Visually hidden, not display:none — the label must still open the picker. */
+.audio-upload-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

@@ -401,6 +401,44 @@ export async function POST(request: Request) {
   return NextResponse.json({ error: current.isEnglish ? "Invalid lecture request." : "수업 요청을 확인해 주세요." }, { status: 400 });
 }
 
+/**
+ * HIS-03/HIS-04. Every child table (`transcript_segments`, `lecture_chunks`,
+ * `lecture_questions`, `lecture_reports`) declares
+ * `references lecture_sessions(id) on delete cascade`, so one delete takes the
+ * lecture and everything derived from it. RLS scopes the row to its owner, so
+ * a guessed id from another account deletes nothing and reports "not found"
+ * rather than confirming the lecture exists.
+ *
+ * A lecture that is still recording is deletable too. Refusing would leave a
+ * session that crashed mid-lecture undeletable until reconcile closes it three
+ * hours later; the client stops its own recording first, and a segment save
+ * that races the delete already handles the 404.
+ */
+export async function DELETE(request: Request) {
+  const current = await context(request);
+  if ("response" in current) return current.response;
+
+  const sessionId = new URL(request.url).searchParams.get("sessionId");
+  if (!validId(sessionId)) {
+    return NextResponse.json({ error: current.isEnglish ? "Check the lecture ID." : "수업 ID를 확인해 주세요." }, { status: 400 });
+  }
+
+  const { data: deleted, error } = await current.supabase
+    .from("lecture_sessions")
+    .delete()
+    .eq("id", sessionId)
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    console.error("Lecture delete failed", error.code);
+    return NextResponse.json({ error: current.isEnglish ? "Could not delete this lecture." : "이 수업을 삭제하지 못했습니다." }, { status: 500 });
+  }
+  if (!deleted) {
+    return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
+  }
+  return NextResponse.json({ deleted: true });
+}
+
 export async function PATCH(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
