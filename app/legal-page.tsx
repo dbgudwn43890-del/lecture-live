@@ -20,6 +20,7 @@ export default function LegalPage({ title, description, children, locale = "ko" 
         <nav aria-label={isEnglish ? "Legal documents" : "문서 메뉴"}>
           <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
           <Link href={`${basePath}/terms`}>{isEnglish ? "Terms" : "이용약관"}</Link>
+          <Link href={`${basePath}/refund-policy`}>{isEnglish ? "Refund Policy" : "환불 정책"}</Link>
           <Link className={styles.classroomLink} href={`${basePath}/classroom`}>{isEnglish ? "Open a classroom" : "강의실 열기"}</Link>
         </nav>
       </header>
@@ -40,7 +41,7 @@ export default function LegalPage({ title, description, children, locale = "ko" 
 
       <footer className={styles.footer}>
         <strong>Lecue</strong>
-        <div><Link href={basePath || "/"}>{isEnglish ? "Home" : "홈"}</Link><Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link><Link href={`${basePath}/terms`}>{isEnglish ? "Terms" : "이용약관"}</Link></div>
+        <div><Link href={basePath || "/"}>{isEnglish ? "Home" : "홈"}</Link><Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link><Link href={`${basePath}/terms`}>{isEnglish ? "Terms" : "이용약관"}</Link><Link href={`${basePath}/refund-policy`}>{isEnglish ? "Refund Policy" : "환불 정책"}</Link><a href="mailto:dbgudwn43890@gmail.com">dbgudwn43890@gmail.com</a></div>
         <small>{isEnglish ? "Check the lecturer's and institution's recording rules before use." : "강의자와 기관의 녹음 정책을 확인한 뒤 사용하세요."}</small>
       </footer>
     </main>
