@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { isUuid } from "../../lib/billing";
 import { splitTerms } from "../../lib/glossary";
@@ -46,6 +47,23 @@ function extractionPrompt(isPdf: boolean) {
   "마지막 줄에 '## TERMS' 머리글을 쓰고, 그 아래 한 줄에 이 자료의 전문용어·고유명사·약어를",
   "쉼표로 구분해 최대 40개 적는다. 받아쓰기가 틀리기 쉬운 말을 고른다. 일반 단어는 넣지 않는다.",
 ].join("\n");
+}
+
+async function extractPdfPages(bytes: Uint8Array) {
+  const pdf = await getDocument({ data: bytes }).promise;
+  const pageCount = Math.min(pdf.numPages, 500);
+  const pages = [] as { page: number; text: string }[];
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item) => "str" in item ? item.str : "")
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text) pages.push({ page: pageNumber, text });
+  }
+  return { pageCount, pages };
 }
 
 async function context(request: Request) {
@@ -174,33 +192,48 @@ export async function POST(request: Request) {
   const filename = (file.name || `material.${type.extension}`).slice(0, 200);
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 240_000, maxRetries: 1 });
 
-  // Reading happens once at upload rather than on every question. PDFs retain
-  // page-level visual context; other documents are indexed as ordered sections.
-  let markdown: string;
-  try {
-    const response = await openai.responses.create({
-      model: "gpt-5.6-luna",
-      max_output_tokens: 16_000,
-      store: false,
-      input: [{
-        role: "user",
-        content: [
-          { type: "input_file", filename, file_data: `data:${type.contentType};base64,${Buffer.from(bytes).toString("base64")}` },
-          { type: "input_text", text: extractionPrompt(type.extension === "pdf") },
-        ],
-      }],
-    });
-    markdown = response.output_text ?? "";
-  } catch (error) {
-    console.error("Material extraction failed", error && typeof error === "object" && "status" in error ? error.status : "unknown");
-    return NextResponse.json({ error: isEnglish ? "Could not read this material." : "이 자료를 읽지 못했습니다." }, { status: 502 });
+  // A document ingestion pipeline must know how many source pages it read.
+  // PDF.js gives native text page-by-page; model output cannot prove coverage.
+  let pages: { page: number; text: string }[];
+  let pageCount: number;
+  let keyterms: string[];
+  if (type.extension === "pdf") {
+    try {
+      const extracted = await extractPdfPages(bytes);
+      pages = extracted.pages;
+      pageCount = extracted.pageCount;
+      keyterms = [];
+    } catch (error) {
+      console.error("PDF text extraction failed", error instanceof Error ? error.name : "unknown");
+      return NextResponse.json({ error: isEnglish ? "Could not read this PDF." : "이 PDF를 읽지 못했습니다." }, { status: 422 });
+    }
+  } else {
+    let markdown: string;
+    try {
+      const response = await openai.responses.create({
+        model: "gpt-5.6-luna",
+        max_output_tokens: 16_000,
+        store: false,
+        input: [{
+          role: "user",
+          content: [
+            { type: "input_file", filename, file_data: `data:${type.contentType};base64,${Buffer.from(bytes).toString("base64")}` },
+            { type: "input_text", text: extractionPrompt(false) },
+          ],
+        }],
+      });
+      markdown = response.output_text ?? "";
+    } catch (error) {
+      console.error("Material extraction failed", error && typeof error === "object" && "status" in error ? error.status : "unknown");
+      return NextResponse.json({ error: isEnglish ? "Could not read this material." : "이 자료를 읽지 못했습니다." }, { status: 502 });
+    }
+    pages = splitPages(markdown);
+    pageCount = pages.at(-1)?.page ?? pages.length;
+    keyterms = splitTerms(markdown);
   }
-
-  const pages = splitPages(markdown);
-  const keyterms = splitTerms(markdown);
   const chunks = chunkPages(pages);
   if (!chunks.length) {
-    return NextResponse.json({ error: isEnglish ? "No readable text was found in this material." : "이 자료에서 읽을 수 있는 내용을 찾지 못했습니다." }, { status: 422 });
+    return NextResponse.json({ error: isEnglish ? "This PDF has no selectable text. Upload a text-based PDF for now." : "이 PDF에는 선택 가능한 텍스트가 없습니다. 현재는 텍스트 기반 PDF를 올려 주세요." }, { status: 422 });
   }
 
   let embeddings;
@@ -236,7 +269,7 @@ export async function POST(request: Request) {
       session_id: session.id,
       user_id: userId,
       filename,
-      page_count: Math.min(500, pages.at(-1)?.page ?? pages.length),
+      page_count: pageCount,
       keyterms: keyterms.join(", "),
       storage_path: storagePath,
     })
