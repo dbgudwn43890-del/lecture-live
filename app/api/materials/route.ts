@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -16,9 +14,6 @@ export const maxDuration = 300;
 
 const MAX_MATERIAL_BYTES = 20_000_000;
 const MAX_DOCUMENTS_PER_SESSION = 20;
-// Long enough to read a slide without re-fetching, short enough that a copied
-// URL stops working well before the lecture ends.
-const SIGNED_URL_SECONDS = 900;
 
 const MATERIAL_TYPES = {
   pdf: "application/pdf",
@@ -90,46 +85,13 @@ export async function GET(request: Request) {
 
   const params = new URL(request.url).searchParams;
 
-  // One document, opened for reading. The bucket is private, so the viewer in
-  // the workspace can only load a page through a short-lived signed URL.
-  const documentId = params.get("documentId");
-  if (documentId !== null) {
-    if (!isUuid(documentId)) {
-      return NextResponse.json({ error: current.isEnglish ? "Check the material." : "자료 정보를 확인해 주세요." }, { status: 400 });
-    }
-    const { data: document } = await current.supabase
-      .from("material_documents")
-      .select("id,filename,page_count,storage_path")
-      .eq("id", documentId)
-      .maybeSingle();
-    if (!document?.storage_path) {
-      return NextResponse.json(
-        { error: current.isEnglish ? "The original file for this material was not kept." : "이 자료의 원본 파일은 보관되어 있지 않습니다." },
-        { status: 404 },
-      );
-    }
-    const { data: signed, error: signError } = await current.supabase.storage
-      .from("materials")
-      .createSignedUrl(document.storage_path, SIGNED_URL_SECONDS);
-    if (signError || !signed) {
-      console.error("Material sign failed", signError?.message ?? "unknown");
-      return NextResponse.json({ error: current.isEnglish ? "Could not open this material." : "이 자료를 열지 못했습니다." }, { status: 500 });
-    }
-    return NextResponse.json({
-      url: signed.signedUrl,
-      expiresInSeconds: SIGNED_URL_SECONDS,
-      filename: document.filename,
-      pageCount: document.page_count,
-    });
-  }
-
   const sessionId = params.get("sessionId");
   if (!isUuid(sessionId)) {
     return NextResponse.json({ error: current.isEnglish ? "Check the lecture." : "수업 정보를 확인해 주세요." }, { status: 400 });
   }
   const query = current.supabase
     .from("material_documents")
-    .select("id,classroom_id,session_id,filename,page_count,created_at,storage_path")
+    .select("id,classroom_id,session_id,filename,page_count,created_at")
     .order("created_at", { ascending: false });
 
   const { data, error } = await query.eq("session_id", sessionId);
@@ -256,18 +218,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Could not index this material." : "이 자료를 색인하지 못했습니다." }, { status: 502 });
   }
 
-  // Uploaded only after extraction and embedding succeed, so a file the pipeline
-  // could not read never lingers in the bucket. The first folder is the owner's
-  // id, which is what the bucket policy checks.
-  const storagePath = `${userId}/${randomUUID()}.${type.extension}`;
-  const { error: uploadError } = await supabase.storage
-    .from("materials")
-    .upload(storagePath, bytes, { contentType: type.contentType, upsert: false });
-  if (uploadError) {
-    console.error("Material upload failed", uploadError.message);
-    return NextResponse.json({ error: isEnglish ? "Could not save this material." : "이 자료를 저장하지 못했습니다." }, { status: 500 });
-  }
-
   const { data: document, error: documentError } = await supabase
     .from("material_documents")
     .insert({
@@ -277,13 +227,11 @@ export async function POST(request: Request) {
       filename,
       page_count: pageCount,
       keyterms: keyterms.join(", "),
-      storage_path: storagePath,
     })
-    .select("id,classroom_id,session_id,filename,page_count,created_at,storage_path")
+    .select("id,classroom_id,session_id,filename,page_count,created_at")
     .single();
   if (documentError || !document) {
     console.error("Material document save failed", documentError?.code);
-    await supabase.storage.from("materials").remove([storagePath]);
     return NextResponse.json({ error: isEnglish ? "Could not save this material." : "이 자료를 저장하지 못했습니다." }, { status: 500 });
   }
 
@@ -301,7 +249,6 @@ export async function POST(request: Request) {
     // remove it rather than leaving a material that silently does nothing.
     console.error("Material chunk save failed", chunkError.code);
     await supabase.from("material_documents").delete().eq("id", document.id);
-    await supabase.storage.from("materials").remove([storagePath]);
     return NextResponse.json({ error: isEnglish ? "Could not save this material." : "이 자료를 저장하지 못했습니다." }, { status: 500 });
   }
 

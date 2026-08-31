@@ -255,7 +255,6 @@ const EMPTY_CLASSROOM_CONTEXT = {
   materialText: "",
   screenText: "",
   materialSources: [] as MaterialSource[],
-  screenSource: null as MaterialSource | null,
 };
 
 /** 자료 검색 결과를 화면에 띄울 만큼 믿을 수 있는지 가르는 선. */
@@ -411,8 +410,6 @@ async function findLectureContext(
       materialText: asBlock(materialMatches),
       screenText: asBlock(screenMatches),
       materialSources: [...new Map([...materialOverviewSources, ...materialSources].map((source) => [`${source.documentId}:${source.startPage}`, source])).values()],
-      // What the panel jumps to, so the learner sees the slide the answer read.
-      screenSource: screenMatches[0] ? toSource(screenMatches[0]) : null,
       admin,
     };
   } catch (error) {
@@ -968,7 +965,7 @@ export async function POST(request: Request) {
           if (saveError) console.error("Lecture question save failed", saveError.code);
         }
 
-        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, materialSources: earlier.materialSources, screenSource: earlier.screenSource, provider, model, usage: result.usage } });
+        send({ done: { answer: cleanedAnswer, sources: cleanedSources, lectureSources: earlier.sources, materialSources: earlier.materialSources, provider, model, usage: result.usage } });
       } catch (error) {
         send({ error: askErrorMessage(error, personalLlm, isEnglish) });
       } finally {

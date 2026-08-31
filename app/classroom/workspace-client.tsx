@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { DragDropProvider, useDraggable, useDroppable } from "@dnd-kit/react";
 
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
@@ -10,7 +11,6 @@ import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
-import PdfSlide from "./pdf-slide";
 
 type Status = "idle" | "connecting" | "recording" | "ended" | "error";
 
@@ -24,7 +24,7 @@ type Segment = {
 type Source = { title: string; url: string };
 type LectureSource = { sessionId: string; title: string; startMs: number; endMs: number };
 type MaterialSource = { documentId: string; filename: string; startPage: number; endPage: number };
-type MaterialDocument = { id: string; classroom_id: string | null; session_id: string; filename: string; page_count: number; storage_path?: string | null };
+type MaterialDocument = { id: string; classroom_id: string | null; session_id: string; filename: string; page_count: number };
 type SessionSummary = {
   id: string;
   classroom_id: string | null;
@@ -71,6 +71,42 @@ function closeMenu(event: { currentTarget: HTMLElement }) {
   event.currentTarget.closest("details")?.removeAttribute("open");
 }
 
+function DraggableSession({ id, title, disabled, isEnglish, children }: {
+  id: string;
+  title: string;
+  disabled: boolean;
+  isEnglish: boolean;
+  children: ReactNode;
+}) {
+  const { ref, handleRef, isDragSource, isDropping } = useDraggable({
+    id: `session:${id}`,
+    type: "session",
+    disabled,
+  });
+  return (
+    <div ref={ref} className={`sidebar-session${isDragSource ? " is-dragging" : ""}${isDropping ? " is-dropping" : ""}`}>
+      <button
+        ref={handleRef}
+        type="button"
+        className="session-drag-handle"
+        aria-label={isEnglish ? `Move ${title}` : `${title} 이동`}
+        title={isEnglish ? "Drag or press Space to move" : "드래그하거나 Space를 눌러 이동"}
+        disabled={disabled}
+      >⠿</button>
+      {children}
+    </div>
+  );
+}
+
+function ClassroomDropTarget({ id, disabled, children }: { id: string; disabled: boolean; children: ReactNode }) {
+  const { ref, isDropTarget } = useDroppable({
+    id: `classroom:${id || "unassigned"}`,
+    accept: "session",
+    disabled,
+  });
+  return <div ref={ref} className={`sidebar-classroom-group${isDropTarget ? " drop-target" : ""}`}>{children}</div>;
+}
+
 const providerNames: Record<PersonalProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
@@ -91,12 +127,6 @@ function formatTime(milliseconds: number) {
 
 function isPdfMaterial(document: MaterialDocument) {
   return document.filename.toLowerCase().endsWith(".pdf");
-}
-
-function materialViewState(documents: MaterialDocument[]) {
-  if (documents.some((document) => document.storage_path && isPdfMaterial(document))) return "viewable";
-  if (documents.some((document) => document.storage_path)) return "indexed";
-  return documents.length ? "text-only" : "none";
 }
 
 type InitialData = {
@@ -144,23 +174,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [editingClassroomTitle, setEditingClassroomTitle] = useState("");
   const [editingGlossary, setEditingGlossary] = useState("");
   const [renamingSessionId, setRenamingSessionId] = useState("");
-  const [dragSessionId, setDragSessionId] = useState("");
-  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(initial?.profile ?? null);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(initial?.creditStatus ?? null);
   const [reportedKeys, setReportedKeys] = useState<string[]>([]);
-  // "없음"과 "원본이 없음"은 다른 상태다. 이 변경 전에 올라온 자료는 텍스트만
-  // 색인되어 있어 답변에는 쓰이지만 슬라이드로 보여 줄 수는 없다.
-  const [materialState, setMaterialState] = useState<"none" | "text-only" | "indexed" | "viewable">("none");
   const [materials, setMaterials] = useState<MaterialDocument[]>([]);
   const [materialPending, setMaterialPending] = useState(false);
   // UPL-03. The upload being watched right now, if any.
   const [audioUpload, setAudioUpload] = useState<AudioUpload | null>(null);
   const [materialDragOver, setMaterialDragOver] = useState(false);
-  const [slidePage, setSlidePage] = useState<MaterialSource | null>(null);
-  const [slideUrl, setSlideUrl] = useState<{ documentId: string; url: string; expiresAt: number } | null>(null);
-  const [slideCollapsed, setSlideCollapsed] = useState(false);
-  const [slideZoomed, setSlideZoomed] = useState(false);
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
   const sessionsById = useMemo(
@@ -177,6 +198,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   // resolved with response.ok). /api/ask only needs to carry the ones missing
   // from this set — the server reads everything else back from the DB itself.
   const confirmedSegmentIdsRef = useRef(new Set<string>());
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const messagesFollowRef = useRef(true);
+  const previousMessageCountRef = useRef(0);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const segmentsRef = useRef<Segment[]>([]);
   const activeSessionIdRef = useRef("");
@@ -198,11 +222,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const pendingAudioRef = useRef<Blob[]>([]);
   const socketOpenedRef = useRef(false);
   const initialRouteRef = useRef(false);
-  const slideUrlRef = useRef<{ documentId: string; url: string; expiresAt: number } | null>(null);
-  // A page the learner or an answer put on screen wins over the follower for a
-  // while. Without this the next 30s tick drags the panel back to whatever the
-  // lecturer is saying, mid-read.
-  const slidePinnedUntilRef = useRef(0);
+  const consentDialogRef = useRef<HTMLDialogElement | null>(null);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("lecue-speech-language");
@@ -250,6 +270,18 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+  useEffect(() => { messagesFollowRef.current = true; }, [activeSessionId]);
+  useEffect(() => {
+    const scroller = messagesScrollRef.current;
+    const countChanged = previousMessageCountRef.current !== messages.length;
+    previousMessageCountRef.current = messages.length;
+    if (!scroller || !messagesFollowRef.current) return;
+    if (countChanged && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    } else {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
+  }, [messages]);
   useEffect(() => {
     if (!initialRouteRef.current) return;
     const url = new URL(window.location.href);
@@ -297,15 +329,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     return () => { cancelled = true; clearInterval(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUpload?.id, audioUpload?.status, locale, isEnglish]);
-  useEffect(() => { slideUrlRef.current = slideUrl; }, [slideUrl]);
-
-  // Whether this lecture has a slide deck at all decides both the follower
-  // below and what the panel says when it has nothing to show.
+  // Materials stay available to answers; the workspace does not render the
+  // original files.
   useEffect(() => {
-    setSlidePage(null);
-    setSlideZoomed(false);
     if (!activeSessionId) {
-      setMaterialState("none");
       setMaterials([]);
       return;
     }
@@ -321,7 +348,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         const documents = data.documents ?? [];
         if (!cancelled) {
           setMaterials(documents);
-          setMaterialState(materialViewState(documents));
         }
       } catch {
         // 자료 유무 확인 실패는 강의 진행을 막지 않는다.
@@ -329,14 +355,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     })();
     return () => { cancelled = true; };
   }, [activeSessionId, locale]);
-
-  // Show the first page immediately; live matching replaces it when the
-  // lecture has said enough to identify a later page.
-  useEffect(() => {
-    if (materialState !== "viewable" || slidePage) return;
-    const document = materials.find(isPdfMaterial);
-    if (document) setSlidePage({ documentId: document.id, filename: document.filename, startPage: 1, endPage: 1 });
-  }, [materialState, materials, slidePage]);
 
   /**
    * UPL-01. Reads the length in the browser first: a file past the three-hour
@@ -435,7 +453,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       if (!response.ok || !data.document) throw new Error(data.error);
       const next = [data.document!, ...materials];
       setMaterials(next);
-      setMaterialState(materialViewState(next));
       setNotice(isEnglish ? "The material is ready." : "강의 자료를 준비했습니다.");
     } catch (caught) {
       setNotice("");
@@ -460,8 +477,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       if (!response.ok) throw new Error(data.error);
       const next = materials.filter((document) => document.id !== documentId);
       setMaterials(next);
-      setMaterialState(materialViewState(next));
-      if (slidePage?.documentId === documentId) setSlidePage(null);
     } catch (caught) {
       setError(caught instanceof Error && caught.message
         ? caught.message
@@ -470,78 +485,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       setMaterialPending(false);
     }
   }
-
-  // The slide follows the lecture on its own, so the panel is not an empty box
-  // for everyone who has not asked anything yet. Nothing is shown unless the
-  // match clears the server's threshold; a weak match leaves the last page up.
-  useEffect(() => {
-    if (status !== "recording" || !activeSessionId || materialState !== "viewable") return;
-    let cancelled = false;
-    async function follow() {
-      if (Date.now() < slidePinnedUntilRef.current) return;
-      // 발화 단위로 저장하므로 긴 문장 중에는 방금 한 말이 아직 세그먼트가 아니다.
-      const anchor = buildAnchor(segmentsRef.current, Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current), interimRef.current);
-      if (!anchor) return;
-      try {
-        const response = await fetch("/api/material-page", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({ sessionId: activeSessionId, anchor }),
-        });
-        if (!response.ok) return;
-        const data = await response.json() as { page: MaterialSource | null };
-        if (cancelled || !data.page) return;
-        const next = data.page;
-        if (!materials.some((document) => document.id === next.documentId && isPdfMaterial(document))) return;
-        setSlidePage((current) =>
-          current && current.documentId === next.documentId && current.startPage === next.startPage ? current : next);
-      } catch {
-        // 슬라이드 추종은 보조 기능이다. 실패해도 스크립트와 질문은 그대로 굴러간다.
-      }
-    }
-    void follow();
-    const timer = window.setInterval(() => void follow(), 30_000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [status, activeSessionId, materialState, locale, materials]);
-
-  // The bucket is private, so every view goes through a short-lived signed URL.
-  // Re-signing only near expiry keeps the viewer from reloading the PDF — and
-  // losing the reader's zoom — every time the page changes.
-  useEffect(() => {
-    if (!slidePage) return;
-    const held = slideUrlRef.current;
-    if (held && held.documentId === slidePage.documentId && held.expiresAt > Date.now() + 120_000) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch(`/api/materials?documentId=${encodeURIComponent(slidePage.documentId)}`, {
-          headers: { "X-Site-Locale": locale },
-          cache: "no-store",
-        });
-        if (!response.ok) throw new Error("sign failed");
-        const data = await response.json() as { url: string; expiresInSeconds?: number };
-        if (cancelled) return;
-        setSlideUrl({
-          documentId: slidePage.documentId,
-          url: data.url,
-          expiresAt: Date.now() + (data.expiresInSeconds ?? 900) * 1_000,
-        });
-      } catch {
-        if (!cancelled) setSlideUrl(null);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [slidePage, locale]);
-
-  // Esc closes the enlarged slide, the way every other overlay in the app does.
-  useEffect(() => {
-    if (!slideZoomed) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setSlideZoomed(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [slideZoomed]);
 
   // Every temporary <details> menu closes on an outside click or Escape.
   useEffect(() => {
@@ -692,7 +635,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }
   }
 
-  /** Moves a lecture between classrooms from the sidebar drag target. */
+  /** Moves a lecture between classrooms from drag-and-drop or the options menu. */
   async function moveSession(sessionId: string, classroomId: string | null) {
     const session = sessionsById.get(sessionId);
     if (!session || (session.classroom_id ?? null) === classroomId) return;
@@ -1391,6 +1334,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const dialog = consentDialogRef.current;
+    if (!dialog) return;
+    if (consentGate && !dialog.open) dialog.showModal();
+    if (!consentGate && dialog.open) dialog.close();
+  }, [consentGate]);
+
   /** ACC-02/ACC-03. Asks the server, which owns the wording version. */
   async function refreshConsent() {
     try {
@@ -1454,14 +1404,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   function askQuestion(event: FormEvent) {
     event.preventDefault();
     void submitQuestion(question, true);
-  }
-
-  /** 학습자나 답변이 직접 지정한 쪽. 잠깐은 자동 추종보다 우선한다. */
-  function pinSlide(source: MaterialSource) {
-    if (!materials.some((document) => document.id === source.documentId && isPdfMaterial(document))) return;
-    slidePinnedUntilRef.current = Date.now() + 120_000;
-    setSlidePage(source);
-    setSlideCollapsed(false);
   }
 
   // Typing during a lecture is itself a distraction, so a transcript paragraph
@@ -1548,7 +1490,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       let buffer = "";
       let streamedText = "";
       let streamError: string | null = null;
-      let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[]; materialSources?: MaterialSource[]; screenSource?: MaterialSource | null } | null = null;
+      let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[]; materialSources?: MaterialSource[] } | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -1575,10 +1517,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
       if (streamError) throw new Error(streamError);
       if (!finalDone) throw new Error(isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다.");
-      const { answer, sources, lectureSources, materialSources, screenSource } = finalDone;
-      // 답이 무엇을 보고 쓰였는지 읽기 전에 보이도록, 근거가 된 쪽을 바로 띄운다.
-      if (screenSource) pinSlide(screenSource);
-      else if (materialSources?.[0]) pinSlide(materialSources[0]);
+      const { answer, sources, lectureSources, materialSources } = finalDone;
 
       setMessages((current) =>
         current.map((message) =>
@@ -1647,25 +1586,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       );
     }
     return (
-      <div
-        key={session.id}
-        className="sidebar-session"
-      >
-        <button
-          type="button"
-          className="session-drag-handle"
-          aria-label={isEnglish ? `Move ${session.title}` : `${session.title} 이동`}
-          title={isEnglish ? "Drag to move" : "드래그해 이동"}
-          disabled={sidebarLocked}
-          draggable={!sidebarLocked}
-          onDragStart={(event) => {
-            setDragSessionId(session.id);
-            // Firefox refuses to start a drag without payload on the transfer.
-            event.dataTransfer.setData("text/plain", session.id);
-            event.dataTransfer.effectAllowed = "move";
-          }}
-          onDragEnd={() => { setDragSessionId(""); setDragOverKey(null); }}
-        >⠿</button>
+      <DraggableSession key={session.id} id={session.id} title={session.title} disabled={sidebarLocked} isEnglish={isEnglish}>
         <button
           type="button"
           className={session.id === activeSessionId ? "active" : undefined}
@@ -1682,6 +1603,15 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <button type="button" onClick={(event) => { closeMenu(event); void exportSession(session.id); }}>
               {isEnglish ? "Export as text" : "텍스트로 내보내기"}
             </button>
+            <p>{isEnglish ? "Move to" : "강의실로 이동"}</p>
+            {(session.classroom_id ? [{ id: "", title: isEnglish ? "Unassigned" : "미분류 수업" }] : [])
+              .concat(classrooms.filter((classroom) => classroom.id !== session.classroom_id).map((classroom) => ({ id: classroom.id, title: classroom.title })))
+              .map((classroom) => (
+                <button key={classroom.id || "unassigned"} type="button" onClick={(event) => {
+                  closeMenu(event);
+                  void moveSession(session.id, classroom.id || null);
+                }}>{classroom.title}</button>
+              ))}
             <button
               type="button"
               className="session-menu-delete"
@@ -1689,31 +1619,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             >{isEnglish ? "Delete lecture" : "수업 삭제"}</button>
           </div>
         </details>
-      </div>
+      </DraggableSession>
     );
   }
 
   /** A classroom and its lectures. The whole group is a drop target. */
   function renderClassroomGroup(key: string, label: string, sessions: SessionSummary[], glossary = "") {
     return (
-      <div
-        key={key || "unassigned"}
-        className={dragOverKey === key ? "sidebar-classroom-group drop-target" : "sidebar-classroom-group"}
-        onDragOver={(event) => {
-          if (!dragSessionId) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          setDragOverKey(key);
-        }}
-        onDragLeave={() => setDragOverKey((current) => (current === key ? null : current))}
-        onDrop={(event) => {
-          event.preventDefault();
-          const sessionId = dragSessionId;
-          setDragSessionId("");
-          setDragOverKey(null);
-          if (sessionId) void moveSession(sessionId, key || null);
-        }}
-      >
+      <ClassroomDropTarget key={key || "unassigned"} id={key} disabled={sidebarLocked}>
         <div className="sidebar-classroom-row">
           <button
             type="button"
@@ -1754,7 +1667,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           )}
         </div>
         <div className="sidebar-sessions">{sessions.map(renderSessionRow)}</div>
-      </div>
+      </ClassroomDropTarget>
     );
   }
 
@@ -1778,10 +1691,19 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <span>{isEnglish ? "Classrooms" : "강의실"}</span>
           </div>
 
-          <nav className="sidebar-classrooms" aria-label={isEnglish ? "Classrooms and lectures" : "강의실과 수업 목록"}>
-            {renderClassroomGroup("", isEnglish ? "Unassigned" : "미분류 수업", unassignedSessions)}
-            {classrooms.map((classroom) => renderClassroomGroup(classroom.id, classroom.title, classroom.sessions, classroom.glossary))}
-          </nav>
+          <DragDropProvider onDragEnd={(event) => {
+            if (event.canceled) return;
+            const source = String(event.operation.source?.id ?? "");
+            const target = String(event.operation.target?.id ?? "");
+            if (!source.startsWith("session:") || !target.startsWith("classroom:")) return;
+            const classroomId = target.slice("classroom:".length);
+            void moveSession(source.slice("session:".length), classroomId === "unassigned" ? null : classroomId);
+          }}>
+            <nav className="sidebar-classrooms" aria-label={isEnglish ? "Classrooms and lectures" : "강의실과 수업 목록"}>
+              {renderClassroomGroup("", isEnglish ? "Unassigned" : "미분류 수업", unassignedSessions)}
+              {classrooms.map((classroom) => renderClassroomGroup(classroom.id, classroom.title, classroom.sessions, classroom.glossary))}
+            </nav>
+          </DragDropProvider>
 
           <form className="sidebar-create-classroom" onSubmit={createClassroom}>
             <label htmlFor="new-classroom">{isEnglish ? "Add a classroom" : "강의실 추가하기"}</label>
@@ -1993,14 +1915,18 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           )}
         </header>
 
-        {consentGate && (
-          <div className="consent-modal">
-          <div className="consent-gate" role="alertdialog" aria-label={isEnglish ? "Before your first recording" : "첫 녹음을 시작하기 전에"}>
+        <dialog
+          ref={consentDialogRef}
+          className="consent-modal"
+          aria-label={isEnglish ? "Before your first recording" : "첫 녹음을 시작하기 전에"}
+          onCancel={(event) => event.preventDefault()}
+        >
+          <div className="consent-gate">
             <p>{isEnglish
               ? "Before Lecue records for the first time, confirm both. Your answer is stored on your account with the date and the wording version."
               : "Lecue가 처음 녹음하기 전에 두 가지를 확인합니다. 확인한 문구의 버전과 시각이 계정에 기록됩니다."}</p>
             <label>
-              <input type="checkbox" checked={consentAge} onChange={(event) => setConsentAge(event.target.checked)} />
+              <input autoFocus type="checkbox" checked={consentAge} onChange={(event) => setConsentAge(event.target.checked)} />
               {isEnglish ? "I am 14 years of age or older." : "만 14세 이상입니다."}
             </label>
             <label>
@@ -2021,8 +1947,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 : isEnglish ? "Agree and continue" : "동의하고 계속"}</button>
             </span>
           </div>
-          </div>
-        )}
+        </dialog>
         <div className="error-banner" role="alert">{error}</div>
         <div className="notice-banner" role="status">{notice}</div>
 
@@ -2069,7 +1994,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             {messages.at(-1)?.role === "assistant" && !messages.at(-1)?.pending ? messages.at(-1)!.text : ""}
           </p>
 
-          <div className="messages">
+          <div
+            className="messages"
+            ref={messagesScrollRef}
+            onScroll={(event) => {
+              const node = event.currentTarget;
+              messagesFollowRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+            }}
+          >
             {messages.length === 0 ? (
               <div className="empty-chat">
                 <p>{isEnglish ? "Ask as soon as the lecture starts." : "강의가 시작되면 바로 물어보세요."}</p>
@@ -2079,7 +2011,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               </div>
             ) : (
               messages.map((message) => (
-                <article key={message.id} className={`message message-${message.role}`}>
+                <article key={message.id} className={`message message-${message.role}`} aria-busy={message.pending || undefined}>
                   {message.role === "assistant" && (
                     <span className="message-label">{message.assistantLabel ?? (isEnglish ? "Lecture assistant · AI" : "강의 조교 · AI")}</span>
                   )}
@@ -2124,16 +2056,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   {message.materialSources && message.materialSources.length > 0 && (
                     <div className="lecture-sources material-sources">
                       <span>{isEnglish ? "Material used" : "강의 자료 참고"}</span>
-                      {/* 답과 근거를 잇는 고리. 누르면 옆 패널이 그 쪽으로 간다. */}
                       {message.materialSources.map((source) => (
-                        <button
-                          type="button"
-                          key={`${source.documentId}-${source.startPage}`}
-                          onClick={() => pinSlide(source)}
-                        >
+                        <span className="material-source" key={`${source.documentId}-${source.startPage}`}>
                           {source.filename} p.{source.startPage}
                           {source.endPage !== source.startPage ? `-${source.endPage}` : ""}
-                        </button>
+                        </span>
                       ))}
                     </div>
                   )}
@@ -2204,18 +2131,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               {materialPending && <span className="material-upload-spinner" aria-hidden="true" />}
               {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add material" : "자료 추가")}
             </label>
-            {materialState === "viewable" && (
-              <button
-                type="button"
-                className="material-show-slides"
-                aria-expanded={!slideCollapsed}
-                onClick={() => setSlideCollapsed((collapsed) => !collapsed)}
-              >
-                {slideCollapsed
-                  ? isEnglish ? "Show slides" : "슬라이드 펼치기"
-                  : isEnglish ? "Hide slides" : "슬라이드 접기"}
-              </button>
-            )}
             {materials.length > 0 && (
               <details className="material-list">
                 <summary>{isEnglish ? "Manage" : "관리"}</summary>
@@ -2234,53 +2149,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             )}
           </div>
 
-          {activeSessionId && materialState === "none" && (
-            <p className="slide-hint">{isEnglish
+          {activeSessionId && materials.length === 0 && (
+            <p className="material-hint">{isEnglish
               ? "Add material to this lecture and answers will use it too."
               : "이 수업에 강의 자료를 올리면 답변에 반영합니다."}</p>
-          )}
-
-          {activeSessionId && materialState === "text-only" && (
-            <p className="slide-hint">{isEnglish
-              ? "This lecture's materials were indexed before originals were kept. Answers still use them; upload them again to see the slides."
-              : "이 수업의 자료는 원본을 보관하기 전에 올라왔습니다. 답변에는 그대로 쓰이지만, 슬라이드를 보려면 다시 올려 주세요."}</p>
-          )}
-
-          {activeSessionId && materialState === "indexed" && (
-            <p className="slide-hint">{isEnglish
-              ? "This material is used in answers. Upload a PDF when you also want to follow slides here."
-              : "이 자료는 답변에 반영됩니다. 여기서 슬라이드도 보려면 PDF를 올려 주세요."}</p>
-          )}
-
-          {activeSessionId && materialState === "viewable" && (
-            <div className={`slide-panel${slideCollapsed ? " collapsed" : ""}`} aria-hidden={slideCollapsed}>
-              <div className="slide-bar">
-                <span className="slide-label">
-                  {slidePage
-                    ? `${slidePage.filename} p.${slidePage.startPage}${slidePage.endPage !== slidePage.startPage ? `-${slidePage.endPage}` : ""}`
-                    : isEnglish ? "Finding the page the lecture is on" : "지금 강의가 지나는 쪽을 찾는 중"}
-                </span>
-                <button type="button" onClick={() => setSlideZoomed(true)} disabled={slideCollapsed || !slidePage || slideUrl?.documentId !== slidePage?.documentId}>
-                  {isEnglish ? "Enlarge" : "크게 보기"}
-                </button>
-              </div>
-              <div className="slide-frame" aria-hidden={slideCollapsed}>
-                {slidePage && slideUrl?.documentId === slidePage.documentId ? (
-                  <PdfSlide
-                    title={isEnglish ? "Slide the lecture is on" : "지금 강의가 지나는 슬라이드"}
-                    url={slideUrl.url}
-                    page={slidePage.startPage}
-                    openLabel={isEnglish ? "Open PDF" : "PDF 열기"}
-                  />
-                ) : (
-                  <p>{slidePage
-                    ? isEnglish ? "Opening the slide…" : "슬라이드를 여는 중입니다"
-                    : isEnglish
-                      ? "The slide appears once the lecture reaches a page in the deck."
-                      : "강의가 자료의 어느 쪽에 닿으면 그 슬라이드가 여기 뜹니다."}</p>
-                )}
-              </div>
-            </div>
           )}
 
           {/* The live region is the newest line only. On the scrollback
@@ -2337,26 +2209,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           </div>
           </section>
         </section>
-
-        {slideZoomed && slidePage && slideUrl?.documentId === slidePage.documentId && (
-          <div className="slide-overlay" role="dialog" aria-modal="true" onClick={() => setSlideZoomed(false)}>
-            <div className="slide-overlay-inner" onClick={(event) => event.stopPropagation()}>
-              <div className="slide-bar">
-                <span className="slide-label">
-                  {slidePage.filename} p.{slidePage.startPage}
-                  {slidePage.endPage !== slidePage.startPage ? `-${slidePage.endPage}` : ""}
-                </span>
-                <button type="button" onClick={() => setSlideZoomed(false)}>{isEnglish ? "Close" : "닫기"}</button>
-              </div>
-              <PdfSlide
-                title={isEnglish ? "Slide, enlarged" : "슬라이드 크게 보기"}
-                url={slideUrl.url}
-                page={slidePage.startPage}
-                openLabel={isEnglish ? "Open PDF" : "PDF 열기"}
-              />
-            </div>
-          </div>
-        )}
 
         <footer className="footnote">
           <span>{isEnglish ? "AI transcription · errors may occur" : "AI 자동 변환 · 오류가 있을 수 있습니다"}</span>

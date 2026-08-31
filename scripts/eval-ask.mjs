@@ -4,8 +4,8 @@ const endpoint = new URL("/api/ask", baseUrl);
 const segment = (startMs, text) => ({ startMs, endMs: startMs + 5_000, text });
 
 // 지시어 질문은 자료가 올라간 실제 강의실이 있어야 의미가 있다. 넷 다 채워졌을
-// 때만 앵커 시나리오를 돌린다. ASK_EVAL_ANCHOR에는 그 슬라이드를 설명하는 실제
-// 강의 발화 한 토막을, ASK_EVAL_ANCHOR_PAGE에는 그때 화면에 있던 쪽 번호를 넣는다.
+// 때만 앵커 시나리오를 돌린다. ASK_EVAL_ANCHOR에는 그 자료 쪽을 설명하는 실제
+// 강의 발화 한 토막을, ASK_EVAL_ANCHOR_PAGE에는 해당 쪽 번호를 넣는다.
 const anchorClassroomId = process.env.ASK_EVAL_CLASSROOM_ID;
 const anchorSessionId = process.env.ASK_EVAL_SESSION_ID;
 const anchorText = process.env.ASK_EVAL_ANCHOR;
@@ -14,10 +14,8 @@ const anchorQuestion = process.env.ASK_EVAL_ANCHOR_QUESTION ?? "이거 왜 이�
 const anchorReady = Boolean(anchorClassroomId && anchorSessionId && anchorText) && Number.isFinite(anchorPage);
 
 const onExpectedPage = (data) =>
-  data.screenSource !== null &&
-  data.screenSource !== undefined &&
-  data.screenSource.startPage <= anchorPage &&
-  data.screenSource.endPage >= anchorPage;
+  data.materialSources.some((source) =>
+    source.startPage <= anchorPage && source.endPage >= anchorPage);
 
 const anchorScenarios = !anchorReady ? [] : [
   {
@@ -46,7 +44,7 @@ const anchorScenarios = !anchorReady ? [] : [
       lectureSessionId: anchorSessionId,
     },
     checks: [
-      [`화면 쪽 p.${anchorPage} 적중`, onExpectedPage],
+      [`자료 쪽 p.${anchorPage} 적중`, onExpectedPage],
       ["자료 근거 표시", (data) => data.materialSources.length > 0],
     ],
   },

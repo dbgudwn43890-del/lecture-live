@@ -240,12 +240,26 @@ a, button, summary, input, textarea, select {
 .consent-modal {
   position: fixed;
   inset: 0;
-  z-index: 60;
-  display: grid;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  display: none;
   place-items: center;
+  margin: 0;
   padding: 24px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+}
+.consent-modal[open] {
+  display: grid;
+  animation: modal-in 160ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.consent-modal::backdrop {
   background: rgba(28, 24, 37, .5);
   backdrop-filter: blur(3px);
+  animation: backdrop-in 160ms ease-out both;
 }
 .consent-modal .consent-gate {
   width: min(560px, 100%);
@@ -260,6 +274,8 @@ a, button, summary, input, textarea, select {
 }
 .consent-modal .consent-gate p { color: var(--muted); }
 .consent-modal .consent-gate span { width: 100%; justify-content: flex-end; margin-top: 4px; }
+@keyframes modal-in { from { opacity: 0; transform: scale(.985) translateY(5px); } }
+@keyframes backdrop-in { from { opacity: 0; } }
 
 /* The exam gate is still a banner; the consent dialog above reuses its checkbox
    and footer layout rather than growing a second set of nearly identical rules. */
@@ -420,6 +436,16 @@ a, button, summary, input, textarea, select {
 }
 
 .message .pending { color: var(--muted); }
+.message .pending::after {
+  content: "•••";
+  display: inline-block;
+  margin-left: 5px;
+  letter-spacing: .14em;
+  animation: pending-dots 1s ease-in-out infinite;
+}
+@keyframes pending-dots {
+  50% { opacity: .28; transform: translateY(-1px); }
+}
 
 .sources {
   display: flex;
@@ -558,7 +584,7 @@ a, button, summary, input, textarea, select {
 .transcript-line .line-report:not(:disabled):hover { color: var(--signal); border-color: var(--signal); }
 .transcript-line .line-report:disabled { color: var(--muted); opacity: .7; }
 
-.material-sources button {
+.material-sources .material-source {
   padding: 4px 7px;
   color: var(--focus);
   background: var(--soft-blue);
@@ -567,7 +593,6 @@ a, button, summary, input, textarea, select {
   font-size: 11px;
   font-weight: 750;
 }
-.material-sources button:hover { background: #d7cfe4; }
 
 .chat-pane { position: relative; }
 .material-drop-overlay {
@@ -598,8 +623,7 @@ a, button, summary, input, textarea, select {
 .material-toolbar strong { font-size: 11px; font-weight: 700; }
 .material-toolbar > div span { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .material-upload-button,
-.material-list > summary,
-.material-show-slides {
+.material-list > summary {
   padding: 5px 8px;
   color: #423b4e;
   background: white;
@@ -647,7 +671,7 @@ a, button, summary, input, textarea, select {
 .material-list li small { color: var(--muted); font-size: 9px; }
 .material-list li button { padding: 3px 6px; color: var(--signal); background: transparent; border: 0; font-size: 9px; }
 
-.slide-hint {
+.material-hint {
   margin: 0;
   padding: 9px 24px;
   color: var(--muted);
@@ -656,119 +680,8 @@ a, button, summary, input, textarea, select {
   font-size: 12px;
 }
 
-.slide-panel {
-  flex: 0 0 auto;
-  max-height: 520px;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  transition: max-height 240ms ease, opacity 180ms ease, transform 240ms ease, border-color 240ms ease;
-}
-.slide-panel.collapsed { max-height: 0; opacity: 0; transform: translateY(-8px); border-bottom-color: transparent; }
-
-.slide-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 24px;
-}
-
-.slide-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--focus);
-  font-size: 12px;
-  font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.slide-bar button {
-  padding: 4px 9px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  font-size: 11px;
-}
-.slide-bar button:hover:not(:disabled) { background: var(--soft-blue); }
-
-/* A quiet desk around the page keeps unlike document ratios intentional. */
-.slide-frame {
-  height: clamp(280px, 34vw, 430px);
-  padding: 0 24px 12px;
-}
-.pdf-slide {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #f1eff6;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.pdf-slide canvas {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  background: white;
-  box-shadow: 0 8px 24px rgba(29, 23, 49, .14);
-}
-.pdf-slide a { color: var(--focus); font-size: 12px; font-weight: 750; }
-.slide-frame p {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  margin: 0;
-  padding: 0 16px;
-  color: var(--muted);
-  text-align: center;
-  background: var(--paper);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
-  font-size: 12px;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .slide-panel { transition: none; }
   .material-upload-spinner { animation: none; }
-}
-
-.slide-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(23, 27, 29, .62);
-}
-
-.slide-overlay-inner {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: min(1180px, 94vw);
-  height: min(880px, 92vh);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.slide-overlay-inner > .pdf-slide {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  background: #ebe8f2;
-}
-.slide-overlay-inner > .pdf-slide canvas {
-  box-shadow: 0 14px 38px rgba(29, 23, 49, .18);
 }
 
 .message-report { margin-top: 8px; }
@@ -1433,7 +1346,6 @@ a, button, summary, input, textarea, select {
   .topbar > button { grid-column: 2; grid-row: 4; }
   .panes { grid-template-columns: 1fr; }
   .chat-pane, .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
-  .slide-frame { height: min(300px, 52vw); padding-inline: 16px; }
   .panes { gap: 14px; padding: 12px; }
   .chat-pane { border-right: 1px solid var(--line-strong); }
   .footnote { min-height: 58px; align-items: flex-start; flex-direction: column; justify-content: center; gap: 7px; }
@@ -1500,6 +1412,7 @@ a, button, summary, input, textarea, select {
     animation: none !important;
     transition-duration: .01ms !important;
   }
+  .consent-modal::backdrop { animation: none !important; }
 }
 
 /* Lecue brutalism: retain the brand palette, expose the product structure. */
@@ -1691,7 +1604,7 @@ button:active,
 .sidebar-section-heading a:hover { color: var(--focus); }
 
 .sidebar-classrooms { display: grid; gap: 12px; }
-.sidebar-classroom-group { min-width: 0; }
+.sidebar-classroom-group { min-width: 0; transition: background-color 140ms ease, outline-color 140ms ease; }
 .sidebar-classroom-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 24px; align-items: center; }
 
 .sidebar-classroom {
@@ -2026,16 +1939,21 @@ button:active,
 .workspace .footnote { color: #817891; background: #eeecf0; border-top: 1px solid #d7d5dc; }
 
 .sidebar-session { display: flex; align-items: center; gap: 2px; }
+.sidebar-session.is-dragging { opacity: .72; }
+.sidebar-session.is-dropping { animation: session-drop 180ms ease-out; }
+@keyframes session-drop { 50% { transform: scale(.985); } }
 .sidebar-session > button { flex: 1 1 auto; }
 .sidebar-sessions .session-drag-handle {
-  flex: 0 0 16px;
-  width: 16px;
+  flex: 0 0 24px;
+  width: 24px;
+  min-height: 24px;
   padding: 3px 0;
   color: #9891a5;
   background: transparent;
   cursor: grab;
   font-size: 12px;
   line-height: 1;
+  touch-action: none;
 }
 .sidebar-sessions .session-drag-handle:active { cursor: grabbing; }
 .sidebar-sessions .session-drag-handle:disabled { cursor: default; opacity: .35; }
@@ -2116,7 +2034,7 @@ button:active,
   font-size: 11px;
 }
 
-.sidebar-classroom-group.drop-target { background: #e7e6ea; border-radius: var(--radius); outline: 1px dashed #9992a5; }
+.sidebar-classroom-group.drop-target { background: #e7e6ea; border-radius: var(--radius); outline: 1px dashed var(--focus); }
 
 /* ---------------------------------------------------------------------------
    Quiet pass. The workspace had inherited two identities at once: the loud
@@ -2328,6 +2246,40 @@ button:active,
   font-weight: 750;
   font-family: inherit;
   text-decoration: none;
+}
+
+/* The classroom fallback keeps its two working surfaces in place instead of
+   replacing a familiar desk with a centered spinner. */
+.classroom-skeleton .workspace-main { grid-template-rows: 48px minmax(0, 1fr); }
+.classroom-skeleton .panes { grid-row: 2; }
+.classroom-skeleton .topbar { display: flex; justify-content: space-between; }
+.classroom-skeleton .chat-pane,
+.classroom-skeleton .transcript-pane { display: grid; grid-template-rows: 68px minmax(0, 1fr) auto; padding: 20px; }
+.classroom-skeleton .transcript-pane { grid-template-rows: 68px minmax(0, 1fr); }
+.skeleton-line,
+.skeleton-card,
+.skeleton-input,
+.skeleton-copy i {
+  display: block;
+  background: #e2dfe6;
+  border-radius: var(--radius);
+}
+.skeleton-line { width: 78%; height: 12px; margin: 9px 8px; }
+.skeleton-new { width: 62%; height: 34px; }
+.skeleton-label { width: 34%; height: 8px; margin-bottom: 20px; }
+.skeleton-short { width: 48%; }
+.skeleton-state { width: 120px; height: 10px; }
+.skeleton-action { width: 82px; height: 28px; }
+.skeleton-heading { width: 132px; height: 14px; margin: 6px 0; }
+.skeleton-card { width: 74%; height: 96px; align-self: start; margin-top: 30px; }
+.skeleton-input { width: 100%; height: 62px; }
+.skeleton-copy { align-self: start; display: grid; gap: 22px; margin-top: 30px; }
+.skeleton-copy i { width: 88%; height: 42px; }
+.skeleton-copy i:nth-child(2) { width: 76%; }
+.skeleton-copy i:nth-child(3) { width: 64%; }
+
+@media (max-width: 840px) {
+  .classroom-skeleton .workspace-main { grid-template-rows: 48px auto; }
 }
 
 /* Delete is the one item in this menu that cannot be undone, so it carries the
