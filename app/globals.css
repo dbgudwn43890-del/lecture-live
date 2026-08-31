@@ -611,6 +611,18 @@ a, button, summary, input, textarea, select {
   white-space: nowrap;
 }
 .material-upload-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.material-upload-button.is-pending { color: var(--focus); cursor: wait; }
+.material-upload-spinner {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  margin-right: 5px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: material-spin 700ms linear infinite;
+}
+@keyframes material-spin { to { transform: rotate(1turn); } }
 .material-list { position: relative; }
 .material-list > summary { list-style: none; }
 .material-list > summary::-webkit-details-marker { display: none; }
@@ -711,6 +723,7 @@ a, button, summary, input, textarea, select {
 
 @media (prefers-reduced-motion: reduce) {
   .slide-panel { transition: none; }
+  .material-upload-spinner { animation: none; }
 }
 
 .slide-overlay {

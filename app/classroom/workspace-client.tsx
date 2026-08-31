@@ -2121,9 +2121,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           <div className="material-toolbar">
             <div>
               <strong>{isEnglish ? "Lecture materials" : "강의 자료"}</strong>
-              <span>{isEnglish ? `${materials.length} PDFs · also improves term recognition` : `PDF ${materials.length}개 · 전문용어 인식에도 반영`}</span>
+              <span>{isEnglish ? `${materials.length} materials · also improves term recognition` : `자료 ${materials.length}개 · 전문용어 인식에도 반영`}</span>
             </div>
-            <label className="material-upload-button">
+            <label className={`material-upload-button${materialPending ? " is-pending" : ""}`} aria-busy={materialPending}>
               <input
                 type="file"
                 accept=".pdf,.docx,.pptx,.txt,.csv,.tsv,.xlsx,.xls"
@@ -2134,11 +2134,19 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   if (file) void uploadMaterial(file);
                 }}
               />
+              {materialPending && <span className="material-upload-spinner" aria-hidden="true" />}
               {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add material" : "자료 추가")}
             </label>
-            {materialState === "viewable" && slideCollapsed && (
-              <button type="button" className="material-show-slides" onClick={() => setSlideCollapsed(false)}>
-                {isEnglish ? "Show slides" : "슬라이드 펼치기"}
+            {materialState === "viewable" && (
+              <button
+                type="button"
+                className="material-show-slides"
+                aria-expanded={!slideCollapsed}
+                onClick={() => setSlideCollapsed((collapsed) => !collapsed)}
+              >
+                {slideCollapsed
+                  ? isEnglish ? "Show slides" : "슬라이드 펼치기"
+                  : isEnglish ? "Hide slides" : "슬라이드 접기"}
               </button>
             )}
             {materials.length > 0 && (
@@ -2178,18 +2186,15 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           )}
 
           {activeSessionId && materialState === "viewable" && (
-            <div className={`slide-panel${slideCollapsed ? " collapsed" : ""}`}>
+            <div className={`slide-panel${slideCollapsed ? " collapsed" : ""}`} aria-hidden={slideCollapsed}>
               <div className="slide-bar">
                 <span className="slide-label">
                   {slidePage
                     ? `${slidePage.filename} p.${slidePage.startPage}${slidePage.endPage !== slidePage.startPage ? `-${slidePage.endPage}` : ""}`
                     : isEnglish ? "Finding the page the lecture is on" : "지금 강의가 지나는 쪽을 찾는 중"}
                 </span>
-                <button type="button" onClick={() => setSlideZoomed(true)} disabled={!slidePage || slideUrl?.documentId !== slidePage?.documentId}>
+                <button type="button" onClick={() => setSlideZoomed(true)} disabled={slideCollapsed || !slidePage || slideUrl?.documentId !== slidePage?.documentId}>
                   {isEnglish ? "Enlarge" : "크게 보기"}
-                </button>
-                <button type="button" onClick={() => setSlideCollapsed((collapsed) => !collapsed)}>
-                  {isEnglish ? "Hide" : "접기"}
                 </button>
               </div>
               <div className="slide-frame" aria-hidden={slideCollapsed}>
