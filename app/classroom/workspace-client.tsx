@@ -515,11 +515,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     return () => window.removeEventListener("keydown", onKey);
   }, [slideZoomed]);
 
-  // Every <details> menu in the shell closes the same way, and the sidebar now
-  // has one per lecture, so this queries them rather than holding a ref each.
+  // Every temporary <details> menu closes on an outside click or Escape.
   useEffect(() => {
     function openMenus() {
-      return document.querySelectorAll<HTMLDetailsElement>("details.profile-menu[open], details.session-menu[open], details.classroom-menu[open]");
+      return document.querySelectorAll<HTMLDetailsElement>("details[open]");
     }
     function closeIfOutside(event: PointerEvent) {
       for (const menu of openMenus()) {
@@ -2144,6 +2143,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               />
               {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add material" : "자료 추가")}
             </label>
+            {materialState === "viewable" && slideCollapsed && (
+              <button type="button" className="material-show-slides" onClick={() => setSlideCollapsed(false)}>
+                {isEnglish ? "Show slides" : "슬라이드 펼치기"}
+              </button>
+            )}
             {materials.length > 0 && (
               <details className="material-list">
                 <summary>{isEnglish ? "Manage" : "관리"}</summary>
@@ -2192,30 +2196,27 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   {isEnglish ? "Enlarge" : "크게 보기"}
                 </button>
                 <button type="button" onClick={() => setSlideCollapsed((collapsed) => !collapsed)}>
-                  {slideCollapsed
-                    ? isEnglish ? "Show" : "펼치기"
-                    : isEnglish ? "Hide" : "접기"}
+                  {isEnglish ? "Hide" : "접기"}
                 </button>
               </div>
-              {!slideCollapsed && (
-                <div className="slide-frame">
-                  {slidePage && slideUrl?.documentId === slidePage.documentId ? (
-                    /* ponytail: 브라우저 내장 PDF 뷰어의 #page 프래그먼트에 기댄다.
-                       Chrome·Edge(1차 지원 환경)는 따르지만 Safari는 무시한다.
-                       현장에서 문제가 되면 pdf.js 캔버스 렌더로 올린다. */
-                    <iframe
-                      title={isEnglish ? "Slide the lecture is on" : "지금 강의가 지나는 슬라이드"}
-                      src={`${slideUrl.url}#page=${slidePage.startPage}&view=Fit`}
-                    />
-                  ) : (
-                    <p>{slidePage
-                      ? isEnglish ? "Opening the slide…" : "슬라이드를 여는 중입니다"
-                      : isEnglish
-                        ? "The slide appears once the lecture reaches a page in the deck."
-                        : "강의가 자료의 어느 쪽에 닿으면 그 슬라이드가 여기 뜹니다."}</p>
-                  )}
-                </div>
-              )}
+              <div className="slide-frame" aria-hidden={slideCollapsed}>
+                {slidePage && slideUrl?.documentId === slidePage.documentId ? (
+                  /* ponytail: 브라우저 내장 PDF 뷰어의 #page 프래그먼트에 기댄다.
+                     Chrome·Edge(1차 지원 환경)는 따르지만 Safari는 무시한다.
+                     현장에서 문제가 되면 pdf.js 캔버스 렌더로 올린다. */
+                  <iframe
+                    title={isEnglish ? "Slide the lecture is on" : "지금 강의가 지나는 슬라이드"}
+                    src={`${slideUrl.url}#page=${slidePage.startPage}&view=Fit`}
+                    tabIndex={slideCollapsed ? -1 : 0}
+                  />
+                ) : (
+                  <p>{slidePage
+                    ? isEnglish ? "Opening the slide…" : "슬라이드를 여는 중입니다"
+                    : isEnglish
+                      ? "The slide appears once the lecture reaches a page in the deck."
+                      : "강의가 자료의 어느 쪽에 닿으면 그 슬라이드가 여기 뜹니다."}</p>
+                )}
+              </div>
             </div>
           )}
 

@@ -324,8 +324,9 @@ a, button, summary, input, textarea, select {
 }
 
 .chat-pane { border-right: 1px solid var(--line-strong); }
-/* 머리글 · 슬라이드 패널 · 스크립트. 패널이 없으면 가운데 줄은 0으로 접힌다. */
-.transcript-pane { grid-template-rows: auto auto minmax(0, 1fr); background: var(--paper); }
+/* The transcript owns remaining height. Materials above it grow only to their content. */
+.transcript-pane { display: flex; flex-direction: column; background: var(--paper); }
+.transcript-pane .transcript { flex: 1 1 auto; }
 
 .pane-heading {
   min-height: 88px;
@@ -597,7 +598,8 @@ a, button, summary, input, textarea, select {
 .material-toolbar strong { font-size: 11px; font-weight: 700; }
 .material-toolbar > div span { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .material-upload-button,
-.material-list > summary {
+.material-list > summary,
+.material-show-slides {
   padding: 5px 8px;
   color: #423b4e;
   background: white;
@@ -643,9 +645,14 @@ a, button, summary, input, textarea, select {
 }
 
 .slide-panel {
+  max-height: 272px;
+  min-height: 0;
+  overflow: hidden;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
+  transition: max-height 240ms ease, opacity 180ms ease, transform 240ms ease, border-color 240ms ease;
 }
+.slide-panel.collapsed { max-height: 0; opacity: 0; transform: translateY(-8px); border-bottom-color: transparent; }
 
 .slide-bar {
   display: flex;
@@ -700,6 +707,10 @@ a, button, summary, input, textarea, select {
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
   font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-panel { transition: none; }
 }
 
 .slide-overlay {
