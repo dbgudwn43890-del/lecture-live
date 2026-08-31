@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MAX_PDF_BYTES = 20_000_000;
-const MAX_DOCUMENTS_PER_CLASSROOM = 20;
+const MAX_DOCUMENTS_PER_SESSION = 20;
 // Long enough to read a slide without re-fetching, short enough that a copied
 // URL stops working well before the lecture ends.
 const SIGNED_URL_SECONDS = 900;
@@ -82,13 +82,16 @@ export async function GET(request: Request) {
     });
   }
 
-  const classroomId = params.get("classroomId");
+  const sessionId = params.get("sessionId");
+  if (!isUuid(sessionId)) {
+    return NextResponse.json({ error: current.isEnglish ? "Check the lecture." : "수업 정보를 확인해 주세요." }, { status: 400 });
+  }
   const query = current.supabase
     .from("material_documents")
     .select("id,classroom_id,session_id,filename,page_count,created_at,storage_path")
     .order("created_at", { ascending: false });
 
-  const { data, error } = isUuid(classroomId) ? await query.eq("classroom_id", classroomId) : await query;
+  const { data, error } = await query.eq("session_id", sessionId);
   if (error) {
     console.error("Material list failed", error.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not load lecture materials." : "강의 자료를 불러오지 못했습니다." }, { status: 500 });
@@ -112,14 +115,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Invalid upload." : "올바른 업로드 요청이 아닙니다." }, { status: 400 });
   }
 
-  const classroomId = formData.get("classroomId");
-  // 수업 중에 올린 자료는 그 수업에 바로 붙는다. 수업 전에 올린 자료는 아직
-  // 세션이 없으므로 null로 두고, 수업을 시작할 때 lecture-sessions가 가져간다.
   const rawSessionId = formData.get("sessionId");
   const sessionId = isUuid(rawSessionId) ? rawSessionId : null;
   const file = formData.get("file");
-  if (!isUuid(classroomId)) {
-    return NextResponse.json({ error: isEnglish ? "Choose a classroom first." : "강의실을 먼저 선택해 주세요." }, { status: 400 });
+  if (!sessionId) {
+    return NextResponse.json({ error: isEnglish ? "Open a lecture first." : "수업을 먼저 열어 주세요." }, { status: 400 });
   }
   if (!(file instanceof File) || file.size === 0 || file.size > MAX_PDF_BYTES) {
     return NextResponse.json({ error: isEnglish ? "Upload a PDF of 20MB or less." : "20MB 이하의 PDF를 올려 주세요." }, { status: 400 });
@@ -130,25 +130,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Only PDF files can be indexed." : "PDF 파일만 색인할 수 있습니다." }, { status: 400 });
   }
 
-  // Ownership check and the per-classroom ceiling in one read. RLS already
-  // scopes both tables to this user, so a foreign classroom id comes back empty.
-  const [{ data: classroom }, { count }, { data: session }] = await Promise.all([
-    supabase.from("classrooms").select("id").eq("id", classroomId).maybeSingle(),
-    supabase.from("material_documents").select("id", { count: "exact", head: true }).eq("classroom_id", classroomId),
-    // RLS scopes this to the owner; a session from another classroom would
-    // attach the material to a lecture it has nothing to do with.
-    sessionId
-      ? supabase.from("lecture_sessions").select("id").eq("id", sessionId).eq("classroom_id", classroomId).maybeSingle()
-      : Promise.resolve({ data: null }),
+  // RLS scopes both reads to this user, so a foreign session id comes back empty.
+  const [{ data: session }, { count }] = await Promise.all([
+    supabase.from("lecture_sessions").select("id,classroom_id").eq("id", sessionId).maybeSingle(),
+    supabase.from("material_documents").select("id", { count: "exact", head: true }).eq("session_id", sessionId),
   ]);
-  if (!classroom) {
-    return NextResponse.json({ error: isEnglish ? "Could not find that classroom." : "해당 강의실을 찾지 못했습니다." }, { status: 404 });
+  if (!session) {
+    return NextResponse.json({ error: isEnglish ? "Could not find that lecture." : "해당 수업을 찾지 못했습니다." }, { status: 404 });
   }
-  if ((count ?? 0) >= MAX_DOCUMENTS_PER_CLASSROOM) {
+  if ((count ?? 0) >= MAX_DOCUMENTS_PER_SESSION) {
     return NextResponse.json({
       error: isEnglish
-        ? `A classroom holds up to ${MAX_DOCUMENTS_PER_CLASSROOM} materials. Remove one first.`
-        : `강의실당 자료는 ${MAX_DOCUMENTS_PER_CLASSROOM}개까지입니다. 먼저 하나를 삭제해 주세요.`,
+        ? `A lecture holds up to ${MAX_DOCUMENTS_PER_SESSION} materials. Remove one first.`
+        : `수업당 자료는 ${MAX_DOCUMENTS_PER_SESSION}개까지입니다. 먼저 하나를 삭제해 주세요.`,
     }, { status: 409 });
   }
 
@@ -215,8 +209,8 @@ export async function POST(request: Request) {
   const { data: document, error: documentError } = await supabase
     .from("material_documents")
     .insert({
-      classroom_id: classroomId,
-      session_id: session?.id ?? null,
+      classroom_id: session.classroom_id,
+      session_id: session.id,
       user_id: userId,
       filename,
       page_count: Math.min(500, pages.at(-1)?.page ?? pages.length),
@@ -233,7 +227,7 @@ export async function POST(request: Request) {
 
   const { error: chunkError } = await supabase.from("material_chunks").insert(chunks.map((chunk, index) => ({
     document_id: document.id,
-    classroom_id: classroomId,
+    classroom_id: session.classroom_id,
     user_id: userId,
     start_page: chunk.startPage,
     end_page: chunk.endPage,

@@ -33,17 +33,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ page: null }, { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } });
   }
 
-  let body: { classroomId?: unknown; anchor?: unknown };
+  let body: { sessionId?: unknown; anchor?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: isEnglish ? "Invalid request." : "올바른 요청이 아닙니다." }, { status: 400 });
   }
 
-  const classroomId = isUuid(body.classroomId) ? body.classroomId : null;
+  const sessionId = isUuid(body.sessionId) ? body.sessionId : null;
   const anchor = typeof body.anchor === "string" ? body.anchor.slice(0, MAX_ANCHOR_CHARACTERS).trim() : "";
   // 근거가 없으면 추정하지 않는다. 호출자는 직전 쪽을 그대로 두면 된다.
-  if (!classroomId || anchor.length < 40) return NextResponse.json({ page: null });
+  if (!sessionId || anchor.length < 40) return NextResponse.json({ page: null });
 
   const admin = createAdminClient();
   const apiKey = process.env.OPENAI_API_KEY;
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     const embedding = await openai.embeddings.create({ model: "text-embedding-3-small", input: anchor });
     const { data, error } = await admin.rpc("match_material_chunks", {
       p_user_id: user.id,
-      p_classroom_id: classroomId,
+      p_session_id: sessionId,
       p_query_embedding: embedding.data[0].embedding,
       p_match_count: 1,
     });

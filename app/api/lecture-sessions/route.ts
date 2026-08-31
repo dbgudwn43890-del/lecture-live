@@ -182,7 +182,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Invalid request." : "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
 
-  if (body.action === "start") {
+  if (body.action === "start" || body.action === "draft") {
     const classroomId = validId(body.classroomId) ? body.classroomId : null;
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title || title.length > 80) return NextResponse.json({ error: current.isEnglish ? "Check the lecture title." : "수업 제목을 확인해 주세요." }, { status: 400 });
@@ -194,20 +194,25 @@ export async function POST(request: Request) {
       if (!classroom) return NextResponse.json({ error: current.isEnglish ? "Classroom not found." : "강의실을 찾지 못했습니다." }, { status: 404 });
     }
 
-    const { data, error } = await current.supabase.from("lecture_sessions").insert({ classroom_id: classroomId, user_id: current.userId, title }).select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").single();
+    const draftId = body.action === "start" && validId(body.sessionId) ? body.sessionId : null;
+    const query = draftId
+      ? current.supabase.from("lecture_sessions").update({ status: "recording", started_at: new Date().toISOString() }).eq("id", draftId).eq("status", "draft")
+      : current.supabase.from("lecture_sessions").insert({ classroom_id: classroomId, user_id: current.userId, title, status: body.action });
+    const { data, error } = await query.select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").single();
     if (error) {
       console.error("Lecture start save failed", error.code);
       return NextResponse.json({ error: current.isEnglish ? "Could not create the lecture record." : "수업 기록을 만들지 못했습니다." }, { status: 500 });
     }
-    if (classroomId) {
-      await current.supabase.from("classrooms").update({ updated_at: new Date().toISOString() }).eq("id", classroomId);
+    const sessionClassroomId = data.classroom_id;
+    if (sessionClassroomId) {
+      await current.supabase.from("classrooms").update({ updated_at: new Date().toISOString() }).eq("id", sessionClassroomId);
       // 방금 올린 자료는 지금 시작하는 수업의 것이다. 지난주 자료는 이미 그때의
       // 세션을 달고 있으므로 여기 걸리지 않는다. 이 구분이 있어야 keyterm 예산이
       // 한 학기치 PDF가 아니라 오늘 강의의 어휘로 찬다.
       const { error: claimError } = await current.supabase
         .from("material_documents")
         .update({ session_id: data.id })
-        .eq("classroom_id", classroomId)
+        .eq("classroom_id", sessionClassroomId)
         .is("session_id", null);
       // 자료가 안 붙어도 수업은 시작돼야 한다. keyterm은 강의실 전체 자료로
       // 물러나므로 최악이라도 지금과 같다.
@@ -416,7 +421,7 @@ export async function POST(request: Request) {
 
 /**
  * HIS-03/HIS-04. Every child table (`transcript_segments`, `lecture_chunks`,
- * `lecture_questions`, `lecture_reports`) declares
+ * `lecture_questions`, `lecture_reports`, `material_documents`) declares
  * `references lecture_sessions(id) on delete cascade`, so one delete takes the
  * lecture and everything derived from it. RLS scopes the row to its owner, so
  * a guessed id from another account deletes nothing and reports "not found"
@@ -436,6 +441,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Check the lecture ID." : "수업 ID를 확인해 주세요." }, { status: 400 });
   }
 
+  const { data: materials } = await current.supabase
+    .from("material_documents")
+    .select("storage_path")
+    .eq("session_id", sessionId);
   const { data: deleted, error } = await current.supabase
     .from("lecture_sessions")
     .delete()
@@ -448,6 +457,11 @@ export async function DELETE(request: Request) {
   }
   if (!deleted) {
     return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
+  }
+  const storagePaths = (materials ?? []).flatMap((material) => material.storage_path ? [material.storage_path] : []);
+  if (storagePaths.length) {
+    const { error: removeError } = await current.supabase.storage.from("materials").remove(storagePaths);
+    if (removeError) console.error("Lecture material files remove failed", removeError.message);
   }
   return NextResponse.json({ deleted: true });
 }

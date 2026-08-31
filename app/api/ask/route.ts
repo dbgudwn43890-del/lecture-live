@@ -264,9 +264,9 @@ const MATERIAL_MIN_SIMILARITY = 0.3;
 // the last minute of the lecture — finds the slide the room is actually looking
 // at, which is the only thing that answers "why is this like this?" (PRD
 // 36.3.2). Batching both into a single request keeps this at one round trip.
-async function findClassroomContext(
+async function findLectureContext(
   userId: string,
-  classroomId: string,
+  classroomId: string | null,
   sessionId: string,
   question: string,
   anchor: string,
@@ -275,29 +275,26 @@ async function findClassroomContext(
   const apiKey = process.env.OPENAI_API_KEY;
   if (!admin || !apiKey) return { ...EMPTY_CLASSROOM_CONTEXT, admin: null };
 
-  // Independent checks, so they run together rather than back to back. The
-  // chunk check asks only whether any exist — an exact count made Postgres
-  // scan every chunk in the classroom, and that grows with every lecture.
+  // Earlier lectures still belong to a classroom; PDFs belong to this session.
   const [{ data: session }, { data: anyChunk }, { data: anyMaterial }] = await Promise.all([
     admin
       .from("lecture_sessions")
       .select("id")
       .eq("id", sessionId)
-      .eq("classroom_id", classroomId)
       .eq("user_id", userId)
       .maybeSingle(),
-    admin
+    classroomId ? admin
       .from("lecture_chunks")
       .select("id")
       .eq("classroom_id", classroomId)
       .eq("user_id", userId)
       .neq("session_id", sessionId)
       .limit(1)
-      .maybeSingle(),
+      .maybeSingle() : Promise.resolve({ data: null }),
     admin
-      .from("material_chunks")
+      .from("material_documents")
       .select("id")
-      .eq("classroom_id", classroomId)
+      .eq("session_id", sessionId)
       .eq("user_id", userId)
       .limit(1)
       .maybeSingle(),
@@ -321,7 +318,7 @@ async function findClassroomContext(
     const anchorEmbedding = useAnchor ? vectors[1] : null;
 
     const [lecture, material, screen] = await Promise.all([
-      anyChunk
+      anyChunk && classroomId
         ? admin.rpc("match_lecture_chunks", {
             p_user_id: userId,
             p_classroom_id: classroomId,
@@ -333,7 +330,7 @@ async function findClassroomContext(
       anyMaterial
         ? admin.rpc("match_material_chunks", {
             p_user_id: userId,
-            p_classroom_id: classroomId,
+            p_session_id: sessionId,
             p_query_embedding: queryEmbedding,
             p_match_count: 4,
           })
@@ -341,7 +338,7 @@ async function findClassroomContext(
       anchorEmbedding
         ? admin.rpc("match_material_chunks", {
             p_user_id: userId,
-            p_classroom_id: classroomId,
+            p_session_id: sessionId,
             p_query_embedding: anchorEmbedding,
             // The room is on one slide, not four. More rows here only dilute
             // the context and slow the answer down.
@@ -391,7 +388,7 @@ async function findClassroomContext(
       admin,
     };
   } catch (error) {
-    console.error("Classroom context lookup failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+    console.error("Lecture context lookup failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
     return { ...EMPTY_CLASSROOM_CONTEXT, admin };
   }
 }
@@ -816,8 +813,8 @@ export async function POST(request: Request) {
     // 복구 요청은 최근 90초만 보므로 요약이 할 일이 없다. 그 외에는 이 읽기가
     // 원문 대신 프롬프트에 들어갈 것을 결정한다.
     lectureSessionId && !catchup ? fetchSummaries(supabase, lectureSessionId) : Promise.resolve<Summary[]>([]),
-    classroomId && lectureSessionId && !catchup
-      ? findClassroomContext(userId, classroomId, lectureSessionId, question, anchor)
+    lectureSessionId && !catchup
+      ? findLectureContext(userId, classroomId, lectureSessionId, question, anchor)
       : Promise.resolve({ ...EMPTY_CLASSROOM_CONTEXT, admin: null }),
   ]);
   const segments = lectureSessionId ? mergeSegments(storedSegments, unconfirmedSegments) : unconfirmedSegments;
@@ -847,8 +844,8 @@ export async function POST(request: Request) {
     : "";
   const materialBlock = earlier.materialText
     ? locale === "en"
-      ? `\n\nRelevant excerpts from lecture materials uploaded to this classroom:\n${earlier.materialText}`
-      : `\n\n이 강의실에 올린 강의 자료 중 관련 내용:\n${earlier.materialText}`
+      ? `\n\nRelevant excerpts from materials attached to this lecture:\n${earlier.materialText}`
+      : `\n\n이 수업에 넣은 강의 자료 중 관련 내용:\n${earlier.materialText}`
     : "";
   const screenBlock = earlier.screenText
     ? locale === "en"

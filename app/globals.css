@@ -89,22 +89,6 @@ a, button, summary, input, textarea, select {
   border-bottom: 1px solid #000;
 }
 
-/* The title field lives in the dark topbar, so it cannot inherit the
-   light-surface styling written for the old toolbar. */
-.topbar .lecture-title-field { max-width: none; }
-.topbar .lecture-title-field input {
-  padding: 7px 10px;
-  color: white;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 750;
-}
-.topbar .lecture-title-field input::placeholder { color: #8e869c; }
-.topbar .lecture-title-field input:hover { border-color: #5b516c; }
-.topbar .lecture-title-field input:focus { border-color: #b1acbb; }
-
 .brand {
   font-size: 15px;
   font-weight: 800;
@@ -316,24 +300,6 @@ a, button, summary, input, textarea, select {
   padding: 0;
   border: 0;
 }
-
-.lecture-title-field {
-  flex: 1 1 180px;
-  min-width: 120px;
-  max-width: 360px;
-}
-
-.lecture-title-field input {
-  width: 100%;
-  padding: 8px 10px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 2px solid var(--line-strong);
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.lecture-title-field input::placeholder { color: var(--muted); }
 
 .panes {
   min-height: 0;
@@ -2021,21 +1987,6 @@ button:active,
 .workspace .transcript { padding: 20px 24px 42px; }
 .workspace .footnote { color: #817891; background: #eeecf0; border-top: 1px solid #d7d5dc; }
 
-/* The title is a label until it is double-clicked, so the topbar stops looking
-   like a form. readOnly, not disabled: the text stays selectable and copyable. */
-.workspace .lecture-title-field input {
-  padding: 4px 8px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.workspace .lecture-title-field input:read-only { cursor: default; }
-.workspace .lecture-title-field input:read-only:hover { background: #f4f2ee; }
-.workspace .lecture-title-field input:not(:read-only) { background: #fff; border-color: #c0bbc8; cursor: text; }
-
 .sidebar-session { display: flex; align-items: center; gap: 2px; }
 .sidebar-session > button { flex: 1 1 auto; }
 .sidebar-session[draggable="true"] > button { cursor: grab; }
@@ -2119,13 +2070,13 @@ button:active,
    control that starts a lecture.
    --------------------------------------------------------------------------- */
 
-/* The topbar's children — title, state, audio upload, start/stop — each need a
+/* The topbar's children — state, audio upload, start/stop — each need a
    column of their own. Declaring fewer wraps the last one onto an implicit row,
    where it stretches into a purple slab across the workspace and the control it
    was hiding (start the lecture) is nowhere the learner can see. Auto-fitting
    the trailing controls keeps that from happening again when one is added. */
 .workspace .topbar {
-  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  grid-template-columns: minmax(0, 1fr) repeat(2, auto);
   gap: 16px;
 }
 
@@ -2267,15 +2218,13 @@ button:active,
 
   /* Same five children as the desktop rule; the topbar wraps to two rows here, so it sizes itself. */
   .workspace-main { min-height: 100svh; grid-template-rows: auto auto auto auto 30px; overflow: visible; }
-  /* Narrow: the title takes the first row on its own, the state and the button
-     share the second, so none of the three has to be truncated. */
+  /* Narrow: the state and upload share a row; start/stop gets the next one. */
   .workspace .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
     align-content: center;
     gap: 6px 12px;
     padding: 8px 12px;
   }
-  .workspace .lecture-title-field { grid-column: 1 / -1; grid-row: 1; }
   .workspace .session-state { grid-column: 1; grid-row: 2; justify-self: start; }
   .workspace .audio-upload-button { grid-column: 2; grid-row: 2; justify-self: end; }
   /* The control that starts the lecture gets its own row here rather than

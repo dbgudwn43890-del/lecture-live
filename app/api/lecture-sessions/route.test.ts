@@ -134,6 +134,39 @@ test.beforeEach(() => {
   process.env.OPENAI_API_KEY = "sk-test";
 });
 
+test("a PDF can create a draft lecture and starting reuses that same session", async () => {
+  const sessionId = randomUUID();
+  const session = {
+    id: sessionId,
+    classroom_id: null,
+    title: "8. 31. 수업",
+    status: "draft",
+    started_at: "2026-08-31T00:00:00.000Z",
+    ended_at: null,
+    duration_seconds: 0,
+  };
+  outcomes["lecture_sessions.insert"] = { data: session, error: null };
+
+  const draftResponse = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "draft", classroomId: null, title: session.title }),
+  }));
+  assert.equal(draftResponse?.status, 201);
+  assert.equal((calls.find((call) => call.table === "lecture_sessions" && call.op === "insert")?.payload as { status: string }).status, "draft");
+
+  calls = [];
+  outcomes["lecture_sessions.update"] = { data: { ...session, status: "recording" }, error: null };
+  const startResponse = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", sessionId, classroomId: null, title: session.title }),
+  }));
+  assert.equal(startResponse?.status, 201);
+  const activation = calls.find((call) => call.table === "lecture_sessions" && call.op === "update");
+  assert.equal((activation?.payload as { status: string }).status, "recording");
+  assert.ok(activation?.filters.includes(`eq:id=${sessionId}`));
+  assert.ok(activation?.filters.includes("eq:status=draft"));
+});
+
 test("GET pages through more than 1,000 transcript segments instead of truncating at PostgREST's cap", async () => {
   const sessionId = randomUUID();
   const rowCount = 1_500;
