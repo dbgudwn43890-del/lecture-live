@@ -1996,7 +1996,18 @@ button:active,
 
 .sidebar-session { display: flex; align-items: center; gap: 2px; }
 .sidebar-session > button { flex: 1 1 auto; }
-.sidebar-session[draggable="true"] > button { cursor: grab; }
+.sidebar-sessions .session-drag-handle {
+  flex: 0 0 16px;
+  width: 16px;
+  padding: 3px 0;
+  color: #9891a5;
+  background: transparent;
+  cursor: grab;
+  font-size: 12px;
+  line-height: 1;
+}
+.sidebar-sessions .session-drag-handle:active { cursor: grabbing; }
+.sidebar-sessions .session-drag-handle:disabled { cursor: default; opacity: .35; }
 
 .session-menu { position: relative; flex: 0 0 auto; }
 

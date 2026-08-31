@@ -1582,15 +1582,22 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       <div
         key={session.id}
         className="sidebar-session"
-        draggable={!sidebarLocked}
-        onDragStart={(event) => {
-          setDragSessionId(session.id);
-          // Firefox refuses to start a drag without payload on the transfer.
-          event.dataTransfer.setData("text/plain", session.id);
-          event.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => { setDragSessionId(""); setDragOverKey(null); }}
       >
+        <button
+          type="button"
+          className="session-drag-handle"
+          aria-label={isEnglish ? `Move ${session.title}` : `${session.title} 이동`}
+          title={isEnglish ? "Drag to move" : "드래그해 이동"}
+          disabled={sidebarLocked}
+          draggable={!sidebarLocked}
+          onDragStart={(event) => {
+            setDragSessionId(session.id);
+            // Firefox refuses to start a drag without payload on the transfer.
+            event.dataTransfer.setData("text/plain", session.id);
+            event.dataTransfer.effectAllowed = "move";
+          }}
+          onDragEnd={() => { setDragSessionId(""); setDragOverKey(null); }}
+        >⠿</button>
         <button
           type="button"
           className={session.id === activeSessionId ? "active" : undefined}
