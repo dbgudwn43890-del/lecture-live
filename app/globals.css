@@ -657,6 +657,7 @@ a, button, summary, input, textarea, select {
 }
 
 .slide-panel {
+  flex: 0 0 auto;
   max-height: 340px;
   min-height: 0;
   overflow: hidden;

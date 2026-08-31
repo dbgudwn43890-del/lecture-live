@@ -50,7 +50,9 @@ function extractionPrompt(isPdf: boolean) {
 }
 
 async function extractPdfPages(bytes: Uint8Array) {
-  const pdf = await getDocument({ data: bytes }).promise;
+  // PDF.js transfers its input buffer to a worker and may detach it. Keep the
+  // upload bytes intact; the same bytes are stored after extraction succeeds.
+  const pdf = await getDocument({ data: bytes.slice() }).promise;
   const pageCount = Math.min(pdf.numPages, 500);
   const pages = [] as { page: number; text: string }[];
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {

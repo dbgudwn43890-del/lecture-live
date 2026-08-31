@@ -243,6 +243,19 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+  useEffect(() => {
+    if (!initialRouteRef.current) return;
+    const url = new URL(window.location.href);
+    if (activeSessionId) {
+      url.searchParams.set("session", activeSessionId);
+      url.searchParams.delete("classroom");
+    } else {
+      url.searchParams.delete("session");
+      if (activeClassroomId) url.searchParams.set("classroom", activeClassroomId);
+      else url.searchParams.delete("classroom");
+    }
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [activeSessionId, activeClassroomId]);
 
   // Uploading or transcribing: the control is occupied either way.
   const audioBusy = audioUpload?.status === "uploading" || audioUpload?.status === "processing" || audioUpload?.status === "queued";
@@ -589,6 +602,18 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     void (async () => {
       if (!hydratedRef.current) {
         await Promise.all([loadClassrooms(), loadCredits()]);
+      } else if (!initialRouteRef.current) {
+        initialRouteRef.current = true;
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get("session");
+        const classroomId = params.get("classroom");
+        if (sessionId) await openSession(sessionId);
+        else if (classroomId && classrooms.some((classroom) => classroom.id === classroomId)) setActiveClassroomId(classroomId);
+        if (params.get("payment") === "success") {
+          setNotice(isEnglish
+            ? "Payment complete. Your credits have been added."
+            : "결제가 완료됐습니다. 크레딧이 추가되었습니다.");
+        }
       }
       hydratedRef.current = false;
       try {
