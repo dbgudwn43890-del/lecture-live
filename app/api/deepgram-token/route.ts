@@ -49,9 +49,17 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  // The glossary read rides along with the credit preflight: it is the same
-  // round trip budget, and the socket cannot open before both come back.
-  const [{ data: statusData, error: statusError }, { data: sessionRow }, { data: spokenRows }] = await Promise.all([
+  // The grant is independent of our database. Mint it while the credit,
+  // glossary and transcript preflight run instead of adding another network
+  // round trip after them. An unused 30-second grant is never returned.
+  const grant = fetch("https://api.deepgram.com/v1/auth/grant", {
+    method: "POST",
+    headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  const [{ data: statusData, error: statusError }, { data: sessionRow }, { data: spokenRows }, response] = await Promise.all([
     supabase.rpc("get_credit_status"),
     supabase
       .from("lecture_sessions")
@@ -69,6 +77,7 @@ export async function POST(request: Request) {
       .eq("session_id", body.sessionId)
       .order("start_ms", { ascending: true })
       .limit(600),
+    grant,
   ]);
   const creditStatus = Array.isArray(statusData) ? statusData[0] : statusData;
   if (statusError) {
@@ -80,16 +89,6 @@ export async function POST(request: Request) {
       error: isEnglish ? "You are out of credits. Choose a plan to start recording." : "남은 크레딧이 없습니다. 요금제를 선택해 주세요.",
     }, { status: 402 });
   }
-
-  // Ask for the narrowest grant Deepgram offers: the browser only ever opens a
-  // listen socket, so an unscoped project token would hand it far more.
-  const response = await fetch("https://api.deepgram.com/v1/auth/grant", {
-    method: "POST",
-    headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
 
   if (!response.ok) {
     console.error("Deepgram token grant failed", response.status);
@@ -145,7 +144,7 @@ export async function POST(request: Request) {
       // 스크립트에 드러나 있고, 남은 시간이 갱신값을 회수할 만큼 길다.
       refreshInMs: declared.length ? null : 600_000,
       listenUrl: listenUrl({
-        language: deepgramLanguage(body.language, "multi"),
+        language: deepgramLanguage(body.language, "ko"),
         keyterms,
         sessionId: body.sessionId,
       }),

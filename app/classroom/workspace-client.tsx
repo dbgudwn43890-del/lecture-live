@@ -129,7 +129,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [lectureTitle, setLectureTitle] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
-  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>("multi");
+  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>("ko");
   const [personalApiKey, setPersonalApiKey] = useState("");
   const [savedCredentials, setSavedCredentials] = useState<SavedCredential[]>([]);
   const [credentialPending, setCredentialPending] = useState(false);
@@ -194,6 +194,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const vocabularyTimerRef = useRef<number | null>(null);
   const vocabularyRefreshedRef = useRef(false);
   const lastSentAtRef = useRef(0);
+  const pendingAudioRef = useRef<Blob[]>([]);
+  const socketOpenedRef = useRef(false);
   const initialRouteRef = useRef(false);
   const slideUrlRef = useRef<{ documentId: string; url: string; expiresAt: number } | null>(null);
   // A page the learner or an answer put on screen wins over the follower for a
@@ -203,7 +205,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   useEffect(() => {
     const saved = window.localStorage.getItem("lecue-speech-language");
-    if (saved === "ko" || saved === "en" || saved === "multi") setSpeechLanguage(saved);
+    // Deepgram's streaming `multi` model does not support Korean. Migrate the
+    // old default instead of letting a saved value keep producing mixed-script noise.
+    const language = saved === "en" ? "en" : "ko";
+    setSpeechLanguage(language);
+    window.localStorage.setItem("lecue-speech-language", language);
   }, []);
 
   // 끝난 10분 구간을 강의 중에 미리 접어 둔다. 질문할 때 세 시간짜리 원문을
@@ -1114,6 +1120,30 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }, RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)]);
   }
 
+  function startMediaRecorder(stream: MediaStream) {
+    if (recorderRef.current?.state === "recording") return;
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : "audio/webm";
+    const recorder = new MediaRecorder(stream, { mimeType });
+    recorderRef.current = recorder;
+    recorder.ondataavailable = (event) => {
+      if (event.data.size === 0) return;
+      const socket = socketRef.current;
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(event.data);
+        lastSentAtRef.current = Date.now();
+      } else {
+        pendingAudioRef.current.push(event.data);
+      }
+    };
+    recorder.onstop = () => {
+      const socket = socketRef.current;
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "CloseStream" }));
+    };
+    recorder.start(250);
+  }
+
   /**
    * 토큰을 받아 소켓을 연다. 첫 연결과 재연결이 같은 경로를 쓴다 — grant는 30초
    * 만에 만료되고 주소는 매번 서버가 다시 만들어 주므로 재사용할 것이 없다.
@@ -1140,28 +1170,17 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     socketRef.current = socket;
 
     socket.onopen = () => {
+      if (finishingRef.current || startedAtRef.current === 0) {
+        socket.close();
+        return;
+      }
       reconnectAttemptRef.current = 0;
       setError("");
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const recorder = new MediaRecorder(stream, { mimeType });
-      recorderRef.current = recorder;
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
-          socket.send(event.data);
-          lastSentAtRef.current = Date.now();
-        }
-      };
-      recorder.onstop = () => {
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "CloseStream" }));
-      };
-      recorder.start(250);
-      if (startedAtRef.current === 0) {
-        startedAtRef.current = Date.now();
-        setElapsedMs(0);
-        setStatus("recording");
-      } else {
+      const firstConnection = !socketOpenedRef.current;
+      socketOpenedRef.current = true;
+      startMediaRecorder(stream);
+      for (const chunk of pendingAudioRef.current.splice(0)) socket.send(chunk);
+      if (!firstConnection) {
         // 새 소켓의 시계는 0에서 다시 시작한다. 이 값을 더하지 않으면 재연결 뒤
         // 세그먼트가 강의 첫머리와 겹쳐 순서와 앵커가 함께 무너진다.
         streamOffsetMsRef.current = Date.now() - startedAtRef.current;
@@ -1212,7 +1231,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     socket.onerror = () => {
       // 강의가 이미 돌고 있으면 onclose의 재연결이 처리한다. 시작도 못 한
       // 연결만 여기서 실패로 끝낸다.
-      if (startedAtRef.current > 0) return;
+      if (socketOpenedRef.current) return;
+      startedAtRef.current = 0;
+      pendingAudioRef.current = [];
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       if (activeSessionIdRef.current) {
         void fetch("/api/lecture-sessions", {
           method: "PATCH",
@@ -1248,6 +1270,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     if (!draftSessionId) setActiveSessionId("");
     setStatus("connecting");
 
+    let startedSessionId = "";
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error(isEnglish
@@ -1263,6 +1286,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         },
       });
       streamRef.current = stream;
+      streamOffsetMsRef.current = 0;
+      pendingAudioRef.current = [];
+      socketOpenedRef.current = false;
+      startedAtRef.current = Date.now();
+      setElapsedMs(0);
+      startMediaRecorder(stream);
+      setStatus("recording");
 
       const sessionResponse = await fetch("/api/lecture-sessions", {
         method: "POST",
@@ -1276,6 +1306,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       });
       const sessionData = await sessionResponse.json() as { session?: SessionSummary; error?: string };
       if (!sessionResponse.ok || !sessionData.session) throw new Error(sessionData.error);
+      startedSessionId = sessionData.session.id;
       setActiveSessionId(sessionData.session.id);
       activeSessionIdRef.current = sessionData.session.id;
       setLectureTitle(sessionData.session.title);
@@ -1287,15 +1318,17 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       showInterim("");
       setMessages([]);
 
-      streamOffsetMsRef.current = 0;
       await connectDeepgram(stream);
     } catch (caught) {
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      if (activeSessionIdRef.current && startedAtRef.current === 0) {
+      pendingAudioRef.current = [];
+      startedAtRef.current = 0;
+      if (startedSessionId && !socketOpenedRef.current) {
         void fetch("/api/lecture-sessions", {
           method: "PATCH",
           headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
+          body: JSON.stringify({ sessionId: startedSessionId, durationMs: 0, segments: [] }),
         });
       }
       setError(microphoneMessage(caught));
@@ -1313,6 +1346,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     stopSocketTimers();
     flushUtterance();
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    pendingAudioRef.current = [];
     // 마이크는 여기서 놓는다. 재연결이 같은 스트림을 다시 쓰므로 레코더가 멈출
     // 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -1805,15 +1839,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               <section className="profile-model-settings" aria-labelledby="profile-speech-title">
                 <div className="profile-model-heading">
                   <h3 id="profile-speech-title">{isEnglish ? "Speech recognition" : "음성 인식 언어"}</h3>
-                  <span>{speechLanguage === "multi" ? (isEnglish ? "Auto multilingual" : "다국어 자동") : speechLanguage === "en" ? "English" : "한국어"}</span>
+                  <span>{speechLanguage === "en" ? "English" : (isEnglish ? "Korean-focused" : "한국어 중심")}</span>
                 </div>
                 <fieldset className="settings-choice">
                   <legend>{isEnglish ? "Lecture language" : "강의 언어"}</legend>
                   <div className="settings-choice-list">
                     {([
-                      { id: "ko", label: "한국어" },
+                      { id: "ko", label: isEnglish ? "Korean-focused" : "한국어 중심" },
                       { id: "en", label: "English" },
-                      { id: "multi", label: isEnglish ? "Auto multilingual" : "다국어 자동" },
                     ] as Array<{ id: DeepgramLanguage; label: string }>).map((option) => (
                       <button
                         type="button"
@@ -1830,8 +1863,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   </div>
                 </fieldset>
                 <p>{isEnglish
-                  ? "Auto multilingual handles supported mixed-language speech. Choose Korean for Korean lectures."
-                  : "다국어 자동은 지원 언어가 섞인 강의용입니다. 한국어 강의는 한국어를 선택하세요."}</p>
+                  ? "Korean-focused recognizes Korean sentences and uses your materials to improve English technical terms. Choose English for lectures spoken mainly in English."
+                  : "한국어 중심은 한국어 문장을 인식하고 자료의 영어 전공용어를 함께 보정합니다. 영어로 진행하는 강의는 English를 선택하세요."}</p>
               </section>
 
               <section className="profile-model-settings" aria-labelledby="profile-model-title">

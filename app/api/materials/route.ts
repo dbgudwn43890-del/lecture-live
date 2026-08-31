@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { isUuid } from "../../lib/billing";
+import { bootstrapTerms } from "../../lib/bootstrap-terms";
 import { splitTerms } from "../../lib/glossary";
 import { chunkPages, splitPages } from "../../lib/material-text";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
@@ -204,7 +205,7 @@ export async function POST(request: Request) {
       const extracted = await extractPdfPages(bytes);
       pages = extracted.pages;
       pageCount = extracted.pageCount;
-      keyterms = [];
+      keyterms = bootstrapTerms(pages.map((page) => page.text).join(" "), [], 40);
     } catch (error) {
       console.error(
         "PDF text extraction failed",

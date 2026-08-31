@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   const title = String(formData.get("title") ?? "").trim().slice(0, 80);
   const classroomId = formData.get("classroomId");
   const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim();
-  const language = deepgramLanguage(formData.get("language"), "multi");
+  const language = deepgramLanguage(formData.get("language"), "ko");
   // The browser reads this off an <audio> element before uploading. It decides
   // whether to accept the job at all; the charge below uses Deepgram's own
   // measurement, so a client lying here cannot buy a cheaper transcription.
