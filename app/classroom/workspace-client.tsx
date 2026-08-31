@@ -90,6 +90,16 @@ function formatTime(milliseconds: number) {
     : `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+function isPdfMaterial(document: MaterialDocument) {
+  return document.filename.toLowerCase().endsWith(".pdf");
+}
+
+function materialViewState(documents: MaterialDocument[]) {
+  if (documents.some((document) => document.storage_path && isPdfMaterial(document))) return "viewable";
+  if (documents.some((document) => document.storage_path)) return "indexed";
+  return documents.length ? "text-only" : "none";
+}
+
 type InitialData = {
   profile: UserProfile | null;
   classrooms: Classroom[];
@@ -143,7 +153,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [reportedKeys, setReportedKeys] = useState<string[]>([]);
   // "없음"과 "원본이 없음"은 다른 상태다. 이 변경 전에 올라온 자료는 텍스트만
   // 색인되어 있어 답변에는 쓰이지만 슬라이드로 보여 줄 수는 없다.
-  const [materialState, setMaterialState] = useState<"none" | "text-only" | "viewable">("none");
+  const [materialState, setMaterialState] = useState<"none" | "text-only" | "indexed" | "viewable">("none");
   const [materials, setMaterials] = useState<MaterialDocument[]>([]);
   const [materialPending, setMaterialPending] = useState(false);
   // UPL-03. The upload being watched right now, if any.
@@ -294,9 +304,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         const documents = data.documents ?? [];
         if (!cancelled) {
           setMaterials(documents);
-          setMaterialState(documents.some((document) => document.storage_path)
-            ? "viewable"
-            : documents.length > 0 ? "text-only" : "none");
+          setMaterialState(materialViewState(documents));
         }
       } catch {
         // 자료 유무 확인 실패는 강의 진행을 막지 않는다.
@@ -369,7 +377,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     if (materialPending) return;
     setMaterialPending(true);
     setError("");
-    setNotice(isEnglish ? "Reading the PDF…" : "PDF를 읽는 중입니다…");
+    setNotice(isEnglish ? "Reading the material…" : "자료를 읽는 중입니다…");
     try {
       let sessionId = activeSessionIdRef.current;
       if (!sessionId) {
@@ -400,8 +408,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       });
       const data = await response.json() as { document?: MaterialDocument; error?: string };
       if (!response.ok || !data.document) throw new Error(data.error);
-      setMaterials((current) => [data.document!, ...current]);
-      setMaterialState(data.document.storage_path ? "viewable" : "text-only");
+      const next = [data.document!, ...materials];
+      setMaterials(next);
+      setMaterialState(materialViewState(next));
       setNotice(isEnglish ? "The material is ready." : "강의 자료를 준비했습니다.");
     } catch (caught) {
       setNotice("");
@@ -426,9 +435,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       if (!response.ok) throw new Error(data.error);
       const next = materials.filter((document) => document.id !== documentId);
       setMaterials(next);
-      setMaterialState(next.some((document) => document.storage_path)
-        ? "viewable"
-        : next.length ? "text-only" : "none");
+      setMaterialState(materialViewState(next));
       if (slidePage?.documentId === documentId) setSlidePage(null);
     } catch (caught) {
       setError(caught instanceof Error && caught.message
@@ -460,6 +467,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         const data = await response.json() as { page: MaterialSource | null };
         if (cancelled || !data.page) return;
         const next = data.page;
+        if (!materials.some((document) => document.id === next.documentId && isPdfMaterial(document))) return;
         setSlidePage((current) =>
           current && current.documentId === next.documentId && current.startPage === next.startPage ? current : next);
       } catch {
@@ -469,7 +477,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     void follow();
     const timer = window.setInterval(() => void follow(), 30_000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [status, activeSessionId, materialState, locale]);
+  }, [status, activeSessionId, materialState, locale, materials]);
 
   // The bucket is private, so every view goes through a short-lived signed URL.
   // Re-signing only near expiry keeps the viewer from reloading the PDF — and
@@ -1415,6 +1423,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   /** 학습자나 답변이 직접 지정한 쪽. 잠깐은 자동 추종보다 우선한다. */
   function pinSlide(source: MaterialSource) {
+    if (!materials.some((document) => document.id === source.documentId && isPdfMaterial(document))) return;
     slidePinnedUntilRef.current = Date.now() + 120_000;
     setSlidePage(source);
     setSlideCollapsed(false);
@@ -2024,7 +2033,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           >
           {materialDragOver && (
             <div className="material-drop-overlay">
-              {isEnglish ? "Drop the PDF into this lecture" : "PDF를 이 수업에 놓으세요"}
+              {isEnglish ? "Drop a material into this lecture" : "자료를 이 수업에 놓으세요"}
             </div>
           )}
           <div className="pane-heading">
@@ -2168,7 +2177,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <label className="material-upload-button">
               <input
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.docx,.pptx,.txt,.csv,.tsv,.xlsx,.xls"
                 disabled={materialPending}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -2176,7 +2185,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   if (file) void uploadMaterial(file);
                 }}
               />
-              {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add PDF" : "PDF 추가")}
+              {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add material" : "자료 추가")}
             </label>
             {materials.length > 0 && (
               <details className="material-list">
@@ -2185,7 +2194,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   {materials.map((document) => (
                     <li key={document.id}>
                       <span>{document.filename}</span>
-                      <small>{document.page_count}{isEnglish ? " pages" : "쪽"}</small>
+                      <small>{document.page_count}{isPdfMaterial(document) ? (isEnglish ? " pages" : "쪽") : (isEnglish ? " sections" : "개 구간")}</small>
                       <button type="button" disabled={materialPending} onClick={() => void deleteMaterial(document.id)}>
                         {isEnglish ? "Remove" : "삭제"}
                       </button>
@@ -2198,14 +2207,20 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
           {activeSessionId && materialState === "none" && (
             <p className="slide-hint">{isEnglish
-              ? "Add a PDF to this lecture and answers will read the formulas and tables on screen too."
-              : "이 수업에 강의 자료(PDF)를 올리면 화면 속 수식·표까지 보고 답합니다."}</p>
+              ? "Add material to this lecture and answers will use it too."
+              : "이 수업에 강의 자료를 올리면 답변에 반영합니다."}</p>
           )}
 
           {activeSessionId && materialState === "text-only" && (
             <p className="slide-hint">{isEnglish
               ? "This lecture's materials were indexed before originals were kept. Answers still use them; upload them again to see the slides."
               : "이 수업의 자료는 원본을 보관하기 전에 올라왔습니다. 답변에는 그대로 쓰이지만, 슬라이드를 보려면 다시 올려 주세요."}</p>
+          )}
+
+          {activeSessionId && materialState === "indexed" && (
+            <p className="slide-hint">{isEnglish
+              ? "This material is used in answers. Upload a PDF when you also want to follow slides here."
+              : "이 자료는 답변에 반영됩니다. 여기서 슬라이드도 보려면 PDF를 올려 주세요."}</p>
           )}
 
           {activeSessionId && materialState === "viewable" && (

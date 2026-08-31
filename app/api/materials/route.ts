@@ -12,21 +12,41 @@ import { createClient } from "../../lib/supabase/server";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const MAX_PDF_BYTES = 20_000_000;
+const MAX_MATERIAL_BYTES = 20_000_000;
 const MAX_DOCUMENTS_PER_SESSION = 20;
 // Long enough to read a slide without re-fetching, short enough that a copied
 // URL stops working well before the lecture ends.
 const SIGNED_URL_SECONDS = 900;
 
-const EXTRACTION_PROMPT = [
-  "이 PDF는 대학 강의 자료다. 페이지 순서대로 내용을 텍스트로 옮겨라.",
-  "각 페이지는 반드시 '## p.N' 머리글로 시작한다. N은 1부터 시작하는 페이지 번호다.",
+const MATERIAL_TYPES = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  txt: "text/plain",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls: "application/vnd.ms-excel",
+} as const;
+
+function materialType(filename: string) {
+  const extension = filename.toLowerCase().split(".").at(-1);
+  return extension && extension in MATERIAL_TYPES
+    ? { extension, contentType: MATERIAL_TYPES[extension as keyof typeof MATERIAL_TYPES] }
+    : null;
+}
+
+function extractionPrompt(isPdf: boolean) {
+  return [
+  `이 ${isPdf ? "PDF" : "파일"}은 대학 강의 자료다. 처음부터 순서대로 내용을 텍스트로 옮겨라.`,
+  `각 ${isPdf ? "페이지" : "문서의 페이지·슬라이드·시트 또는 섹션"}는 반드시 '## p.N' 머리글로 시작한다. N은 1부터 시작하는 순번이다.`,
   "수식은 읽어서 이해할 수 있는 말과 기호로 적는다. 표는 행 단위로 풀어 쓴다.",
   "그림·도표는 무엇을 보여 주는지 한두 문장으로 서술한다.",
   "장식, 페이지 번호, 머리말, 꼬리말은 생략한다. 없는 내용을 지어내지 않는다.",
   "마지막 줄에 '## TERMS' 머리글을 쓰고, 그 아래 한 줄에 이 자료의 전문용어·고유명사·약어를",
   "쉼표로 구분해 최대 40개 적는다. 받아쓰기가 틀리기 쉬운 말을 고른다. 일반 단어는 넣지 않는다.",
 ].join("\n");
+}
 
 async function context(request: Request) {
   const supabase = await createClient();
@@ -121,13 +141,18 @@ export async function POST(request: Request) {
   if (!sessionId) {
     return NextResponse.json({ error: isEnglish ? "Open a lecture first." : "수업을 먼저 열어 주세요." }, { status: 400 });
   }
-  if (!(file instanceof File) || file.size === 0 || file.size > MAX_PDF_BYTES) {
-    return NextResponse.json({ error: isEnglish ? "Upload a PDF of 20MB or less." : "20MB 이하의 PDF를 올려 주세요." }, { status: 400 });
+  if (!(file instanceof File) || file.size === 0 || file.size > MAX_MATERIAL_BYTES) {
+    return NextResponse.json({ error: isEnglish ? "Upload a supported file of 20MB or less." : "지원하는 형식의 20MB 이하 자료를 올려 주세요." }, { status: 400 });
+  }
+  const type = materialType(file.name);
+  if (!type) {
+    return NextResponse.json({ error: isEnglish ? "Supported: PDF, Word, PowerPoint, text, CSV, and Excel files." : "PDF, Word, PowerPoint, 텍스트, CSV, 엑셀 파일을 올릴 수 있습니다." }, { status: 400 });
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
-  // Trust the bytes, not the name or the browser-supplied type.
-  if (String.fromCharCode(...bytes.slice(0, 5)) !== "%PDF-") {
-    return NextResponse.json({ error: isEnglish ? "Only PDF files can be indexed." : "PDF 파일만 색인할 수 있습니다." }, { status: 400 });
+  // A PDF must be a PDF even when its filename says so. Other accepted office
+  // files are passed by extension, which selects OpenAI's file parser.
+  if (type.extension === "pdf" && String.fromCharCode(...bytes.slice(0, 5)) !== "%PDF-") {
+    return NextResponse.json({ error: isEnglish ? "This file is not a valid PDF." : "올바른 PDF 파일이 아닙니다." }, { status: 400 });
   }
 
   // RLS scopes both reads to this user, so a foreign session id comes back empty.
@@ -146,13 +171,11 @@ export async function POST(request: Request) {
     }, { status: 409 });
   }
 
-  const filename = (file.name || "material.pdf").slice(0, 200);
+  const filename = (file.name || `material.${type.extension}`).slice(0, 200);
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 240_000, maxRetries: 1 });
 
-  // Slides carry their meaning in formulas, tables, and diagrams, which plain
-  // text extraction drops. The model reads the pages as pages and writes them
-  // back as text, so the vision step happens once at upload instead of on
-  // every question (PRD 36.3.2).
+  // Reading happens once at upload rather than on every question. PDFs retain
+  // page-level visual context; other documents are indexed as ordered sections.
   let markdown: string;
   try {
     const response = await openai.responses.create({
@@ -162,22 +185,22 @@ export async function POST(request: Request) {
       input: [{
         role: "user",
         content: [
-          { type: "input_file", filename, file_data: `data:application/pdf;base64,${Buffer.from(bytes).toString("base64")}` },
-          { type: "input_text", text: EXTRACTION_PROMPT },
+          { type: "input_file", filename, file_data: `data:${type.contentType};base64,${Buffer.from(bytes).toString("base64")}` },
+          { type: "input_text", text: extractionPrompt(type.extension === "pdf") },
         ],
       }],
     });
     markdown = response.output_text ?? "";
   } catch (error) {
     console.error("Material extraction failed", error && typeof error === "object" && "status" in error ? error.status : "unknown");
-    return NextResponse.json({ error: isEnglish ? "Could not read this PDF." : "이 PDF를 읽지 못했습니다." }, { status: 502 });
+    return NextResponse.json({ error: isEnglish ? "Could not read this material." : "이 자료를 읽지 못했습니다." }, { status: 502 });
   }
 
   const pages = splitPages(markdown);
   const keyterms = splitTerms(markdown);
   const chunks = chunkPages(pages);
   if (!chunks.length) {
-    return NextResponse.json({ error: isEnglish ? "No readable text was found in this PDF." : "이 PDF에서 읽을 수 있는 내용을 찾지 못했습니다." }, { status: 422 });
+    return NextResponse.json({ error: isEnglish ? "No readable text was found in this material." : "이 자료에서 읽을 수 있는 내용을 찾지 못했습니다." }, { status: 422 });
   }
 
   let embeddings;
@@ -194,13 +217,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Could not index this material." : "이 자료를 색인하지 못했습니다." }, { status: 502 });
   }
 
-  // Uploaded only after extraction and embedding succeed, so a PDF the pipeline
+  // Uploaded only after extraction and embedding succeed, so a file the pipeline
   // could not read never lingers in the bucket. The first folder is the owner's
   // id, which is what the bucket policy checks.
-  const storagePath = `${userId}/${randomUUID()}.pdf`;
+  const storagePath = `${userId}/${randomUUID()}.${type.extension}`;
   const { error: uploadError } = await supabase.storage
     .from("materials")
-    .upload(storagePath, bytes, { contentType: "application/pdf", upsert: false });
+    .upload(storagePath, bytes, { contentType: type.contentType, upsert: false });
   if (uploadError) {
     console.error("Material upload failed", uploadError.message);
     return NextResponse.json({ error: isEnglish ? "Could not save this material." : "이 자료를 저장하지 못했습니다." }, { status: 500 });
