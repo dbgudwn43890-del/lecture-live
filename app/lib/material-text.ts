@@ -3,7 +3,7 @@ export type MaterialChunk = { startPage: number; endPage: number; text: string }
 
 /**
  * 색인 모델은 페이지마다 `## p.3` 형태의 머리글을 먼저 쓰도록 지시받는다.
- * 머리글 앞의 서두, 빈 페이지, 순서가 어긋난 응답은 모두 버리지 않고 정리한다.
+ * 모델이 그 형식을 빠뜨려도 실제 추출 텍스트는 첫 구간으로 보존한다.
  */
 export function splitPages(markdown: string): MaterialPage[] {
   const pages: MaterialPage[] = [];
@@ -25,7 +25,13 @@ export function splitPages(markdown: string): MaterialPage[] {
     if (current) current.text += `${line}\n`;
   }
   if (current?.text.trim()) pages.push({ ...current, text: current.text.trim() });
-  return pages.filter((page) => page.page >= 1 && page.page <= 500).sort((a, b) => a.page - b.page);
+  const numbered = pages.filter((page) => page.page >= 1 && page.page <= 500).sort((a, b) => a.page - b.page);
+  if (numbered.length) return numbered;
+
+  // Some valid file reads ignore the requested page markers. Keep that text;
+  // only the terms footer is metadata rather than searchable lecture content.
+  const fallback = markdown.split(/^#{1,3}\s+TERMS\b/im, 1)[0].trim();
+  return fallback ? [{ page: 1, text: fallback }] : [];
 }
 
 /**

@@ -29,3 +29,9 @@ test("stops collecting when a section that is not a page begins", () => {
   const pages = splitPages("## p.1\n첫 장\n## TERMS\n한계효용, 기회비용\n");
   assert.deepEqual(pages, [{ page: 1, text: "첫 장" }]);
 });
+
+test("keeps readable output when the model omits page markers", () => {
+  assert.deepEqual(splitPages("스택은 후입선출 구조입니다.\n\n## TERMS\n스택, 큐"), [
+    { page: 1, text: "스택은 후입선출 구조입니다." },
+  ]);
+});
