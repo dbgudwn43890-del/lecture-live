@@ -10,6 +10,7 @@ import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
+import PdfSlide from "./pdf-slide";
 
 type Status = "idle" | "connecting" | "recording" | "ended" | "error";
 
@@ -2265,13 +2266,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               </div>
               <div className="slide-frame" aria-hidden={slideCollapsed}>
                 {slidePage && slideUrl?.documentId === slidePage.documentId ? (
-                  /* ponytail: 브라우저 내장 PDF 뷰어의 #page 프래그먼트에 기댄다.
-                     Chrome·Edge(1차 지원 환경)는 따르지만 Safari는 무시한다.
-                     현장에서 문제가 되면 pdf.js 캔버스 렌더로 올린다. */
-                  <iframe
+                  <PdfSlide
                     title={isEnglish ? "Slide the lecture is on" : "지금 강의가 지나는 슬라이드"}
-                    src={`${slideUrl.url}#page=${slidePage.startPage}&view=Fit`}
-                    tabIndex={slideCollapsed ? -1 : 0}
+                    url={slideUrl.url}
+                    page={slidePage.startPage}
+                    openLabel={isEnglish ? "Open PDF" : "PDF 열기"}
                   />
                 ) : (
                   <p>{slidePage
@@ -2349,9 +2348,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 </span>
                 <button type="button" onClick={() => setSlideZoomed(false)}>{isEnglish ? "Close" : "닫기"}</button>
               </div>
-              <iframe
+              <PdfSlide
                 title={isEnglish ? "Slide, enlarged" : "슬라이드 크게 보기"}
-                src={`${slideUrl.url}#page=${slidePage.startPage}&view=Fit`}
+                url={slideUrl.url}
+                page={slidePage.startPage}
+                openLabel={isEnglish ? "Open PDF" : "PDF 열기"}
               />
             </div>
           </div>

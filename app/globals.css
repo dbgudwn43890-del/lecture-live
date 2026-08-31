@@ -658,7 +658,7 @@ a, button, summary, input, textarea, select {
 
 .slide-panel {
   flex: 0 0 auto;
-  max-height: 340px;
+  max-height: 520px;
   min-height: 0;
   overflow: hidden;
   background: var(--surface);
@@ -695,18 +695,30 @@ a, button, summary, input, textarea, select {
 }
 .slide-bar button:hover:not(:disabled) { background: var(--soft-blue); }
 
-/* 스크립트가 주인공이므로 슬라이드는 이 높이를 넘지 않는다. 자세히 볼 때는 확대. */
+/* A quiet desk around the page keeps unlike document ratios intentional. */
 .slide-frame {
-  height: 208px;
+  height: clamp(280px, 34vw, 430px);
   padding: 0 24px 12px;
 }
-.slide-frame iframe {
+.pdf-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
-  background: var(--paper);
+  overflow: hidden;
+  background: #f1eff6;
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+.pdf-slide canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  background: white;
+  box-shadow: 0 8px 24px rgba(29, 23, 49, .14);
+}
+.pdf-slide a { color: var(--focus); font-size: 12px; font-weight: 750; }
 .slide-frame p {
   display: flex;
   align-items: center;
@@ -748,10 +760,15 @@ a, button, summary, input, textarea, select {
   border-radius: var(--radius);
   overflow: hidden;
 }
-.slide-overlay-inner iframe {
+.slide-overlay-inner > .pdf-slide {
   width: 100%;
   height: 100%;
   border: 0;
+  border-radius: 0;
+  background: #ebe8f2;
+}
+.slide-overlay-inner > .pdf-slide canvas {
+  box-shadow: 0 14px 38px rgba(29, 23, 49, .18);
 }
 
 .message-report { margin-top: 8px; }
@@ -1416,7 +1433,7 @@ a, button, summary, input, textarea, select {
   .topbar > button { grid-column: 2; grid-row: 4; }
   .panes { grid-template-columns: 1fr; }
   .chat-pane, .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
-  .slide-frame { height: 168px; }
+  .slide-frame { height: min(300px, 52vw); padding-inline: 16px; }
   .panes { gap: 14px; padding: 12px; }
   .chat-pane { border-right: 1px solid var(--line-strong); }
   .footnote { min-height: 58px; align-items: flex-start; flex-direction: column; justify-content: center; gap: 7px; }
