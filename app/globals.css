@@ -2056,6 +2056,13 @@ button:active,
 
 .sidebar-sessions .session-menu-panel button:hover:not(:disabled) { color: #201d26; background: #e9e8ec; }
 
+.sidebar-sessions .session-menu-panel .session-menu-delete {
+  margin-top: 5px;
+  padding-top: 10px;
+  color: #7a4dc7;
+  border-top: 1px solid #e4e1e8;
+}
+
 .sidebar-session-rename {
   width: 100%;
   min-width: 0;

@@ -652,7 +652,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }
   }
 
-  /** Moves a lecture between classrooms. Both the sidebar menu and a drag land here. */
+  /** Moves a lecture between classrooms from the sidebar drag target. */
   async function moveSession(sessionId: string, classroomId: string | null) {
     const session = sessionsById.get(sessionId);
     if (!session || (session.classroom_id ?? null) === classroomId) return;
@@ -1556,7 +1556,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   const sidebarLocked = classroomPending || status === "recording" || status === "connecting";
 
-  /** One lecture row: open it, rename it in place, or move it by menu or drag. */
+  /** One lecture row: open it, rename it in place, or drag it into a classroom. */
   function renderSessionRow(session: SessionSummary) {
     if (renamingSessionId === session.id) {
       return (
@@ -1612,20 +1612,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               className="session-menu-delete"
               onClick={(event) => { closeMenu(event); void deleteSession(session.id); }}
             >{isEnglish ? "Delete lecture" : "수업 삭제"}</button>
-            <p>{isEnglish ? "Move to" : "이동"}</p>
-            <button
-              type="button"
-              disabled={!session.classroom_id}
-              onClick={(event) => { closeMenu(event); void moveSession(session.id, null); }}
-            >{isEnglish ? "Unassigned" : "미분류 수업"}</button>
-            {classrooms.map((classroom) => (
-              <button
-                key={classroom.id}
-                type="button"
-                disabled={classroom.id === session.classroom_id}
-                onClick={(event) => { closeMenu(event); void moveSession(session.id, classroom.id); }}
-              >{classroom.title}</button>
-            ))}
           </div>
         </details>
       </div>
