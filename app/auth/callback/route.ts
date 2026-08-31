@@ -1,7 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 
-import { CONSENT_TYPES, CONSENT_VERSION } from "../../lib/consent";
+import { SIGNUP_CONSENT_TYPES, CONSENT_VERSION } from "../../lib/consent";
 import { createClient } from "../../lib/supabase/server";
 import { getSafeAuthNext } from "../../lib/auth-redirect";
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { error } = await supabase.from("consents").upsert(
-        CONSENT_TYPES.map((consentType) => ({ user_id: user.id, consent_type: consentType, document_version: CONSENT_VERSION })),
+        SIGNUP_CONSENT_TYPES.map((consentType) => ({ user_id: user.id, consent_type: consentType, document_version: CONSENT_VERSION })),
         { onConflict: "user_id,consent_type,document_version", ignoreDuplicates: true },
       );
       // The classroom asks again on its next load if this did not land, so a

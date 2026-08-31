@@ -30,6 +30,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
   // learner reading this at the moment a lecture starts will tick anything.
   const [consentAge, setConsentAge] = useState(false);
   const [consentRecording, setConsentRecording] = useState(false);
+  const [consentAssessment, setConsentAssessment] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -130,9 +131,9 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       setMessage(isEnglish ? "The passwords do not match." : "비밀번호가 서로 다릅니다.");
       return;
     }
-    if (mode === "signup" && (!consentAge || !consentRecording)) {
+    if (mode === "signup" && (!consentAge || !consentRecording || !consentAssessment)) {
       setIsError(true);
-      setMessage(isEnglish ? "Check both boxes to create an account." : "두 항목을 모두 확인해야 계정을 만들 수 있습니다.");
+      setMessage(isEnglish ? "Check all agreements to create an account." : "모든 동의 항목을 확인해야 계정을 만들 수 있습니다.");
       return;
     }
 
@@ -177,7 +178,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
           await fetch("/api/consents", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-            body: JSON.stringify({ types: ["age_14", "recording"] }),
+            body: JSON.stringify({ types: ["age_14", "recording", "assessment"] }),
           }).catch(() => {
             // The classroom asks again on its next load, so a failed write
             // costs one dialog rather than an unrecorded consent.
@@ -319,6 +320,12 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                       {isEnglish
                         ? "Lecue records lectures through my microphone and sends the audio to an external AI service for transcription. The original audio is not kept once the transcript is made."
                         : "Lecue가 마이크로 강의를 녹음하고, 받아쓰기를 위해 음성을 외부 AI 서비스로 보내는 데 동의합니다. 원본 음성은 스크립트를 만든 뒤 보관하지 않습니다."}
+                    </label>
+                    <label>
+                      <input type="checkbox" checked={consentAssessment} onChange={(event) => setConsentAssessment(event.target.checked)} disabled={pending} />
+                      {isEnglish
+                        ? "I will not use Lecue during an exam, quiz, or graded assessment."
+                        : "시험·퀴즈 등 평가 중에는 Lecue를 사용하지 않겠습니다."}
                     </label>
                   </div>
                 )}
