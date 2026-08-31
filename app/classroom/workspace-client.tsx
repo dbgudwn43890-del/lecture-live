@@ -129,7 +129,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [lectureTitle, setLectureTitle] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
-  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>(isEnglish ? "en" : "ko");
+  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>("multi");
   const [personalApiKey, setPersonalApiKey] = useState("");
   const [savedCredentials, setSavedCredentials] = useState<SavedCredential[]>([]);
   const [credentialPending, setCredentialPending] = useState(false);
@@ -309,6 +309,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     })();
     return () => { cancelled = true; };
   }, [activeSessionId, locale]);
+
+  // Show the first page immediately; live matching replaces it when the
+  // lecture has said enough to identify a later page.
+  useEffect(() => {
+    if (materialState !== "viewable" || slidePage) return;
+    const document = materials.find(isPdfMaterial);
+    if (document) setSlidePage({ documentId: document.id, filename: document.filename, startPage: 1, endPage: 1 });
+  }, [materialState, materials, slidePage]);
 
   /**
    * UPL-01. Reads the length in the browser first: a file past the three-hour

@@ -94,6 +94,7 @@ test("builds a listen url with repeated keyterm and no encoding", () => {
 test("accepts multilingual recognition and rejects unknown language values", () => {
   assert.equal(deepgramLanguage("multi", "ko"), "multi");
   assert.equal(deepgramLanguage("fr", "ko"), "ko");
+  assert.equal(deepgramLanguage("fr", "multi"), "multi");
   const url = listenUrl({ language: "multi", keyterms: ["Lecue"], sessionId: "multi" });
   assert.ok(url.includes("language=multi"));
   assert.ok(url.includes("endpointing=100"));

@@ -657,7 +657,7 @@ a, button, summary, input, textarea, select {
 }
 
 .slide-panel {
-  max-height: 272px;
+  max-height: 340px;
   min-height: 0;
   overflow: hidden;
   background: var(--surface);

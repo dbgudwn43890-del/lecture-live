@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     {
       accessToken: data.access_token,
       listenUrl: listenUrl({
-        language: deepgramLanguage(body.language, "ko"),
+        language: deepgramLanguage(body.language, "multi"),
         keyterms: parseGlossary(body.keyterms),
         sessionId: "lab",
         pcm: true,

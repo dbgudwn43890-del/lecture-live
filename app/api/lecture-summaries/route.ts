@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     let text: string;
     try {
       const response = await openai.responses.create({
-        model: "gpt-5.6-luna",
+        model: "gpt-4o-mini",
         max_output_tokens: 2_000,
         store: false,
         instructions: SUMMARY_PROMPT,

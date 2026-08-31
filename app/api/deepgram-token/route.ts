@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       // 스크립트에 드러나 있고, 남은 시간이 갱신값을 회수할 만큼 길다.
       refreshInMs: declared.length ? null : 600_000,
       listenUrl: listenUrl({
-        language: deepgramLanguage(body.language, isEnglish ? "en" : "ko"),
+        language: deepgramLanguage(body.language, "multi"),
         keyterms,
         sessionId: body.sessionId,
       }),

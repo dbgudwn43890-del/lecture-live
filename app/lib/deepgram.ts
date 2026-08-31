@@ -35,7 +35,7 @@ export const MAX_UTTERANCE_CHARACTERS = 600;
 export const MAX_KEYTERMS = 50;
 export const KEYTERM_CHARACTER_BUDGET = 400;
 
-export function deepgramLanguage(value: unknown, fallback: "ko" | "en"): DeepgramLanguage {
+export function deepgramLanguage(value: unknown, fallback: DeepgramLanguage): DeepgramLanguage {
   return value === "ko" || value === "en" || value === "multi" ? value : fallback;
 }
 

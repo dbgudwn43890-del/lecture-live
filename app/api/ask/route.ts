@@ -250,6 +250,8 @@ function isUuid(value: unknown): value is string {
 const EMPTY_CLASSROOM_CONTEXT = {
   text: "",
   sources: [] as LectureSource[],
+  materialOverview: "",
+  materialOverviewSources: [] as MaterialSource[],
   materialText: "",
   screenText: "",
   materialSources: [] as MaterialSource[],
@@ -276,7 +278,7 @@ async function findLectureContext(
   if (!admin || !apiKey) return { ...EMPTY_CLASSROOM_CONTEXT, admin: null };
 
   // Earlier lectures still belong to a classroom; PDFs belong to this session.
-  const [{ data: session }, { data: anyChunk }, { data: anyMaterial }] = await Promise.all([
+  const [{ data: session }, { data: anyChunk }, { data: materialDocuments }] = await Promise.all([
     admin
       .from("lecture_sessions")
       .select("id")
@@ -293,21 +295,46 @@ async function findLectureContext(
       .maybeSingle() : Promise.resolve({ data: null }),
     admin
       .from("material_documents")
-      .select("id")
+      .select("id,filename")
       .eq("session_id", sessionId)
       .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle(),
+      .order("created_at", { ascending: false })
+      .limit(4),
   ]);
   if (!session) return { ...EMPTY_CLASSROOM_CONTEXT, admin: null };
-  if (!anyChunk && !anyMaterial) return { ...EMPTY_CLASSROOM_CONTEXT, admin };
+  const attachedMaterials = materialDocuments ?? [];
+  if (!anyChunk && !attachedMaterials.length) return { ...EMPTY_CLASSROOM_CONTEXT, admin };
+
+  // A material's identity stays in context even when a vague question has too
+  // little semantic overlap to retrieve a detailed passage.
+  const overviewRows = await Promise.all(attachedMaterials.map(async (document) => {
+    const { data } = await admin
+      .from("material_chunks")
+      .select("document_id,start_page,end_page,text")
+      .eq("document_id", document.id)
+      .order("start_page", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return data ? { ...data, filename: document.filename } : null;
+  }));
+  const materialOverviewSources = overviewRows.flatMap((row) => row ? [{
+    documentId: String(row.document_id),
+    filename: String(row.filename),
+    startPage: Number(row.start_page),
+    endPage: Number(row.end_page),
+  }] : []);
+  const materialOverview = overviewRows.flatMap((row) => row
+    ? [`[${row.filename} p.${row.start_page}] ${String(row.text).slice(0, 600)}`]
+    : [],
+  ).join("\n\n");
+  const baseContext = { ...EMPTY_CLASSROOM_CONTEXT, materialOverview, materialOverviewSources };
 
   try {
     // Bound the wait: SDK defaults are a 10-minute timeout with 2 retries,
     // so a hung provider rode to the platform timeout and returned a raw 504
     // instead of the localized error the catch block below produces.
     const openai = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
-    const useAnchor = Boolean(anchor) && Boolean(anyMaterial);
+    const useAnchor = Boolean(anchor) && attachedMaterials.length > 0;
     const embedding = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: useAnchor ? [question, anchor] : [question],
@@ -327,7 +354,7 @@ async function findLectureContext(
             p_match_count: 5,
           })
         : Promise.resolve({ data: [], error: null }),
-      anyMaterial
+      attachedMaterials.length
         ? admin.rpc("match_material_chunks", {
             p_user_id: userId,
             p_session_id: sessionId,
@@ -378,18 +405,19 @@ async function findLectureContext(
     const materialSources = [...screenMatches, ...materialMatches].map(toSource);
 
     return {
+      ...baseContext,
       text: matches.map((item) => `[${item.session_title}] ${item.text}`).join("\n\n"),
       sources: [...new Map(sources.map((source) => [`${source.sessionId}:${source.startMs}`, source])).values()],
       materialText: asBlock(materialMatches),
       screenText: asBlock(screenMatches),
-      materialSources: [...new Map(materialSources.map((source) => [`${source.documentId}:${source.startPage}`, source])).values()],
+      materialSources: [...new Map([...materialOverviewSources, ...materialSources].map((source) => [`${source.documentId}:${source.startPage}`, source])).values()],
       // What the panel jumps to, so the learner sees the slide the answer read.
       screenSource: screenMatches[0] ? toSource(screenMatches[0]) : null,
       admin,
     };
   } catch (error) {
     console.error("Lecture context lookup failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
-    return { ...EMPTY_CLASSROOM_CONTEXT, admin };
+    return { ...baseContext, admin };
   }
 }
 
@@ -847,14 +875,19 @@ export async function POST(request: Request) {
       ? `\n\nRelevant excerpts from materials attached to this lecture:\n${earlier.materialText}`
       : `\n\n이 수업에 넣은 강의 자료 중 관련 내용:\n${earlier.materialText}`
     : "";
+  const materialOverviewBlock = earlier.materialOverview
+    ? locale === "en"
+      ? `\n\nMaterials attached to this lecture (always available context):\n${earlier.materialOverview}`
+      : `\n\n이 수업에 넣은 강의 자료 개요(항상 참고할 맥락):\n${earlier.materialOverview}`
+    : "";
   const screenBlock = earlier.screenText
     ? locale === "en"
       ? `\n\nMaterial the lecture is most likely on screen right now:\n${earlier.screenText}`
       : `\n\n지금 화면에 떠 있을 가능성이 높은 강의 자료:\n${earlier.screenText}`
     : "";
   const input = locale === "en"
-    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}${screenBlock}${materialBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
-    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}${screenBlock}${materialBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
+    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
+    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
 
   // Everything above this line is validation (auth, rate limit, credits, body
   // shape); only once all of it has passed does the response start streaming.
