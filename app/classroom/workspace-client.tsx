@@ -1175,16 +1175,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // 확인이 함께 있어야 그 약속이 말로 그치지 않는다 (app/policy).
     // ponytail: 브라우저당 한 번. 계정에 남겨야 할 만큼 무거운 동의가 되면 그때
     // 테이블로 올린다.
-    // ACC-02/ACC-03: age and the recording notice are account-level and must be
-    // on record before the microphone opens, so they are checked ahead of the
-    // per-browser exam acknowledgement.
-    if (consentSatisfied !== true) {
-      const satisfied = await refreshConsent();
-      if (!satisfied) {
-        setConsentGate(true);
-        return;
-      }
-    }
+    // ACC-02/ACC-03의 계정 동의는 여기서 묻지 않는다. 가입할 때 받고, 기록이
+    // 없는 계정은 강의실에 들어오는 순간 한 번 묻는다 — 강의가 막 시작되려는
+    // 순간에 약관을 읽히는 것은 동의를 받는 방법이 아니라 누르게 만드는 방법이다.
     if (!examAcknowledged()) {
       setExamGate(true);
       return;
@@ -1297,6 +1290,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     finishingRef.current = false;
   }
 
+  // 가입 이후에 만들어진 계정은 이미 기록이 있다. 그 전에 만든 계정만 여기서
+  // 한 번 걸리고, 그 뒤로는 다시 뜨지 않는다.
+  useEffect(() => {
+    void refreshConsent().then((satisfied) => setConsentGate(!satisfied));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** ACC-02/ACC-03. Asks the server, which owns the wording version. */
   async function refreshConsent() {
     try {
@@ -1327,7 +1327,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       if (!response.ok) throw new Error(data.error);
       setConsentSatisfied(true);
       setConsentGate(false);
-      void startLecture();
     } catch (caught) {
       setError(caught instanceof Error && caught.message
         ? caught.message
@@ -1960,7 +1959,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         </header>
 
         {consentGate && (
-          <div className="notice-banner consent-gate" role="alertdialog" aria-label={isEnglish ? "Before your first recording" : "첫 녹음을 시작하기 전에"}>
+          <div className="consent-modal">
+          <div className="consent-gate" role="alertdialog" aria-label={isEnglish ? "Before your first recording" : "첫 녹음을 시작하기 전에"}>
             <p>{isEnglish
               ? "Before Lecue records for the first time, confirm both. Your answer is stored on your account with the date and the wording version."
               : "Lecue가 처음 녹음하기 전에 두 가지를 확인합니다. 확인한 문구의 버전과 시각이 계정에 기록됩니다."}</p>
@@ -1983,8 +1983,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 disabled={!consentAge || !consentRecording || consentPending}
               >{consentPending
                 ? isEnglish ? "Saving…" : "저장 중…"
-                : isEnglish ? "Agree and start" : "동의하고 시작"}</button>
+                : isEnglish ? "Agree and continue" : "동의하고 계속"}</button>
             </span>
+          </div>
           </div>
         )}
         {examGate && (

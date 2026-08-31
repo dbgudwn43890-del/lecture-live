@@ -26,6 +26,10 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
   const classroomPath = `${basePath}/classroom`;
   const [nextPath, setNextPath] = useState(classroomPath);
   const [mode, setMode] = useState<Mode>("signin");
+  // ACC-02/ACC-03. Asked once, here, instead of in front of the microphone: a
+  // learner reading this at the moment a lecture starts will tick anything.
+  const [consentAge, setConsentAge] = useState(false);
+  const [consentRecording, setConsentRecording] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -126,6 +130,11 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       setMessage(isEnglish ? "The passwords do not match." : "비밀번호가 서로 다릅니다.");
       return;
     }
+    if (mode === "signup" && (!consentAge || !consentRecording)) {
+      setIsError(true);
+      setMessage(isEnglish ? "Check both boxes to create an account." : "두 항목을 모두 확인해야 계정을 만들 수 있습니다.");
+      return;
+    }
 
     setPendingAction(mode);
     setMessage("");
@@ -138,7 +147,9 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       const { data, error } = mode === "signup"
         ? await supabase.auth.signUp({
             ...credentials,
-            options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}` },
+            // consent=1 carries the ticked boxes across the email round trip;
+            // the callback writes the rows once there is a session to own them.
+            options: { emailRedirectTo: `${window.location.origin}/auth/callback?consent=1&next=${encodeURIComponent(nextPath)}` },
           })
         : await supabase.auth.signInWithPassword(credentials);
 
@@ -160,6 +171,18 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       }
 
       if (data.session) {
+        // Email confirmation is off for this project, so there is a session
+        // right away and no callback to carry the consent for us.
+        if (mode === "signup") {
+          await fetch("/api/consents", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+            body: JSON.stringify({ types: ["age_14", "recording"] }),
+          }).catch(() => {
+            // The classroom asks again on its next load, so a failed write
+            // costs one dialog rather than an unrecorded consent.
+          });
+        }
         redirecting = true;
         window.location.assign(nextPath);
         return;
@@ -283,6 +306,21 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                       disabled={pending}
                     />
                   </>
+                )}
+
+                {mode === "signup" && (
+                  <div className="signup-consent">
+                    <label>
+                      <input type="checkbox" checked={consentAge} onChange={(event) => setConsentAge(event.target.checked)} disabled={pending} />
+                      {isEnglish ? "I am 14 years of age or older." : "만 14세 이상입니다."}
+                    </label>
+                    <label>
+                      <input type="checkbox" checked={consentRecording} onChange={(event) => setConsentRecording(event.target.checked)} disabled={pending} />
+                      {isEnglish
+                        ? "Lecue records lectures through my microphone and sends the audio to an external AI service for transcription. The original audio is not kept once the transcript is made."
+                        : "Lecue가 마이크로 강의를 녹음하고, 받아쓰기를 위해 음성을 외부 AI 서비스로 보내는 데 동의합니다. 원본 음성은 스크립트를 만든 뒤 보관하지 않습니다."}
+                    </label>
+                  </div>
                 )}
 
                 <button className="email-auth-button" type="submit" disabled={pending}>

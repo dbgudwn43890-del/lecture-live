@@ -250,8 +250,35 @@ a, button, summary, input, textarea, select {
   font-size: 13px;
 }
 
-/* The consent gate is the same banner with checkboxes, so it shares the layout
-   rather than growing a second set of nearly identical rules. */
+/* Account consent is asked once, on the way into the classroom, and it owns the
+   screen while it is up. As a banner it sat in the same strip as the topbar
+   controls and was read as chrome — or covered them outright. */
+.consent-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(28, 24, 37, .5);
+  backdrop-filter: blur(3px);
+}
+.consent-modal .consent-gate {
+  width: min(560px, 100%);
+  max-height: 90svh;
+  overflow-y: auto;
+  padding: 26px;
+  color: var(--ink);
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: var(--pop-shadow);
+  font-size: 13px;
+}
+.consent-modal .consent-gate p { color: var(--muted); }
+.consent-modal .consent-gate span { width: 100%; justify-content: flex-end; margin-top: 4px; }
+
+/* The exam gate is still a banner; the consent dialog above reuses its checkbox
+   and footer layout rather than growing a second set of nearly identical rules. */
 .exam-gate,
 .consent-gate {
   display: flex;
@@ -1988,7 +2015,9 @@ button:active,
 .workspace .question-form textarea,
 .workspace .question-form button { border-radius: var(--radius); }
 .workspace .question-form textarea { border-width: 1px; border-color: #d1ced6; }
-.workspace .question-form button { background: var(--focus); }
+/* Only the submit button is filled; .catchup-button is a dashed ghost and this
+   rule used to paint over it, leaving its label unreadable on a solid block. */
+.workspace .question-form button[type="submit"] { background: var(--focus); }
 .workspace .transcript { padding: 20px 24px 42px; }
 .workspace .footnote { color: #817891; background: #eeecf0; border-top: 1px solid #d7d5dc; }
 
@@ -2090,11 +2119,13 @@ button:active,
    control that starts a lecture.
    --------------------------------------------------------------------------- */
 
-/* Three children — title, state, button — but only two columns were declared,
-   so the button wrapped onto its own implicit row and stretched into a slab
-   across the width of the workspace. */
+/* The topbar's children — title, state, audio upload, start/stop — each need a
+   column of their own. Declaring fewer wraps the last one onto an implicit row,
+   where it stretches into a purple slab across the workspace and the control it
+   was hiding (start the lecture) is nowhere the learner can see. Auto-fitting
+   the trailing controls keeps that from happening again when one is added. */
 .workspace .topbar {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
   gap: 16px;
 }
 
@@ -2246,7 +2277,10 @@ button:active,
   }
   .workspace .lecture-title-field { grid-column: 1 / -1; grid-row: 1; }
   .workspace .session-state { grid-column: 1; grid-row: 2; justify-self: start; }
-  .workspace .topbar > button { grid-column: 2; grid-row: 2; }
+  .workspace .audio-upload-button { grid-column: 2; grid-row: 2; justify-self: end; }
+  /* The control that starts the lecture gets its own row here rather than
+     competing with the upload label for the same cell. */
+  .workspace .topbar > button { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; justify-content: center; }
   .workspace .panes { grid-template-columns: 1fr; padding: 12px; }
   .workspace .chat-pane,
   .workspace .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
@@ -2320,3 +2354,24 @@ button:active,
 .audio-upload-button:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
 /* Visually hidden, not display:none — the label must still open the picker. */
 .audio-upload-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Signup consent. ACC-02/ACC-03 used to be asked in front of the microphone,
+   which is the worst moment to put wording in front of someone — the lecture
+   has started and the only thing they want is the record button. */
+.signup-consent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 2px;
+}
+.signup-consent label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.signup-consent input { margin-top: 2px; flex: 0 0 auto; accent-color: var(--signal); }
