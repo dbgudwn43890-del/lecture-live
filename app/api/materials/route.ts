@@ -204,7 +204,10 @@ export async function POST(request: Request) {
       pageCount = extracted.pageCount;
       keyterms = [];
     } catch (error) {
-      console.error("PDF text extraction failed", error instanceof Error ? error.name : "unknown");
+      console.error(
+        "PDF text extraction failed",
+        error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
+      );
       return NextResponse.json({ error: isEnglish ? "Could not read this PDF." : "이 PDF를 읽지 못했습니다." }, { status: 422 });
     }
   } else {

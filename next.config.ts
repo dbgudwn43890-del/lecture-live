@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  // PDF.js uses Node-only modules while reading uploaded files. Keep it out of
+  // the route bundle so Vercel runs the package's server build unchanged.
+  serverExternalPackages: ["pdfjs-dist"],
   async redirects() {
     const preview = [
       { source: "/preview", destination: "/", permanent: true },
