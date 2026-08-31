@@ -463,29 +463,25 @@ a, button, summary, input, textarea, select {
   background: var(--surface);
 }
 
-.question-form .catchup-button {
-  grid-column: 1 / -1;
+.pane-heading-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--muted);
-  font-weight: 650;
-  font-size: 13px;
+  gap: 10px;
 }
 
-.question-form .catchup-button:hover:not(:disabled) { border-style: solid; }
-.question-form .catchup-button:disabled { opacity: .5; }
-.question-form .catchup-button kbd {
-  font: inherit;
-  font-size: 11px;
-  opacity: .7;
+.pane-heading .catchup-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: white;
+  color: var(--ink);
+  font-weight: 650;
+  font-size: 12px;
 }
+
+.pane-heading .catchup-button:hover:not(:disabled) { border-color: var(--focus); color: var(--focus); }
+.pane-heading .catchup-button:disabled { opacity: .5; }
 
 .question-form textarea {
   min-height: 58px;

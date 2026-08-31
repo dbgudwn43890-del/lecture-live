@@ -1408,17 +1408,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     );
   }
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      // Alt+R. 타이핑 중에도 안전하도록 수식 키를 요구한다.
-      if (!event.altKey || event.ctrlKey || event.metaKey || event.key.toLowerCase() !== "r") return;
-      event.preventDefault();
-      askCatchup();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  });
-
   function askQuestion(event: FormEvent) {
     event.preventDefault();
     void submitQuestion(question, true);
@@ -2042,7 +2031,12 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <div>
               <h1 id="chat-title">{isEnglish ? "Ask about the lecture" : "강의에 질문하기"}</h1>
             </div>
-            <span className="count">{messages.filter((message) => message.role === "user").length}{isEnglish ? " questions" : "개 질문"}</span>
+            <div className="pane-heading-actions">
+              <button type="button" className="catchup-button" disabled={!canAsk} onClick={askCatchup}>
+                {isEnglish ? "I missed that" : "방금 놓쳤어요"}
+              </button>
+              <span className="count">{messages.filter((message) => message.role === "user").length}{isEnglish ? " questions" : "개 질문"}</span>
+            </div>
           </div>
 
           {/* Likewise: announce the newest answer, not the whole thread. */}
@@ -2134,10 +2128,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           </div>
 
           <form className="question-form" onSubmit={askQuestion}>
-            <button type="button" className="catchup-button" disabled={!canAsk} onClick={askCatchup}>
-              {isEnglish ? "I missed that · replay the last 90 seconds" : "방금 놓쳤어요 · 최근 90초 다시"}
-              <kbd>Alt+R</kbd>
-            </button>
             <label htmlFor="question" className="sr-only">{isEnglish ? "Enter a question" : "질문 입력"}</label>
             <textarea
               id="question"
