@@ -167,6 +167,22 @@ test("a PDF can create a draft lecture and starting reuses that same session", a
   assert.ok(activation?.filters.includes("eq:status=draft"));
 });
 
+test("starting without a draft saves a recording session", async () => {
+  const session = {
+    id: randomUUID(), classroom_id: null, title: "바로 시작한 수업", status: "recording",
+    started_at: "2026-08-31T00:00:00.000Z", ended_at: null, duration_seconds: 0,
+  };
+  outcomes["lecture_sessions.insert"] = { data: session, error: null };
+
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: session.title }),
+  }));
+
+  assert.equal(response?.status, 201);
+  assert.equal((calls.find((call) => call.table === "lecture_sessions" && call.op === "insert")?.payload as { status: string }).status, "recording");
+});
+
 test("GET pages through more than 1,000 transcript segments instead of truncating at PostgREST's cap", async () => {
   const sessionId = randomUUID();
   const rowCount = 1_500;

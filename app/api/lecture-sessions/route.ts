@@ -197,7 +197,7 @@ export async function POST(request: Request) {
     const draftId = body.action === "start" && validId(body.sessionId) ? body.sessionId : null;
     const query = draftId
       ? current.supabase.from("lecture_sessions").update({ status: "recording", started_at: new Date().toISOString() }).eq("id", draftId).eq("status", "draft")
-      : current.supabase.from("lecture_sessions").insert({ classroom_id: classroomId, user_id: current.userId, title, status: body.action });
+      : current.supabase.from("lecture_sessions").insert({ classroom_id: classroomId, user_id: current.userId, title, status: body.action === "draft" ? "draft" : "recording" });
     const { data, error } = await query.select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").single();
     if (error) {
       console.error("Lecture start save failed", error.code);
