@@ -59,7 +59,7 @@
 .content h2 { margin: 0; font-size: 21px; line-height: 1.4; letter-spacing: -.025em; }
 .content h3 { margin: 30px 0 10px; font-size: 15px; }
 .content h3:first-child { margin-top: 0; }
-.content p, .content li { color: #465055; font-size: 14px; line-height: 1.85; }
+.content p, .content li { color: #4b4459; font-size: 14px; line-height: 1.85; }
 .content p { margin: 0 0 14px; }
 .content ul, .content ol { margin: 12px 0 0; padding-left: 20px; }
 .content li + li { margin-top: 8px; }
@@ -69,8 +69,8 @@
 .tableWrap { overflow-x: auto; border-top: 1px solid var(--legal-ink); }
 .content table { width: 100%; min-width: 680px; border-collapse: collapse; }
 .content th, .content td { padding: 16px 14px; border-bottom: 1px solid var(--legal-line); text-align: left; vertical-align: top; font-size: 12px; line-height: 1.7; }
-.content th { color: var(--legal-ink); background: #e6eae9; font-weight: 800; }
-.content td { color: #465055; }
+.content th { color: var(--legal-ink); background: #e9e6ee; font-weight: 800; }
+.content td { color: #4b4459; }
 .placeholder { color: #9b2f20 !important; font-weight: 800; }
 
 .footer {
@@ -79,7 +79,7 @@
   grid-template-columns: auto 1fr auto;
   gap: 24px 50px;
   padding: 48px max(30px, calc((100vw - 1120px) / 2));
-  color: #b7c0c2;
+  color: #bdb7c8;
   background: var(--legal-ink);
   font-size: 11px;
 }
@@ -87,7 +87,7 @@
 .footer strong { color: white; font-size: 16px; }
 .footer div { justify-self: end; display: flex; gap: 22px; }
 .footer a { text-decoration: none; }
-.footer small { grid-column: 1 / -1; color: #7f898c; }
+.footer small { grid-column: 1 / -1; color: #847b95; }
 
 @media (max-width: 760px) {
   .header { min-height: 62px; padding: 0 16px; }

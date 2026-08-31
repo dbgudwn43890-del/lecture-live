@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { IBM_Plex_Mono } from "next/font/google";
+import { Geist, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 // Pretendard as ~92 unicode-range subsets instead of one 2 MB file: a Korean page
 // pulls only the ranges it actually renders (tens of KB), and the browser fetches
@@ -12,6 +12,10 @@ import "./fonts/pretendard.css";
 // globals.css and two CSS modules asked for "IBM Plex Mono" while nothing loaded it,
 // so those labels fell through to whatever ui-monospace resolves to. next/font
 // self-hosts it at build time; --font-mono is what the stylesheets now name.
+// Geist carries the Latin brand voice; Korean glyphs fall through to Pretendard
+// in the same stack, so one line of mixed ko/en text stays optically even.
+const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+
 const mono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "700"],
@@ -46,7 +50,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   return (
-    <html lang={locale} className={mono.variable}>
+    <html lang={locale} className={`${sans.variable} ${mono.variable}`}>
       <body>{children}</body>
     </html>
   );

@@ -339,7 +339,7 @@ export default function LandingPage({
       </section>
 
       <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={isAuthenticated ? classroomPath : `${base}/login?mode=signup`}>{isAuthenticated ? copy.openClassroom : copy.finalCta}<span>→</span></Link></section>
-      <footer className={styles.footer}><strong>Lecue</strong><p>{copy.footerDescription}</p><div><Link href={`${base}/privacy`}>{copy.privacy}</Link><Link href={`${base}/terms`}>{copy.terms}</Link><Link href={`${base}/refund-policy`}>{copy.refund}</Link><a href={`mailto:${copy.support}`}>{copy.support}</a></div><small>{copy.recordingNotice}</small></footer>
+      <footer className={styles.footer}><div><strong>Lecue</strong><p className={styles.footerTagline}>Built for what matters.</p></div><p>{copy.footerDescription}</p><div><Link href={`${base}/privacy`}>{copy.privacy}</Link><Link href={`${base}/terms`}>{copy.terms}</Link><Link href={`${base}/refund-policy`}>{copy.refund}</Link><a href={`mailto:${copy.support}`}>{copy.support}</a></div><small>{copy.recordingNotice}</small></footer>
     </main>
   );
 }
