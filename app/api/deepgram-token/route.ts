@@ -55,7 +55,10 @@ export async function POST(request: Request) {
     supabase.rpc("get_credit_status"),
     supabase
       .from("lecture_sessions")
-      .select("classrooms(glossary, material_documents(keyterms))")
+      // material_documents hangs off both tables now: directly from this
+      // session, and from the classroom it belongs to. Reading both in the one
+      // embed keeps the session's own material first without a second trip.
+      .select("classrooms(glossary, material_documents(keyterms)), material_documents(keyterms)")
       .eq("id", body.sessionId)
       .maybeSingle(),
     // 재연결이거나 어휘 갱신이면 이 수업의 앞부분이 이미 쌓여 있다. 첫 연결이면
@@ -115,10 +118,19 @@ export async function POST(request: Request) {
 
   // 자료에서 뽑은 용어가 손으로 넣은 용어집을 이어받는다. 학생이 아무것도 입력하지
   // 않아도 업로드한 슬라이드가 그 과목의 어휘집 노릇을 한다 (PRD 36.3.1).
-  const classroom = (sessionRow as { classrooms?: { glossary?: string; material_documents?: Array<{ keyterms?: string }> } | null })?.classrooms;
+  const row = sessionRow as {
+    classrooms?: { glossary?: string; material_documents?: Array<{ keyterms?: string }> } | null;
+    material_documents?: Array<{ keyterms?: string }>;
+  } | null;
+  const classroom = row?.classrooms;
+  // 이 수업에 붙은 자료가 있으면 그것만 오늘의 어휘집이다. 한 학기치 PDF에서 뽑은
+  // 용어를 모두 밀어 넣으면 400자 예산이 지난주 어휘로 차서, 정작 오늘 나올 말이
+  // 잘린다. 붙은 자료가 없는 수업만 강의실 전체 자료로 물러난다.
+  const sessionMaterial = row?.material_documents ?? [];
+  const material = sessionMaterial.length ? sessionMaterial : classroom?.material_documents ?? [];
   const declared = mergeKeyterms(
     parseGlossary(classroom?.glossary),
-    (classroom?.material_documents ?? []).flatMap((document) => parseGlossary(document.keyterms)),
+    material.flatMap((document) => parseGlossary(document.keyterms)),
   );
   // 자료도 용어집도 없는 수업은 여기서만 어휘를 얻는다. 남은 예산에만 들어가므로
   // 손으로 넣은 용어와 슬라이드 용어를 밀어내지 않는다.

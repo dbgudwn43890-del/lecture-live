@@ -199,7 +199,20 @@ export async function POST(request: Request) {
       console.error("Lecture start save failed", error.code);
       return NextResponse.json({ error: current.isEnglish ? "Could not create the lecture record." : "수업 기록을 만들지 못했습니다." }, { status: 500 });
     }
-    if (classroomId) await current.supabase.from("classrooms").update({ updated_at: new Date().toISOString() }).eq("id", classroomId);
+    if (classroomId) {
+      await current.supabase.from("classrooms").update({ updated_at: new Date().toISOString() }).eq("id", classroomId);
+      // 방금 올린 자료는 지금 시작하는 수업의 것이다. 지난주 자료는 이미 그때의
+      // 세션을 달고 있으므로 여기 걸리지 않는다. 이 구분이 있어야 keyterm 예산이
+      // 한 학기치 PDF가 아니라 오늘 강의의 어휘로 찬다.
+      const { error: claimError } = await current.supabase
+        .from("material_documents")
+        .update({ session_id: data.id })
+        .eq("classroom_id", classroomId)
+        .is("session_id", null);
+      // 자료가 안 붙어도 수업은 시작돼야 한다. keyterm은 강의실 전체 자료로
+      // 물러나므로 최악이라도 지금과 같다.
+      if (claimError) console.error("Material session claim failed", claimError.code);
+    }
     return NextResponse.json({ session: data }, { status: 201 });
   }
 

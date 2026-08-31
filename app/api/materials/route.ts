@@ -85,7 +85,7 @@ export async function GET(request: Request) {
   const classroomId = params.get("classroomId");
   const query = current.supabase
     .from("material_documents")
-    .select("id,classroom_id,filename,page_count,created_at,storage_path")
+    .select("id,classroom_id,session_id,filename,page_count,created_at,storage_path")
     .order("created_at", { ascending: false });
 
   const { data, error } = isUuid(classroomId) ? await query.eq("classroom_id", classroomId) : await query;
@@ -113,6 +113,10 @@ export async function POST(request: Request) {
   }
 
   const classroomId = formData.get("classroomId");
+  // 수업 중에 올린 자료는 그 수업에 바로 붙는다. 수업 전에 올린 자료는 아직
+  // 세션이 없으므로 null로 두고, 수업을 시작할 때 lecture-sessions가 가져간다.
+  const rawSessionId = formData.get("sessionId");
+  const sessionId = isUuid(rawSessionId) ? rawSessionId : null;
   const file = formData.get("file");
   if (!isUuid(classroomId)) {
     return NextResponse.json({ error: isEnglish ? "Choose a classroom first." : "강의실을 먼저 선택해 주세요." }, { status: 400 });
@@ -128,9 +132,14 @@ export async function POST(request: Request) {
 
   // Ownership check and the per-classroom ceiling in one read. RLS already
   // scopes both tables to this user, so a foreign classroom id comes back empty.
-  const [{ data: classroom }, { count }] = await Promise.all([
+  const [{ data: classroom }, { count }, { data: session }] = await Promise.all([
     supabase.from("classrooms").select("id").eq("id", classroomId).maybeSingle(),
     supabase.from("material_documents").select("id", { count: "exact", head: true }).eq("classroom_id", classroomId),
+    // RLS scopes this to the owner; a session from another classroom would
+    // attach the material to a lecture it has nothing to do with.
+    sessionId
+      ? supabase.from("lecture_sessions").select("id").eq("id", sessionId).eq("classroom_id", classroomId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   if (!classroom) {
     return NextResponse.json({ error: isEnglish ? "Could not find that classroom." : "해당 강의실을 찾지 못했습니다." }, { status: 404 });
@@ -207,13 +216,14 @@ export async function POST(request: Request) {
     .from("material_documents")
     .insert({
       classroom_id: classroomId,
+      session_id: session?.id ?? null,
       user_id: userId,
       filename,
       page_count: Math.min(500, pages.at(-1)?.page ?? pages.length),
       keyterms: keyterms.join(", "),
       storage_path: storagePath,
     })
-    .select("id,classroom_id,filename,page_count,created_at,storage_path")
+    .select("id,classroom_id,session_id,filename,page_count,created_at,storage_path")
     .single();
   if (documentError || !document) {
     console.error("Material document save failed", documentError?.code);

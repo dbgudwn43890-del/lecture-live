@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { cleanAnswerText, cleanSources } from "../../lib/answer-format";
+import { buildLectureContext, type Summary } from "../../lib/lecture-summary";
 import {
   isAllowedPersonalModel,
   isPersonalProvider,
@@ -183,6 +184,33 @@ async function fetchStoredSegments(
     offset += SEGMENT_PAGE_SIZE;
   }
   return rows.slice(0, SEGMENT_CAP);
+}
+
+/**
+ * 이 수업의 구간 요약. /api/lecture-summaries가 강의 중에 미리 만들어 둔 것으로,
+ * 세 시간짜리 원문 대신 프롬프트에 들어간다. 창은 최대 18개라 페이지 넘김이
+ * 필요 없다.
+ */
+async function fetchSummaries(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessionId: string,
+): Promise<Summary[]> {
+  const { data, error } = await supabase
+    .from("lecture_summaries")
+    .select("window_index,start_ms,end_ms,text")
+    .eq("session_id", sessionId)
+    .order("window_index", { ascending: true });
+  if (error) {
+    // 요약을 못 읽으면 원문 전체로 답한다. 비싸지만 틀리지는 않는다.
+    console.error("Lecture summary read failed", error.code);
+    return [];
+  }
+  return (data ?? []).map((row) => ({
+    windowIndex: Number(row.window_index),
+    startMs: Number(row.start_ms),
+    endMs: Number(row.end_ms),
+    text: String(row.text),
+  }));
 }
 
 // De-duplicate by client id (a segment the client already confirmed can still
@@ -783,8 +811,11 @@ export async function POST(request: Request) {
   // the wait instead of adding it (PRD 36.3.4).
   // Without a session id there is nothing to read back, so fall back to
   // whatever the request carried (the pre-existing behavior).
-  const [storedSegments, earlier] = await Promise.all([
+  const [storedSegments, storedSummaries, earlier] = await Promise.all([
     lectureSessionId ? fetchStoredSegments(supabase, lectureSessionId) : Promise.resolve<Segment[]>([]),
+    // 복구 요청은 최근 90초만 보므로 요약이 할 일이 없다. 그 외에는 이 읽기가
+    // 원문 대신 프롬프트에 들어갈 것을 결정한다.
+    lectureSessionId && !catchup ? fetchSummaries(supabase, lectureSessionId) : Promise.resolve<Summary[]>([]),
     classroomId && lectureSessionId && !catchup
       ? findClassroomContext(userId, classroomId, lectureSessionId, question, anchor)
       : Promise.resolve({ ...EMPTY_CLASSROOM_CONTEXT, admin: null }),
@@ -801,10 +832,11 @@ export async function POST(request: Request) {
   const inWindow = catchup
     ? segments.filter((segment) => segment.endMs >= catchupUntilMs - CATCHUP_WINDOW_MS)
     : segments;
-  const transcript = inWindow
-    .map((segment) => `[${formatTime(segment.startMs)}] ${segment.text}`)
-    .join("\n");
-  const context = `${transcript}${interim ? `\n[${formatTime(questionAtMs)} · 임시] ${interim}` : ""}`;
+  // 요약이 있으면 끝난 구간은 요약으로, 진행 중인 구간과 질문이 가리키는 구간만
+  // 원문으로 보낸다. 요약이 없으면(짧은 수업, 요약 실패, 복구 요청) 지금까지처럼
+  // 원문 전체가 들어간다 — 이 경로가 죽어도 답은 나와야 한다.
+  const lecture = buildLectureContext(inWindow, catchup ? [] : storedSummaries, question);
+  const context = `${lecture.text}${interim ? `\n[${formatTime(questionAtMs)} · 임시] ${interim}` : ""}`;
 
   if (context.length > 500_000) {
     return NextResponse.json({ error: isEnglish ? "The transcript exceeds the current processing limit." : "스크립트가 현재 처리 한도를 넘었습니다." }, { status: 413 });

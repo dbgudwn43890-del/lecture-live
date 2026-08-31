@@ -23,7 +23,7 @@ type Segment = {
 type Source = { title: string; url: string };
 type LectureSource = { sessionId: string; title: string; startMs: number; endMs: number };
 type MaterialSource = { documentId: string; filename: string; startPage: number; endPage: number };
-type MaterialDocument = { id: string; classroom_id: string; filename: string; page_count: number; storage_path?: string | null };
+type MaterialDocument = { id: string; classroom_id: string; session_id?: string | null; filename: string; page_count: number; storage_path?: string | null };
 type SessionSummary = {
   id: string;
   classroom_id: string | null;
@@ -200,6 +200,25 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     if (saved === "ko" || saved === "en" || saved === "multi") setSpeechLanguage(saved);
   }, []);
 
+  // 끝난 10분 구간을 강의 중에 미리 접어 둔다. 질문할 때 세 시간짜리 원문을
+  // 통째로 보내지 않기 위한 준비이고, 학습자가 기다리는 시점이 아니라 여기서
+  // 돈다. 서버가 할 일이 없으면 아무것도 하지 않으므로 그냥 두드린다.
+  useEffect(() => {
+    if (status !== "recording") return;
+    const fold = () => {
+      const sessionId = activeSessionIdRef.current;
+      if (!sessionId) return;
+      void fetch("/api/lecture-summaries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ sessionId }),
+        // 실패해도 답변은 원문으로 나온다. 강의를 방해할 이유가 없다.
+      }).catch(() => {});
+    };
+    const timer = window.setInterval(fold, 120_000);
+    return () => window.clearInterval(timer);
+  }, [status, locale]);
+
   useEffect(() => {
     if (status !== "recording") return;
     const timer = window.setInterval(() => {
@@ -359,6 +378,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     try {
       const formData = new FormData();
       formData.set("classroomId", activeClassroomId);
+      // 수업 중에 올린 자료는 그 수업에 붙어 keyterm을 바로 채운다. 수업 전이면
+      // 세션이 없고, 시작할 때 서버가 가져간다.
+      if (activeSessionIdRef.current) formData.set("sessionId", activeSessionIdRef.current);
       formData.set("file", file);
       const response = await fetch("/api/materials", {
         method: "POST",
