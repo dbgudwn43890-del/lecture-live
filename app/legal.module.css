@@ -7,6 +7,8 @@
   --legal-line: var(--line);
   --legal-signal: var(--signal);
   --legal-focus: var(--focus);
+  --legal-edge: var(--edge);
+  --legal-invert: var(--invert-bg);
   min-height: 100dvh;
   color: var(--legal-ink);
   background: var(--legal-paper);
@@ -31,7 +33,7 @@
 .header nav { display: flex; align-items: center; gap: 24px; font-size: 12px; font-weight: 750; }
 .header nav a { color: var(--legal-muted); text-decoration: none; }
 .header nav a:hover { color: var(--legal-ink); }
-.header nav .classroomLink { padding: 10px 14px; color: white; background: var(--legal-ink); }
+.header nav .classroomLink { padding: 10px 14px; color: white; background: var(--legal-invert); }
 
 .hero {
   width: min(1120px, calc(100% - 60px));
@@ -59,19 +61,19 @@
 .content h2 { margin: 0; font-size: 21px; line-height: 1.4; letter-spacing: -.025em; }
 .content h3 { margin: 30px 0 10px; font-size: 15px; }
 .content h3:first-child { margin-top: 0; }
-.content p, .content li { color: #4b4459; font-size: 14px; line-height: 1.85; }
+.content p, .content li { color: color-mix(in srgb, var(--ink), var(--muted)); font-size: 14px; line-height: 1.85; }
 .content p { margin: 0 0 14px; }
 .content ul, .content ol { margin: 12px 0 0; padding-left: 20px; }
 .content li + li { margin-top: 8px; }
 .content a { color: var(--legal-focus); text-underline-offset: 3px; }
 .content strong { color: var(--legal-ink); }
 
-.tableWrap { overflow-x: auto; border-top: 1px solid var(--legal-ink); }
+.tableWrap { overflow-x: auto; border-top: 1px solid var(--legal-edge); }
 .content table { width: 100%; min-width: 680px; border-collapse: collapse; }
 .content th, .content td { padding: 16px 14px; border-bottom: 1px solid var(--legal-line); text-align: left; vertical-align: top; font-size: 12px; line-height: 1.7; }
-.content th { color: var(--legal-ink); background: #e9e6ee; font-weight: 800; }
-.content td { color: #4b4459; }
-.placeholder { color: #9b2f20 !important; font-weight: 800; }
+.content th { color: var(--legal-ink); background: color-mix(in srgb, var(--ink) 6%, var(--paper)); font-weight: 800; }
+.content td { color: color-mix(in srgb, var(--ink), var(--muted)); }
+.placeholder { color: var(--danger) !important; font-weight: 800; }
 
 .footer {
   min-height: 170px;
@@ -80,7 +82,7 @@
   gap: 24px 50px;
   padding: 48px max(30px, calc((100vw - 1120px) / 2));
   color: #bdb7c8;
-  background: var(--legal-ink);
+  background: var(--legal-invert);
   font-size: 11px;
 }
 
@@ -105,13 +107,13 @@
 }
 
 /* Legal pages use the same structural brutalism without reducing readability. */
-.header { border-bottom: 2px solid var(--legal-ink); }
-.header nav .classroomLink { border: 2px solid var(--legal-ink); box-shadow: 3px 3px 0 var(--legal-focus); }
-.hero { border-bottom: 2px solid var(--legal-ink); }
+.header { border-bottom: 2px solid var(--legal-edge); }
+.header nav .classroomLink { border: 2px solid var(--legal-edge); box-shadow: 3px 3px 0 var(--legal-focus); }
+.hero { border-bottom: 2px solid var(--legal-edge); }
 .hero > p,
 .hero dt { font-family: var(--font-mono), ui-monospace, monospace; }
-.content section { border-color: var(--legal-ink); }
-.tableWrap { border: 2px solid var(--legal-ink); }
+.content section { border-color: var(--legal-edge); }
+.tableWrap { border: 2px solid var(--legal-edge); }
 .content th,
-.content td { border-color: var(--legal-ink); }
+.content td { border-color: var(--legal-edge); }
 .footer { border-top: 3px solid var(--legal-signal); }
