@@ -12,7 +12,7 @@ import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
 
-type Status = "idle" | "connecting" | "recording" | "ended" | "error";
+type Status = "idle" | "connecting" | "recording" | "paused" | "ended" | "error";
 
 type Segment = {
   id: string;
@@ -29,10 +29,11 @@ type SessionSummary = {
   id: string;
   classroom_id: string | null;
   title: string;
-  status: "draft" | "recording" | "completed";
+  status: "draft" | "recording" | "paused" | "completed";
   started_at: string;
   ended_at: string | null;
   duration_seconds: number;
+  recorded_ms: number;
   question_count: number;
 };
 type Classroom = { id: string; title: string; locale: "ko" | "en"; glossary?: string; sessions: SessionSummary[] };
@@ -140,8 +141,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
   const statusCopy: Record<Status, string> = isEnglish
-    ? { idle: "Not started", connecting: "Connecting", recording: "Recording", ended: "Ended", error: "Check connection" }
-    : { idle: "시작 전", connecting: "연결 중", recording: "기록 중", ended: "종료됨", error: "연결 확인 필요" };
+    ? { idle: "Not started", connecting: "Connecting", recording: "Recording", paused: "Paused", ended: "Ended", error: "Check connection" }
+    : { idle: "시작 전", connecting: "연결 중", recording: "기록 중", paused: "일시정지", ended: "종료됨", error: "연결 확인 필요" };
   const [status, setStatus] = useState<Status>("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -193,6 +194,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef(0);
+  const elapsedBaseMsRef = useRef(0);
   const segmentIdsRef = useRef(new Set<string>());
   // Segments the server has actually persisted (its "segment" save fetch
   // resolved with response.ok). /api/ask only needs to carry the ones missing
@@ -255,7 +257,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   useEffect(() => {
     if (status !== "recording") return;
     const timer = window.setInterval(() => {
-      const elapsed = Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current);
+      const elapsed = currentElapsedMs();
       // The clock is only read at second granularity, so publishing all four
       // ticks a second re-rendered the whole workspace for an identical
       // string — 43,200 times over a three-hour lecture.
@@ -267,6 +269,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }, 250);
     return () => window.clearInterval(timer);
   }, [status]);
+
+  function currentElapsedMs() {
+    return Math.min(MAX_LECTURE_MS, elapsedBaseMsRef.current
+      + (startedAtRef.current ? Date.now() - startedAtRef.current : 0));
+  }
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
@@ -903,9 +910,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   }
 
   async function openSession(sessionId: string) {
-    if (status === "recording" || status === "connecting") return;
+    if (status === "recording" || status === "connecting" || finishingRef.current) return;
     setClassroomPending(true);
     setError("");
+    setNotice("");
     try {
       const response = await fetch(`/api/lecture-sessions?sessionId=${encodeURIComponent(sessionId)}`, { headers: { "X-Site-Locale": locale } });
       const data = await response.json() as {
@@ -929,8 +937,27 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerText(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
       ]));
       showInterim("");
-      setElapsedMs(data.session.duration_seconds * 1_000);
-      setStatus(data.session.status === "draft" ? "idle" : "ended");
+      let recordedMs = data.session.recorded_ms ?? data.session.duration_seconds * 1_000;
+      let nextStatus: Status = data.session.status === "draft" ? "idle"
+        : data.session.status === "completed" ? "ended" : "paused";
+      // A refresh closes the browser microphone but cannot close the old DB
+      // session. Recover it as paused so wall-clock time never becomes audio.
+      if (data.session.status === "recording") {
+        const pauseResponse = await fetch("/api/lecture-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ action: "pause", sessionId: data.session.id }),
+        });
+        const pauseData = await pauseResponse.json() as { recordedMs?: number; error?: string };
+        if (!pauseResponse.ok) throw new Error(pauseData.error);
+        recordedMs = pauseData.recordedMs ?? recordedMs;
+        nextStatus = "paused";
+      }
+      elapsedBaseMsRef.current = recordedMs;
+      startedAtRef.current = 0;
+      streamOffsetMsRef.current = recordedMs;
+      setElapsedMs(recordedMs);
+      setStatus(nextStatus);
     } catch (caught) {
       setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not load the lecture." : "수업 기록을 불러오지 못했습니다.");
     } finally {
@@ -939,7 +966,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   }
 
   function prepareNewLecture() {
-    if (status === "recording" || status === "connecting") return;
+    if (status === "recording" || status === "connecting" || finishingRef.current) return;
     setActiveSessionId("");
     activeSessionIdRef.current = "";
     setLectureTitle("");
@@ -949,6 +976,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     setMessages([]);
     showInterim("");
     setElapsedMs(0);
+    elapsedBaseMsRef.current = 0;
+    startedAtRef.current = 0;
+    setNotice("");
     saveFailuresRef.current = 0;
     setStatus("idle");
   }
@@ -1026,7 +1056,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       return next;
     });
     // 말이 끝난 시각과 지금의 차이가 곧 확정 지연이다 (PRD 36.3.4).
-    void saveSegment(segment, Math.max(0, Date.now() - (startedAtRef.current + segment.endMs)));
+    void saveSegment(segment, Math.max(0, Date.now()
+      - (startedAtRef.current + segment.endMs - elapsedBaseMsRef.current)));
   }
 
   function stopSocketTimers() {
@@ -1092,7 +1123,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
    * 토큰을 받아 소켓을 연다. 첫 연결과 재연결이 같은 경로를 쓴다 — grant는 30초
    * 만에 만료되고 주소는 매번 서버가 다시 만들어 주므로 재사용할 것이 없다.
    */
-  async function connectDeepgram(stream: MediaStream) {
+  async function connectDeepgram(stream: MediaStream, recoverAsPaused = false) {
     const tokenResponse = await fetch("/api/deepgram-token", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
@@ -1127,7 +1158,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       if (!firstConnection) {
         // 새 소켓의 시계는 0에서 다시 시작한다. 이 값을 더하지 않으면 재연결 뒤
         // 세그먼트가 강의 첫머리와 겹쳐 순서와 앵커가 함께 무너진다.
-        streamOffsetMsRef.current = Date.now() - startedAtRef.current;
+        streamOffsetMsRef.current = currentElapsedMs();
       }
       // 백그라운드 탭이나 절전으로 레코더가 멎으면 Deepgram이 10초쯤 뒤 소켓을 닫는다.
       lastSentAtRef.current = Date.now();
@@ -1181,16 +1212,18 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       if (activeSessionIdRef.current) {
         void fetch("/api/lecture-sessions", {
-          method: "PATCH",
+          method: recoverAsPaused ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({ sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
+          body: JSON.stringify(recoverAsPaused
+            ? { action: "pause", sessionId: activeSessionIdRef.current }
+            : { sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
         }).then(() => loadCredits());
         stream.getTracks().forEach((track) => track.stop());
       }
       setError(isEnglish
         ? "Speech recognition could not connect. Check the network and API settings."
         : "음성 인식 연결에 실패했습니다. 네트워크와 API 설정을 확인해 주세요.");
-      setStatus("error");
+      setStatus(recoverAsPaused ? "paused" : "error");
     };
 
     socket.onclose = () => {
@@ -1203,11 +1236,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   }
 
   async function startLecture() {
+    if (finishingRef.current) return;
     // ACC-02/ACC-03의 계정 동의는 여기서 묻지 않는다. 가입할 때 받고, 기록이
     // 없는 계정은 강의실에 들어오는 순간 한 번 묻는다 — 강의가 막 시작되려는
     // 순간에 약관을 읽히는 것은 동의를 받는 방법이 아니라 누르게 만드는 방법이다.
     setError("");
+    setNotice("");
     startedAtRef.current = 0;
+    elapsedBaseMsRef.current = 0;
     const draftSessionId = status === "idle" ? activeSessionIdRef.current : "";
     saveFailuresRef.current = 0;
     vocabularyRefreshedRef.current = false;
@@ -1280,6 +1316,83 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }
   }
 
+  async function pauseLecture() {
+    if (status !== "recording" || finishingRef.current) return;
+    finishingRef.current = true;
+    try {
+      const response = await fetch("/api/lecture-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ action: "pause", sessionId: activeSessionIdRef.current }),
+      });
+      const data = await response.json() as { recordedMs?: number; error?: string };
+      if (!response.ok) throw new Error(data.error);
+      if (reconnectTimerRef.current !== null) window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+      stopSocketTimers();
+      flushUtterance();
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      pendingAudioRef.current = [];
+      socketRef.current?.close();
+      const recordedMs = data.recordedMs ?? currentElapsedMs();
+      elapsedBaseMsRef.current = recordedMs;
+      startedAtRef.current = 0;
+      streamOffsetMsRef.current = recordedMs;
+      setElapsedMs(recordedMs);
+      setStatus("paused");
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not pause the lecture." : "강의를 일시정지하지 못했습니다.");
+    } finally {
+      finishingRef.current = false;
+    }
+  }
+
+  async function resumeLecture() {
+    if (status !== "paused" || finishingRef.current) return;
+    setError("");
+    setStatus("connecting");
+    let stream: MediaStream | null = null;
+    let resumed = false;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      const response = await fetch("/api/lecture-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ action: "resume", sessionId: activeSessionIdRef.current }),
+      });
+      const data = await response.json() as { recordedMs?: number; error?: string };
+      if (!response.ok) throw new Error(data.error);
+      resumed = true;
+      const recordedMs = data.recordedMs ?? elapsedBaseMsRef.current;
+      elapsedBaseMsRef.current = recordedMs;
+      streamOffsetMsRef.current = recordedMs;
+      startedAtRef.current = Date.now();
+      streamRef.current = stream;
+      pendingAudioRef.current = [];
+      socketOpenedRef.current = false;
+      reconnectAttemptRef.current = 0;
+      setStatus("recording");
+      await connectDeepgram(stream, true);
+    } catch (caught) {
+      stream?.getTracks().forEach((track) => track.stop());
+      startedAtRef.current = 0;
+      if (resumed) {
+        await fetch("/api/lecture-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ action: "pause", sessionId: activeSessionIdRef.current }),
+        }).catch(() => {});
+      }
+      setError(microphoneMessage(caught));
+      setStatus("paused");
+    }
+  }
+
   async function finishLecture() {
     if (finishingRef.current) return;
     finishingRef.current = true;
@@ -1288,6 +1401,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       reconnectTimerRef.current = null;
     }
     stopSocketTimers();
+    const durationMs = currentElapsedMs();
+    const reachedLimit = durationMs >= MAX_LECTURE_MS;
     flushUtterance();
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     pendingAudioRef.current = [];
@@ -1303,7 +1418,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
           body: JSON.stringify({
             sessionId,
-            durationMs: Math.min(MAX_LECTURE_MS, Date.now() - startedAtRef.current),
+            durationMs,
             segments: segmentsRef.current,
           }),
         });
@@ -1311,7 +1426,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         if (!response.ok) throw new Error(data.error);
         await loadClassrooms(activeClassroomId);
         await loadCredits();
-        if (Date.now() - startedAtRef.current >= MAX_LECTURE_MS) {
+        if (reachedLimit) {
           // Hitting the cap saved the lecture, so this is a notice, not the
           // red alert banner it used to be rendered in.
           setNotice(isEnglish ? "This lecture reached the 3-hour session limit and was saved." : "수업 1회 최대 3시간에 도달해 자동으로 저장·종료했습니다.");
@@ -1324,6 +1439,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // finishingRef alone does not stop a clean stop from being read as a drop.
     // A lecture that has ended has no start time.
     startedAtRef.current = 0;
+    elapsedBaseMsRef.current = durationMs;
     finishingRef.current = false;
   }
 
@@ -1386,7 +1502,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   const canAsk = (segments.length > 0 || interim.length > 0)
     && !messages.some((message) => message.pending)
-    && (creditStatus === null || creditStatus.credits > 0 || status === "recording");
+    && (creditStatus === null || creditStatus.credits > 0 || status === "recording" || status === "paused");
 
   /**
    * 놓친 구간 복구. 질문을 문장으로 못 쓰는 순간이 강의에서는 훨씬 잦다 — 무엇을
@@ -1561,7 +1677,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         personalModelOptions[aiProvider][0].label;
   const planLabel = getPlanLabel(creditStatus?.planCode, locale);
 
-  const sidebarLocked = classroomPending || status === "recording" || status === "connecting";
+  const sidebarLocked = classroomPending || status === "recording" || status === "connecting" || status === "paused";
 
   /** One lecture row: open it, rename it in place, or drag it into a classroom. */
   function renderSessionRow(session: SessionSummary) {
@@ -1885,10 +2001,20 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <time>{formatTime(elapsedMs)}</time>
           </div>
 
-          {status === "recording" || status === "connecting" ? (
-            <button className="stop-button" type="button" onClick={stopLecture} disabled={status === "connecting"}>
-              {isEnglish ? "End lecture" : "강의 종료"}
-            </button>
+          {status === "recording" || status === "connecting" || status === "paused" ? (
+            <div className="lecture-controls">
+              <button
+                className="pause-button"
+                type="button"
+                onClick={status === "paused" ? resumeLecture : pauseLecture}
+                disabled={status === "connecting"}
+              >{status === "paused"
+                  ? isEnglish ? "Resume" : "이어하기"
+                  : isEnglish ? "Pause" : "일시정지"}</button>
+              <button className="stop-button" type="button" onClick={stopLecture} disabled={status === "connecting"}>
+                {isEnglish ? "End lecture" : "강의 종료"}
+              </button>
+            </div>
           ) : (
             <>
               {/* UPL-01. A lecture already recorded on a phone takes the same

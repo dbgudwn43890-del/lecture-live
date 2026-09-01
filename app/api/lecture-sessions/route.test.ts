@@ -183,6 +183,27 @@ test("starting without a draft saves a recording session", async () => {
   assert.equal((calls.find((call) => call.table === "lecture_sessions" && call.op === "insert")?.payload as { status: string }).status, "recording");
 });
 
+test("pause and resume return the server-owned accumulated recording time", async () => {
+  const sessionId = randomUUID();
+  outcomes["rpc:pause_lecture_session.rpc"] = { data: [{ status: "paused", recorded_ms: 61_250 }], error: null };
+
+  const pauseResponse = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "pause", sessionId }),
+  }));
+  assert.equal(pauseResponse?.status, 200);
+  assert.deepEqual(await pauseResponse?.json(), { status: "paused", recordedMs: 61_250 });
+  assert.deepEqual(calls.at(-1)?.payload, { p_session_id: sessionId });
+
+  outcomes["rpc:resume_lecture_session.rpc"] = { data: [{ status: "recording", recorded_ms: 61_250 }], error: null };
+  const resumeResponse = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "resume", sessionId }),
+  }));
+  assert.equal(resumeResponse?.status, 200);
+  assert.deepEqual(await resumeResponse?.json(), { status: "recording", recordedMs: 61_250 });
+});
+
 test("GET pages through more than 1,000 transcript segments instead of truncating at PostgREST's cap", async () => {
   const sessionId = randomUUID();
   const rowCount = 1_500;

@@ -158,7 +158,7 @@ export async function GET(request: Request) {
   // "segment" saves during recording are never capped like the PATCH
   // completion payload is) — it's just a safety ceiling against a runaway read.
   const [{ data: session, error: sessionError }, { rows: segments, error: segmentError }, { data: questions, error: questionError }] = await Promise.all([
-    current.supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").eq("id", sessionId).maybeSingle(),
+    current.supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds,recorded_ms").eq("id", sessionId).maybeSingle(),
     fetchAllSegments(current.supabase, sessionId, 50_000),
     current.supabase.from("lecture_questions").select("id,question,answer,provider,model,external_sources,lecture_sources,created_at").eq("session_id", sessionId).order("created_at"),
   ]);
@@ -195,10 +195,17 @@ export async function POST(request: Request) {
     }
 
     const draftId = body.action === "start" && validId(body.sessionId) ? body.sessionId : null;
+    const now = new Date().toISOString();
     const query = draftId
-      ? current.supabase.from("lecture_sessions").update({ status: "recording", started_at: new Date().toISOString() }).eq("id", draftId).eq("status", "draft")
-      : current.supabase.from("lecture_sessions").insert({ classroom_id: classroomId, user_id: current.userId, title, status: body.action === "draft" ? "draft" : "recording" });
-    const { data, error } = await query.select("id,classroom_id,title,status,started_at,ended_at,duration_seconds").single();
+      ? current.supabase.from("lecture_sessions").update({ status: "recording", started_at: now, recording_started_at: now, recorded_ms: 0 }).eq("id", draftId).eq("status", "draft")
+      : current.supabase.from("lecture_sessions").insert({
+          classroom_id: classroomId,
+          user_id: current.userId,
+          title,
+          status: body.action === "draft" ? "draft" : "recording",
+          recording_started_at: body.action === "draft" ? null : now,
+        });
+    const { data, error } = await query.select("id,classroom_id,title,status,started_at,ended_at,duration_seconds,recorded_ms").single();
     if (error) {
       console.error("Lecture start save failed", error.code);
       return NextResponse.json({ error: current.isEnglish ? "Could not create the lecture record." : "수업 기록을 만들지 못했습니다." }, { status: 500 });
@@ -225,7 +232,7 @@ export async function POST(request: Request) {
 
   // A refresh or crash mid-lecture used to leave the row in "recording"
   // forever: the library showed it as live and the workspace opened it at
-  // 0:00. Only sessions past the 3-hour cap are closed — a session younger
+  // 0:00. Only active recording periods past the 3-hour cap are closed — a session younger
   // than that may be recording right now in another tab, and completing it
   // would make every further audio chunk fail with LECTURE_NOT_RECORDING.
   if (body.action === "reconcile") {
@@ -253,7 +260,7 @@ export async function POST(request: Request) {
       .from("lecture_sessions")
       .select("id,classroom_id,user_id")
       .eq("status", "recording")
-      .lt("started_at", abandonedBefore)
+      .lt("recording_started_at", abandonedBefore)
       .limit(MAX_RECONCILE_SESSIONS);
     if (error) {
       console.error("Stale lecture lookup failed", error.code);
@@ -275,6 +282,8 @@ export async function POST(request: Request) {
           status: "completed",
           ended_at: new Date().toISOString(),
           duration_seconds: durationSeconds,
+          recorded_ms: Math.min(MAX_LECTURE_MS, durationSeconds * 1_000),
+          recording_started_at: null,
         })
         .eq("id", session.id);
 
@@ -374,12 +383,27 @@ export async function POST(request: Request) {
     });
   }
 
+  if ((body.action === "pause" || body.action === "resume") && validId(body.sessionId)) {
+    const functionName = body.action === "pause" ? "pause_lecture_session" : "resume_lecture_session";
+    const { data, error } = await current.supabase.rpc(functionName, { p_session_id: body.sessionId });
+    const state = Array.isArray(data) ? data[0] : data;
+    if (error || !state) {
+      if (error) console.error(`Lecture ${body.action} failed`, error.code);
+      return NextResponse.json({
+        error: current.isEnglish
+          ? `Could not ${body.action} the lecture.`
+          : body.action === "pause" ? "강의를 일시정지하지 못했습니다." : "강의를 이어서 시작하지 못했습니다.",
+      }, { status: 409 });
+    }
+    return NextResponse.json({ status: state.status, recordedMs: Number(state.recorded_ms ?? 0) });
+  }
+
   if (body.action === "segment" && validId(body.sessionId) && validSegment(body.segment)) {
     const segment = body.segment;
     // The browser holds the Deepgram socket directly, so this save is the only
     // event the server sees on a live lecture — which makes it the only place
     // the meter can run. The minute index comes from the session's own
-    // started_at, so the client cannot supply it, and consumption is idempotent
+    // accumulated active time, so the client cannot supply it, and consumption is idempotent
     // per minute, so several utterances inside one minute bill it once.
     const [{ data: creditData, error: creditError }, { data: session }] = await Promise.all([
       current.supabase.rpc("consume_lecture_credits_elapsed", { p_session_id: body.sessionId }),
@@ -513,13 +537,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Invalid lecture completion data." : "수업 종료 정보를 확인해 주세요." }, { status: 400 });
   }
   const segments = body.segments.filter(validSegment).slice(0, 5_000);
-  const { data: session } = await current.supabase.from("lecture_sessions").select("id,classroom_id,started_at,status").eq("id", body.sessionId).maybeSingle();
+  const { data: session } = await current.supabase
+    .from("lecture_sessions")
+    .select("id,classroom_id,started_at,status,recorded_ms,recording_started_at")
+    .eq("id", body.sessionId)
+    .maybeSingle();
   if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
   // Only a recording lecture can be completed. consume_lecture_credits already
   // refuses anything else, but that rejection was logged and stepped over, so a
   // completed session could be re-PATCHed forever — each replay re-embedding a
   // fresh 5,000-segment payload on the platform key. Ending twice is a no-op.
-  if (session.status !== "recording") return NextResponse.json({ completed: true, indexed: false });
+  if (session.status !== "recording" && session.status !== "paused") return NextResponse.json({ completed: true, indexed: false });
 
   if (segments.length) {
     const { error } = await current.supabase.from("transcript_segments").upsert(segments.map((segment) => ({
@@ -534,10 +562,12 @@ export async function PATCH(request: Request) {
     if (error) console.error("Final transcript save failed", error.code);
   }
 
-  // Derived from the session's own started_at, not from the client. A client
+  // Derived from the session's accumulated active time, not from the client. A client
   // reporting durationMs: 0 after a 90-minute lecture used to store 0 and skip
   // the final credit reconciliation below.
-  const elapsedMs = Date.now() - new Date(session.started_at).getTime();
+  const elapsedMs = Math.min(MAX_LECTURE_MS, Number(session.recorded_ms ?? 0) + (session.status === "recording"
+    ? Math.max(0, Date.now() - new Date(session.recording_started_at ?? session.started_at).getTime())
+    : 0));
   // A start that failed before the first sample (a blocked AudioContext, a
   // missing worklet) still lands here, and billing off started_at charged it a
   // full lecture-minute for a lecture that recorded nothing. The transcript is
@@ -556,7 +586,13 @@ export async function PATCH(request: Request) {
     });
     if (creditError) console.error("Final credit reconciliation failed", creditError.code);
   }
-  const { error: updateError } = await current.supabase.from("lecture_sessions").update({ status: "completed", ended_at: new Date().toISOString(), duration_seconds: durationSeconds }).eq("id", body.sessionId);
+  const { error: updateError } = await current.supabase.from("lecture_sessions").update({
+    status: "completed",
+    ended_at: new Date().toISOString(),
+    duration_seconds: durationSeconds,
+    recorded_ms: recordedSomething ? elapsedMs : 0,
+    recording_started_at: null,
+  }).eq("id", body.sessionId);
   if (updateError) {
     console.error("Lecture completion failed", updateError.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 500 });

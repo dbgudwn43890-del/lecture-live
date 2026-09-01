@@ -13,7 +13,7 @@ async function fetchAllSessions(supabase: SupabaseClient) {
   for (;;) {
     const { data, error } = await supabase
       .from("lecture_sessions")
-      .select("id,classroom_id,title,status,started_at,ended_at,duration_seconds")
+      .select("id,classroom_id,title,status,started_at,ended_at,duration_seconds,recorded_ms")
       .order("started_at", { ascending: false })
       // started_at alone is not unique, and a paginated read needs a total
       // order or sessions sharing a timestamp can straddle a page boundary

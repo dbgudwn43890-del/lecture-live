@@ -130,6 +130,7 @@ a, button, summary, input, textarea, select {
 }
 
 .state-connecting { background: #e6b64f; }
+.state-paused { background: #8b7b4a; }
 /* A distinct hue from .state-recording: both being red made the dot, which is
    what people glance at, identical whether recording was fine or had failed. */
 .state-error { background: #b3261e; box-shadow: 0 0 0 2px #f3d5d2; }
@@ -194,7 +195,7 @@ a, button, summary, input, textarea, select {
 
 .credential-actions button:disabled { opacity: 0.45; }
 
-.start-button, .stop-button {
+.start-button, .pause-button, .stop-button {
   min-width: 104px;
   padding: 10px 16px;
   border: 1px solid transparent;
@@ -208,6 +209,7 @@ a, button, summary, input, textarea, select {
 }
 
 .start-button { background: white; color: var(--ink); }
+.pause-button { background: #eeeaf3; color: var(--ink); }
 .stop-button { background: var(--signal); color: white; }
 .stop-button:hover { background: var(--signal-dark); }
 
@@ -1785,6 +1787,7 @@ button:active,
 .workspace .session-state time { color: #302b39; }
 
 .workspace .start-button,
+.workspace .pause-button,
 .workspace .stop-button {
   min-width: 0;
   min-height: 28px;
@@ -1799,6 +1802,7 @@ button:active,
 /* The brutalist :hover further up lifts these 2px and drops a 5px black
    shadow, which read as the button popping in and out of the quiet topbar. */
 .workspace .start-button:hover,
+.workspace .pause-button:hover,
 .workspace .stop-button:hover {
   box-shadow: none;
   transform: none;
@@ -1806,7 +1810,9 @@ button:active,
 
 .workspace .start-button { color: white; background: var(--focus); }
 .workspace .start-button:hover { background: #2f1d4e; }
+.workspace .pause-button { color: var(--ink); background: #eeeaf3; }
 .workspace .stop-button { background: var(--signal); }
+.workspace .lecture-controls { display: flex; gap: 8px; }
 .workspace button:active { box-shadow: none; transform: none; }
 
 .profile-menu { position: relative; }
@@ -2058,6 +2064,7 @@ button:active,
 .workspace .session-state time { font-variant-numeric: tabular-nums; }
 
 .workspace .start-button,
+.workspace .pause-button,
 .workspace .stop-button {
   min-height: 32px;
   padding: 0 14px;
@@ -2204,6 +2211,8 @@ button:active,
   /* The control that starts the lecture gets its own row here rather than
      competing with the upload label for the same cell. */
   .workspace .topbar > button { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; justify-content: center; }
+  .workspace .lecture-controls { grid-column: 1 / -1; grid-row: 3; }
+  .workspace .lecture-controls button { flex: 1; justify-content: center; }
   .workspace .panes { grid-template-columns: 1fr; padding: 12px; }
   .workspace .chat-pane,
   .workspace .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
@@ -2215,6 +2224,7 @@ button:active,
   .sidebar-profile { min-width: 0; }
   /* The app's primary control. It used to shrink here, not grow. */
   .workspace .start-button,
+  .workspace .pause-button,
   .workspace .stop-button { min-width: 76px; min-height: 44px; padding: 0 12px; font-size: 13px; }
 }
 
