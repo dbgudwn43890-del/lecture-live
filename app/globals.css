@@ -564,7 +564,15 @@ a, button, summary, input, textarea, select {
 /* Pilot reporting (PRD 36.2). The control only appears on hover or keyboard
    focus: a button on every transcript line would compete with the lecture the
    learner is trying to read. */
-.transcript-line { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.transcript-line {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  /* 세 시간 강의의 화면 밖 문단은 그리지 않는다. 높이는 추정치면 충분하다. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
 .transcript-line > time {
   padding-top: 7px;
   color: #91899d;

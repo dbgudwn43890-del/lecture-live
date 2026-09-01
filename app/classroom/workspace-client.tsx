@@ -206,6 +206,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const messagesFollowRef = useRef(true);
   const previousMessageCountRef = useRef(0);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
+  // 지난 부분을 다시 읽는 중에는 새 문장이 와도 바닥으로 끌어내리지 않는다.
+  const transcriptFollowRef = useRef(true);
   const segmentsRef = useRef<Segment[]>([]);
   const activeSessionIdRef = useRef("");
   const finishingRef = useRef(false);
@@ -272,6 +274,56 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     return () => window.clearInterval(timer);
   }, [status]);
 
+  // 녹음 중 탭을 닫으면 마지막 발화가 유실된다. 실수인 닫기만 한 번 막는다.
+  useEffect(() => {
+    if (status !== "recording") return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [status]);
+
+  // 화면이 잠들면 레코더가 멎고 Deepgram이 소켓을 닫는다(연결부 주석 참고).
+  // 녹음 중에는 화면을 깨워 두고, 탭이 다시 보이면 잃은 잠금을 다시 잡는다.
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  useEffect(() => {
+    if (status !== "recording" || !("wakeLock" in navigator)) return;
+    let cancelled = false;
+    const acquire = async () => {
+      try {
+        const lock = await navigator.wakeLock.request("screen");
+        if (cancelled) void lock.release().catch(() => {});
+        else wakeLockRef.current = lock;
+      } catch {
+        // 배터리 절약 모드 등이 거부해도 녹음은 계속된다.
+      }
+    };
+    void acquire();
+    const onVisible = () => { if (document.visibilityState === "visible") void acquire(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      void wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    };
+  }, [status]);
+
+  // 와이파이가 돌아왔는데 백오프 30초를 마저 기다릴 이유가 없다.
+  useEffect(() => {
+    const onOnline = () => {
+      if (reconnectTimerRef.current === null) return;
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+      const stream = streamRef.current;
+      if (stream && !finishingRef.current && startedAtRef.current !== 0) {
+        void connectDeepgram(stream).catch(() => scheduleReconnect());
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function currentElapsedMs() {
     return Math.min(MAX_LECTURE_MS, elapsedBaseMsRef.current
       + (startedAtRef.current ? Date.now() - startedAtRef.current : 0));
@@ -279,7 +331,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
-  useEffect(() => { messagesFollowRef.current = true; }, [activeSessionId]);
+  useEffect(() => {
+    messagesFollowRef.current = true;
+    transcriptFollowRef.current = true;
+  }, [activeSessionId]);
   useEffect(() => {
     const scroller = messagesScrollRef.current;
     const countChanged = previousMessageCountRef.current !== messages.length;
@@ -520,7 +575,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   useEffect(() => {
     if (!segments.length && !interim) return;
     const transcript = transcriptScrollRef.current;
-    if (transcript) transcript.scrollTop = transcript.scrollHeight;
+    if (transcript && transcriptFollowRef.current) transcript.scrollTop = transcript.scrollHeight;
   }, [segments, interim]);
 
   useEffect(
@@ -1721,6 +1776,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             void renameSession(session.id, event.target.value);
           }}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             // Escape restores the stored title first, so the blur below is a no-op.
             if (event.key === "Escape") event.currentTarget.value = session.title;
             if (event.key === "Escape" || event.key === "Enter") event.currentTarget.blur();
@@ -2044,6 +2100,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 else setLectureTitle(event.target.value.trim());
               }}
               onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return;
                 if (event.key === "Escape" && activeSessionId) {
                   setLectureTitle(sessionsById.get(activeSessionId)?.title ?? "");
                 }
@@ -2283,6 +2340,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={(event) => {
+                // 한글 조합 중의 Enter는 글자 확정이지 전송이 아니다.
+                if (event.nativeEvent.isComposing) return;
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   event.currentTarget.form?.requestSubmit();
@@ -2359,7 +2418,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             {interim || transcriptParagraphs.at(-1)?.text || ""}
           </p>
 
-          <div className="transcript" ref={transcriptScrollRef}>
+          <div
+            className="transcript"
+            ref={transcriptScrollRef}
+            onScroll={(event) => {
+              const node = event.currentTarget;
+              transcriptFollowRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+            }}
+          >
             {segments.length === 0 && !interim ? (
               <div className="empty-transcript">
                 <p>{status === "connecting"
