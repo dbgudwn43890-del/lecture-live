@@ -1109,6 +1109,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     const recorder = new MediaRecorder(stream, { mimeType });
     recorderRef.current = recorder;
     recorder.ondataavailable = (event) => {
+      // pause/resume can replace the recorder before the old one's final
+      // dataavailable event arrives. Never feed that stale WebM chunk into the
+      // resumed socket.
+      if (recorderRef.current !== recorder) return;
       if (event.data.size === 0) return;
       const socket = socketRef.current;
       if (socket?.readyState === WebSocket.OPEN) {
@@ -1119,6 +1123,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       }
     };
     recorder.onstop = () => {
+      // The previous recorder may finish after resume has installed a new one.
+      // Its CloseStream must not close the new Deepgram connection.
+      if (recorderRef.current !== recorder) return;
       const socket = socketRef.current;
       if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "CloseStream" }));
     };
@@ -1151,6 +1158,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     socketRef.current = socket;
 
     socket.onopen = () => {
+      if (socketRef.current !== socket) {
+        socket.close();
+        return;
+      }
       if (finishingRef.current || startedAtRef.current === 0) {
         socket.close();
         return;
@@ -1186,6 +1197,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     };
 
     socket.onmessage = (event) => {
+      if (socketRef.current !== socket) return;
       const message = JSON.parse(event.data as string) as DeepgramResult;
       // utterance_end_ms를 요청해 놓고 버리던 신호다. speech_final이 뜨지 않는
       // 발화를 끊어 주는 안전망이자, 실시간 자막이 멈춰 보이지 않게 하는 장치다.
@@ -1210,6 +1222,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     };
 
     socket.onerror = () => {
+      if (socketRef.current !== socket) return;
       // 강의가 이미 돌고 있으면 onclose의 재연결이 처리한다. 시작도 못 한
       // 연결만 여기서 실패로 끝낸다.
       if (socketOpenedRef.current) return;
@@ -1233,6 +1246,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     };
 
     socket.onclose = () => {
+      if (socketRef.current !== socket) return;
       stopSocketTimers();
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       if (finishingRef.current || startedAtRef.current === 0) return;
@@ -1359,6 +1373,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   async function resumeLecture() {
     if (status !== "paused" || finishingRef.current) return;
+    finishingRef.current = true;
     setError("");
     setStatus("connecting");
     let stream: MediaStream | null = null;
@@ -1397,6 +1412,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       }
       setError(microphoneMessage(caught));
       setStatus("paused");
+    } finally {
+      finishingRef.current = false;
     }
   }
 
