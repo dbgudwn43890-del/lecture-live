@@ -2534,4 +2534,5 @@ button:active,
   color: var(--ink);
   border: 1px solid var(--line-strong);
 }
-.confirm-modal .confirm-delete { background: #b3402f; }
+/* 파괴적 동작은 두 테마 모두 붉은 채움 + 흰 글자. --on-signal은 보라 채움용이다. */
+.confirm-modal .confirm-delete { background: #b3402f; color: #fff; }
