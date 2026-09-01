@@ -5,7 +5,10 @@
  */
 export function canUseSttLab(userId: string | null) {
   if (!userId) return false;
-  if (process.env.NODE_ENV !== "production") return true;
+  // Local dev only. A Vercel preview deployment is also NODE_ENV=development
+  // in some configs, and it runs on the real provider keys — the allowlist
+  // applies to anything deployed.
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) return true;
 
   const allowed = (process.env.STT_LAB_USER_IDS ?? "")
     .split(",")

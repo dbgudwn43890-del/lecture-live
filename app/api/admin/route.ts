@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createAdminClient } from "../../lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -17,6 +18,9 @@ async function requireAdmin() {
   const userId = await getAuthenticatedUserId();
   const admin = createAdminClient();
   if (!userId || !admin) return null;
+  // Non-admins still cost an auth.admin.getUserById per request without this.
+  const rateLimit = await checkSharedRateLimit(`admin:${userId}`, 30, 60_000);
+  if (!rateLimit.allowed) return null;
   const allowed = (process.env.ADMIN_EMAILS ?? "")
     .split(",").map((email) => email.trim().toLowerCase()).filter(Boolean);
   if (!allowed.length) return null;
@@ -48,7 +52,10 @@ export async function GET() {
     // 상한에 잘려 오히려 헤비 유저가 남용자처럼 보인다. 집계는 Postgres에서.
     admin.rpc("admin_abuse_signals", { p_since: since }),
   ]);
-  if (userError) return NextResponse.json({ error: userError.message }, { status: 502 });
+  if (userError) {
+    console.error("Admin user list failed", userError.message);
+    return NextResponse.json({ error: "사용자 목록을 불러오지 못했습니다." }, { status: 502 });
+  }
 
   const creditsByUser = new Map<string, number>();
   for (const grant of grants ?? []) {
@@ -126,6 +133,9 @@ export async function POST(request: Request) {
     expires_at: new Date(now.getTime() + days * 86_400_000).toISOString(),
   });
   // 23505 = 이미 처리된 같은 지급. 성공으로 답해 재전송 루프를 끝낸다.
-  if (error && error.code !== "23505") return NextResponse.json({ error: error.message }, { status: 502 });
+  if (error && error.code !== "23505") {
+    console.error("Admin grant failed", error.code);
+    return NextResponse.json({ error: "크레딧을 지급하지 못했습니다." }, { status: 502 });
+  }
   return NextResponse.json({ ok: true });
 }

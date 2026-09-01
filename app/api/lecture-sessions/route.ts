@@ -620,17 +620,21 @@ export async function PATCH(request: Request) {
     console.error("Lecture completion has no admin client");
     return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 503 });
   }
-  const { error: updateError } = await admin.from("lecture_sessions").update({
+  // Conditional on status so two concurrent PATCHes cannot both pass the
+  // check above and each run the embedding step — only the one that actually
+  // flips the row proceeds to index.
+  const { data: completedRow, error: updateError } = await admin.from("lecture_sessions").update({
     status: "completed",
     ended_at: new Date().toISOString(),
     duration_seconds: durationSeconds,
     recorded_ms: recordedSomething ? elapsedMs : 0,
     recording_started_at: null,
-  }).eq("id", body.sessionId).eq("user_id", current.userId);
+  }).eq("id", body.sessionId).eq("user_id", current.userId).in("status", ["recording", "paused"]).select("id").maybeSingle();
   if (updateError) {
     console.error("Lecture completion failed", updateError.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 500 });
   }
+  if (!completedRow) return NextResponse.json({ completed: true, indexed: false });
 
   // 색인은 요청 본문이 아니라 DB에서 읽는다. 클라이언트 payload는 5,000개에서
   // 잘리는데, 그걸 그대로 색인하면 긴 강의 뒷부분이 검색에서 영영 빠진다 —
