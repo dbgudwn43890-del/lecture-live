@@ -121,13 +121,14 @@ export async function POST(request: Request) {
   // gates acceptance, this decides the bill. Falling back to the last segment
   // keeps a response without metadata from billing zero.
   const measuredSeconds = Number(payload.metadata?.duration);
-  const durationMs = Math.min(
+  let durationMs = Math.min(
     MAX_AUDIO_MS,
     Number.isFinite(measuredSeconds) && measuredSeconds > 0
       ? Math.round(measuredSeconds * 1_000)
       : segments.at(-1)?.endMs ?? 0,
   );
-  const durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
+  let durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
+  let paidSegments = segments;
 
   // BILL-01, on the same meter as a live lecture: one started minute, one
   // credit. The owner comes from the session row rather than auth.uid(), which
@@ -152,10 +153,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Charge failed." }, { status: 500 });
     }
   }
-  // Out of credits mid-upload. The transcript already exists and the preflight
-  // gated the start, so the lecture still completes; the shortfall is logged.
+  // Out of credits mid-upload. Deliver exactly the minutes that were paid for
+  // and drop the rest — completing the full transcript regardless turned one
+  // credit into a three-hour transcription, multiplied by parallel uploads.
   if (Array.isArray(charge) && charge[0] && charge[0].allowed === false) {
-    console.error("Upload credit charge partial", upload.id, charge[0].charged_through);
+    const paidMs = (Math.max(-1, Number(charge[0].charged_through)) + 1) * 60_000;
+    if (paidMs <= 0) {
+      // Not even the first minute could be charged: no product to deliver.
+      await markFailed("credit");
+      return NextResponse.json({ ok: true });
+    }
+    console.error("Upload credit charge partial, truncating", upload.id, charge[0].charged_through);
+    const { error: trimError } = await supabase
+      .from("transcript_segments")
+      .delete()
+      .eq("session_id", session.id)
+      .gte("start_ms", paidMs);
+    if (trimError) {
+      console.error("Upload transcript trim failed", trimError.code);
+      return NextResponse.json({ error: "Trim failed." }, { status: 500 });
+    }
+    paidSegments = segments.filter((segment) => segment.startMs < paidMs);
+    durationMs = Math.min(durationMs, paidMs);
+    durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
   }
 
   const { error: completeError } = await supabase
@@ -164,7 +184,7 @@ export async function POST(request: Request) {
     .eq("id", session.id);
   if (completeError) console.error("Upload session completion failed", completeError.code);
 
-  await indexUpload(supabase, session, segments);
+  await indexUpload(supabase, session, paidSegments);
   await discardAudio();
   await supabase
     .from("uploads")

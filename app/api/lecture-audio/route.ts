@@ -117,8 +117,9 @@ export async function POST(request: Request) {
   // 지원하지 않으므로 혼용(실시간 Soniox 전용) 선택은 여기서 ko로 내린다.
   const language = raw === "multi" ? "ko" : raw;
   // The browser reads this off an <audio> element before uploading. It decides
-  // whether to accept the job at all; the charge below uses Deepgram's own
-  // measurement, so a client lying here cannot buy a cheaper transcription.
+  // whether to accept the job at all; the charge uses Deepgram's own
+  // measurement and the callback cuts the transcript off where credits run
+  // out, so a client lying here cannot buy a cheaper transcription.
   const claimedDurationMs = Number(formData.get("durationMs") ?? 0);
 
   if (!(file instanceof File) || file.size === 0) {
@@ -158,13 +159,20 @@ export async function POST(request: Request) {
   }
 
   // Transcribing a 3-hour file costs real money before a single credit is
-  // charged, so an account with nothing left is turned away at the door. The
-  // actual charge happens on the callback, against Deepgram's measured length.
+  // charged, so the door asks for the whole claimed length up front — one
+  // credit used to admit any file, and parallel submits multiplied the free
+  // Deepgram spend before the first callback landed. The charge itself still
+  // happens on the callback, against Deepgram's measured length.
+  const requiredCredits = Math.max(1, Math.min(180, Math.ceil(
+    (Number.isFinite(claimedDurationMs) && claimedDurationMs > 0 ? claimedDurationMs : 0) / 60_000,
+  )));
   const { data: creditStatus } = await supabase.rpc("get_credit_status");
   const credits = Number((Array.isArray(creditStatus) ? creditStatus[0] : creditStatus)?.credits ?? 0);
-  if (credits <= 0) {
+  if (credits < requiredCredits) {
     return NextResponse.json({
-      error: isEnglish ? "You are out of credits. Choose a plan to continue." : "남은 크레딧이 없습니다. 요금제를 선택해 주세요.",
+      error: isEnglish
+        ? `This lecture needs ${requiredCredits} credits and you have ${credits}. Choose a plan to continue.`
+        : `이 수업을 변환하려면 크레딧 ${requiredCredits}개가 필요합니다. 남은 크레딧은 ${credits}개입니다.`,
       credits,
     }, { status: 402 });
   }

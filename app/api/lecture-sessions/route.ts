@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { isUuid } from "../../lib/billing";
 import { chunkTranscript, type TranscriptPart } from "../../lib/chunk-transcript";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
+import { createAdminClient } from "../../lib/supabase/admin";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -198,8 +199,16 @@ export async function POST(request: Request) {
 
     const draftId = body.action === "start" && validId(body.sessionId) ? body.sessionId : null;
     const now = new Date().toISOString();
-    const query = draftId
-      ? current.supabase.from("lecture_sessions").update({ status: "recording", started_at: now, recording_started_at: now, recorded_ms: 0 }).eq("id", draftId).eq("status", "draft")
+    // The billing clock columns are no longer writable by the authenticated
+    // role (20260902000000), so starting a draft goes through the service key
+    // — scoped to the caller's own row by user_id, since it bypasses RLS.
+    const admin = draftId ? createAdminClient() : null;
+    if (draftId && !admin) {
+      console.error("Lecture start has no admin client");
+      return NextResponse.json({ error: current.isEnglish ? "Lectures are not configured yet." : "수업 기록이 아직 설정되지 않았습니다." }, { status: 503 });
+    }
+    const query = draftId && admin
+      ? admin.from("lecture_sessions").update({ status: "recording", started_at: now, recording_started_at: now, recorded_ms: 0 }).eq("id", draftId).eq("user_id", current.userId).eq("status", "draft")
       : current.supabase.from("lecture_sessions").insert({
           classroom_id: classroomId,
           user_id: current.userId,
@@ -257,6 +266,13 @@ export async function POST(request: Request) {
     // deferred batch or an OpenAI outage and short enough to stop retrying.
     const INDEX_CATCH_UP_MS = 7 * 86_400_000;
 
+    // Completion writes billing columns, which only the service key may touch
+    // now — every write below is scoped to rows the RLS-bound select returned.
+    const reconcileAdmin = createAdminClient();
+    if (!reconcileAdmin) {
+      console.error("Reconcile has no admin client");
+      return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 503 });
+    }
     const abandonedBefore = new Date(Date.now() - MAX_LECTURE_MS).toISOString();
     const { data: stale, error } = await current.supabase
       .from("lecture_sessions")
@@ -281,7 +297,7 @@ export async function POST(request: Request) {
       if (segmentsError) console.error("Reconcile transcript read failed", segmentsError.code);
 
       const durationSeconds = segments?.length ? Math.round(Math.max(...segments.map((row) => row.end_ms)) / 1_000) : 0;
-      await current.supabase
+      await reconcileAdmin
         .from("lecture_sessions")
         .update({
           status: "completed",
@@ -290,7 +306,8 @@ export async function POST(request: Request) {
           recorded_ms: Math.min(MAX_LECTURE_MS, durationSeconds * 1_000),
           recording_started_at: null,
         })
-        .eq("id", session.id);
+        .eq("id", session.id)
+        .eq("user_id", current.userId);
 
       if (segments?.length) {
         toIndex.push({
@@ -596,13 +613,20 @@ export async function PATCH(request: Request) {
     });
     if (creditError) console.error("Final credit reconciliation failed", creditError.code);
   }
-  const { error: updateError } = await current.supabase.from("lecture_sessions").update({
+  // Billing columns are service-key-only since 20260902000000. The session's
+  // ownership was already established by the RLS-bound select above.
+  const admin = createAdminClient();
+  if (!admin) {
+    console.error("Lecture completion has no admin client");
+    return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 503 });
+  }
+  const { error: updateError } = await admin.from("lecture_sessions").update({
     status: "completed",
     ended_at: new Date().toISOString(),
     duration_seconds: durationSeconds,
     recorded_ms: recordedSomething ? elapsedMs : 0,
     recording_started_at: null,
-  }).eq("id", body.sessionId);
+  }).eq("id", body.sessionId).eq("user_id", current.userId);
   if (updateError) {
     console.error("Lecture completion failed", updateError.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 500 });

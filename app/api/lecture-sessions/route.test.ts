@@ -106,6 +106,22 @@ mock.module(pathToFileURL("app/lib/supabase/server.ts").href, {
   namedExports: { createClient: () => Promise.resolve(supabaseStub) },
 });
 
+// Billing-column writes go through the service key since 20260902000000; the
+// same stub records those calls too.
+mock.module(pathToFileURL("app/lib/supabase/admin.ts").href, {
+  namedExports: {
+    createAdminClient: () => ({
+      ...supabaseStub,
+      // checkSharedRateLimit also reaches this client; the tests are about
+      // the handlers, so the shared limiter always says yes.
+      rpc(name: string, params: unknown) {
+        if (name === "consume_rate_limit") return Promise.resolve({ data: [{ allowed: true }], error: null });
+        return supabaseStub.rpc(name, params);
+      },
+    }),
+  },
+});
+
 type EmbeddingsCall = { input: string[] };
 let embeddingsCalls: EmbeddingsCall[] = [];
 

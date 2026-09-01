@@ -619,6 +619,16 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   useEffect(
     () => () => {
+      // Unmount is a stop. Without marking it as one, the socket's onclose
+      // sees a live recording and schedules reconnects forever against the
+      // dead mic stream — a new WebSocket and token fetch every 30 seconds
+      // until the tab closes.
+      finishingRef.current = true;
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      stopSocketTimers();
       recorderRef.current?.stop();
       socketRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
