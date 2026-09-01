@@ -4,9 +4,9 @@ export type BillingPlan = "monthly" | "term" | "semester";
 
 export const PLAN_CREDITS = {
   trial: 180,
-  monthly: 3_600,
-  term: 14_400,
-  semester: 21_600,
+  monthly: 3_000,
+  term: 12_000,
+  semester: 18_000,
 } as const;
 
 export function isBillingPlan(value: unknown): value is BillingPlan {

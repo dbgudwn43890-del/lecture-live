@@ -1589,6 +1589,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     stopSocketTimers();
     const durationMs = currentElapsedMs();
     const reachedLimit = durationMs >= MAX_LECTURE_MS;
+    // 버튼을 누른 즉시 화면을 종료 상태로 바꾼다. 아래 1.2초 대기 동안
+    // "기록 중"이 그대로면 눌리지 않은 줄 알고 다시 누른다.
+    setStatus("ended");
     // 레코더를 먼저 멈춰 종료 신호를 보내고, 공급자가 맺음말을 확정할 시간을
     // 준다. flush를 먼저 하면 마지막 문장이 버퍼에 닿기 전에 창이 닫힌다.
     // ponytail: 고정 1.2초 대기. Deepgram 마지막 Results/Soniox finished를
@@ -1603,7 +1606,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.
     streamRef.current?.getTracks().forEach((track) => track.stop());
     stopMicMeter();
-    setStatus("ended");
     const sessionId = activeSessionIdRef.current;
     if (sessionId) {
       try {

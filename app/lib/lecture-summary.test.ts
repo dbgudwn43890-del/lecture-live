@@ -6,9 +6,19 @@ import {
   completedWindows,
   pickWindows,
   segmentsInWindow,
+  SUMMARY_PROMPT,
   SUMMARY_WINDOW_MS,
   windowIndexOf,
 } from "./lecture-summary.ts";
+
+// 프롬프트 하네스: 요약 지시의 핵심 세 축이 지워지지 않게 지킨다. 실제 품질은
+// gpt-4o-mini 실측으로 확인했고(정정·보존 통과), 여기서는 회귀만 막는다.
+test("요약 프롬프트가 핵심어 보존과 STT 오류 정정 지시를 담는다", () => {
+  assert.match(SUMMARY_PROMPT, /핵심어 보존/);
+  assert.match(SUMMARY_PROMPT, /오류 정정/);
+  assert.match(SUMMARY_PROMPT, /확신 없으면 그대로/); // 환각 가드
+  assert.match(SUMMARY_PROMPT, /지어내지 않는다/);
+});
 
 const line = (startMs: number, text: string) => ({ startMs, endMs: startMs + 4_000, text });
 
