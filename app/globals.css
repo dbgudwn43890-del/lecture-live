@@ -47,7 +47,9 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #131118;
-    --surface: #1b1823;
+    /* 배경과 한 단계 확실히 벌린다. 다크에서 표면 구분은 그림자가 아니라
+       밝기 차가 한다 (Material dark elevation). */
+    --surface: #201b2b;
     --ink: #ece9f2;
     --muted: #a49cb2;
     --line: rgba(236, 233, 242, .12);
@@ -73,6 +75,24 @@
     --brutal-shadow: 0 10px 28px -16px rgba(0, 0, 0, .85);
     color-scheme: dark;
   }
+
+  /* 밝기가 곧 높이: 배경(--paper) < 사이드바 < 패널(--surface) < 떠 있는 것.
+     라이트에서는 패널이 종이색 그대로여도 테두리·그림자가 구분해 주지만,
+     다크에서는 표면 밝기 단계가 그 역할을 대신한다. */
+  .chat-pane,
+  .transcript-pane { background: var(--surface); }
+
+  /* 떠 있는 메뉴와 다이얼로그는 패널보다 한 단계 더 밝게. */
+  .session-menu-panel,
+  .profile-menu-panel,
+  .classroom-menu form,
+  .consent-modal .consent-gate,
+  .material-list ul { background: #2b2437; }
+
+  /* 밝은 회색 오프셋 그림자는 다크에서 번진 자국처럼 보인다. */
+  .chat-pane,
+  .transcript-pane,
+  .classroom-unit { box-shadow: 4px 4px 0 rgba(0, 0, 0, .5); }
 }
 
 * { box-sizing: border-box; }
@@ -1596,6 +1616,11 @@ button:active,
   .chat-pane,
   .transcript-pane,
   .classroom-unit { box-shadow: 3px 3px 0 var(--line-strong); }
+  @media (prefers-color-scheme: dark) {
+    .chat-pane,
+    .transcript-pane,
+    .classroom-unit { box-shadow: 3px 3px 0 rgba(0, 0, 0, .5); }
+  }
 }
 
 /* Classroom workspace: quiet sidebar shell inspired by focused writing tools. */
