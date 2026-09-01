@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 워크스페이스가 한 컴포넌트라 세그먼트·스트리밍 델타마다 전체가 다시
+  // 그려진다. 컴파일러가 자동 메모이제이션으로 바뀐 부분만 그리게 한다.
+  reactCompiler: true,
   allowedDevOrigins: ["127.0.0.1"],
   // PDF.js uses Node-only modules while reading uploaded files. Keep it out of
   // the route bundle so Vercel runs the package's server build unchanged.

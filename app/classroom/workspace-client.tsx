@@ -1694,20 +1694,25 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
+        let sawDelta = false;
         for (const line of lines) {
           if (!line.trim()) continue;
           const parsed = JSON.parse(line) as { delta?: string; done?: typeof finalDone; error?: string };
           if (typeof parsed.delta === "string") {
             streamedText += parsed.delta;
-            const text = streamedText;
-            setMessages((current) =>
-              current.map((message) => (message.id === assistantId ? { ...message, text, pending: true } : message)),
-            );
+            sawDelta = true;
           } else if (parsed.done) {
             finalDone = parsed.done;
           } else if (parsed.error) {
             streamError = parsed.error;
           }
+        }
+        // 델타 줄마다가 아니라 도착한 청크당 한 번만 그린다.
+        if (sawDelta) {
+          const text = streamedText;
+          setMessages((current) =>
+            current.map((message) => (message.id === assistantId ? { ...message, text, pending: true } : message)),
+          );
         }
       }
 
