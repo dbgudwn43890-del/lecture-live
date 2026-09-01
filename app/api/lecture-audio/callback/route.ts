@@ -130,13 +130,33 @@ export async function POST(request: Request) {
   const durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
 
   // BILL-01, on the same meter as a live lecture: one started minute, one
-  // credit. The RPC is idempotent per minute and runs as the owner, so a
-  // retried callback cannot double-charge.
-  const { error: creditError } = await supabase.rpc("consume_lecture_credits", {
+  // credit. The owner comes from the session row rather than auth.uid(), which
+  // is null on this service-key connection — the cookie-bound RPC raised
+  // AUTH_REQUIRED here and every upload went out unbilled. The service variant
+  // is idempotent per minute, so a retried callback cannot double-charge.
+  const { data: charge, error: creditError } = await supabase.rpc("consume_lecture_credits_service", {
+    p_user_id: session.user_id,
     p_session_id: session.id,
     p_minute_index: Math.min(179, Math.max(0, Math.ceil(durationSeconds / 60) - 1)),
   });
-  if (creditError) console.error("Upload credit charge failed", creditError.code);
+  if (creditError) {
+    // A retry that arrives after an earlier attempt charged and completed the
+    // session raises LECTURE_NOT_RECORDING. The money is already taken —
+    // failing forever here would just make Deepgram hammer the callback.
+    if (String(creditError.message ?? "").includes("LECTURE_NOT_RECORDING")) {
+      console.error("Upload charge skipped, session already closed", upload.id);
+    } else {
+      // Nothing here is written yet beyond the transcript, and the charge is
+      // idempotent — let Deepgram retry rather than lose the money silently.
+      console.error("Upload credit charge failed", creditError.code);
+      return NextResponse.json({ error: "Charge failed." }, { status: 500 });
+    }
+  }
+  // Out of credits mid-upload. The transcript already exists and the preflight
+  // gated the start, so the lecture still completes; the shortfall is logged.
+  if (Array.isArray(charge) && charge[0] && charge[0].allowed === false) {
+    console.error("Upload credit charge partial", upload.id, charge[0].charged_through);
+  }
 
   const { error: completeError } = await supabase
     .from("lecture_sessions")
