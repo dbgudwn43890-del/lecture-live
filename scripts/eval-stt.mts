@@ -57,7 +57,13 @@ async function soniox(): Promise<string> {
   const createResponse = await fetch("https://api.soniox.com/v1/transcriptions", {
     method: "POST",
     headers: { ...auth, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "stt-async-preview", file_id: fileId, language_hints: hints }),
+    body: JSON.stringify({
+      model: "stt-async-preview",
+      file_id: fileId,
+      language_hints: hints,
+      // keyterm 대응물. 영어 전공용어가 한글 음차로 적히지 않게 표기를 고정한다.
+      ...(terms.length ? { context: { terms } } : {}),
+    }),
   });
   if (!createResponse.ok) throw new Error(`soniox create ${createResponse.status}: ${await createResponse.text()}`);
   const { id } = await createResponse.json() as { id: string };

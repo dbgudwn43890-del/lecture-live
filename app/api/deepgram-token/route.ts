@@ -5,6 +5,7 @@ import { isUuid } from "../../lib/billing";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { bootstrapTerms } from "../../lib/bootstrap-terms";
 import { deepgramLanguage, listenUrl } from "../../lib/deepgram";
+import { SONIOX_LISTEN_URL, sonioxStreamConfig } from "../../lib/soniox";
 import { mergeKeyterms, parseGlossary } from "../../lib/glossary";
 import { createClient } from "../../lib/supabase/server";
 
@@ -27,11 +28,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Invalid lecture session." : "수업 정보를 확인해 주세요." }, { status: 400 });
   }
 
-  const apiKey = process.env.DEEPGRAM_API_KEY;
+  // 한국어 수업은 Soniox로 간다: 한·영 혼용을 문장 안에서 같이 인식하고,
+  // 스트리밍 단가가 Deepgram의 1/3.8이다 (CER 실측: scripts/eval-stt.mts).
+  // "default"(bare)와 "en"은 Deepgram에 남는다.
+  const language = deepgramLanguage(body.language, "ko");
+  const useSoniox = language === "ko" && Boolean(process.env.SONIOX_API_KEY);
+
+  const apiKey = useSoniox ? process.env.SONIOX_API_KEY : process.env.DEEPGRAM_API_KEY;
 
   if (!apiKey) {
     return NextResponse.json(
-      { error: "DEEPGRAM_API_KEY가 설정되지 않았습니다." },
+      { error: "음성 인식 API 키가 설정되지 않았습니다." },
       { status: 503 },
     );
   }
@@ -52,13 +59,21 @@ export async function POST(request: Request) {
   // The grant is independent of our database. Mint it while the credit,
   // glossary and transcript preflight run instead of adding another network
   // round trip after them. An unused 30-second grant is never returned.
-  const grant = fetch("https://api.deepgram.com/v1/auth/grant", {
-    method: "POST",
-    headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
+  const grant = useSoniox
+    ? fetch("https://api.soniox.com/v1/auth/temporary-api-key", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ usage_type: "transcribe_websocket", expires_in_seconds: 60 }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(15_000),
+      })
+    : fetch("https://api.deepgram.com/v1/auth/grant", {
+        method: "POST",
+        headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(15_000),
+      });
   const [{ data: statusData, error: statusError }, { data: sessionRow }, { data: spokenRows }, response] = await Promise.all([
     supabase.rpc("get_credit_status"),
     supabase
@@ -91,12 +106,13 @@ export async function POST(request: Request) {
   }
 
   if (!response.ok) {
-    console.error("Deepgram token grant failed", response.status);
+    console.error("STT token grant failed", useSoniox ? "soniox" : "deepgram", response.status);
     return NextResponse.json({ error: "음성 인식 연결을 준비하지 못했습니다." }, { status: 502 });
   }
 
-  const data = (await response.json()) as { access_token?: string };
-  if (!data.access_token) {
+  const data = (await response.json()) as { access_token?: string; api_key?: string };
+  const accessToken = useSoniox ? data.api_key : data.access_token;
+  if (!accessToken) {
     return NextResponse.json({ error: "음성 인식 토큰이 비어 있습니다." }, { status: 502 });
   }
 
@@ -135,11 +151,27 @@ export async function POST(request: Request) {
   // 손으로 넣은 용어와 슬라이드 용어를 밀어내지 않는다.
   const spoken = (spokenRows ?? []).map((row) => String((row as { text?: unknown }).text ?? "")).join(" ");
   const keyterms = mergeKeyterms(declared, bootstrapTerms(spoken, declared));
-  const language = deepgramLanguage(body.language, "ko");
+
+  if (useSoniox) {
+    return NextResponse.json(
+      {
+        accessToken,
+        credits: Number(credit.remaining_credits),
+        // ponytail: 어휘 갱신 재접속은 Deepgram 경로에만 있다. Soniox context도
+        // 접속 시점에만 붙지만, 예산이 10배라 부트스트랩 없이도 대부분 담긴다.
+        // 용어 누락 신고가 쌓이면 같은 refreshInMs 경로를 여기에도 연다.
+        refreshInMs: null,
+        listenUrl: SONIOX_LISTEN_URL,
+        // 첫 소켓 메시지로 보낼 설정. 파라미터 주인은 서버라는 원칙 유지.
+        sonioxConfig: sonioxStreamConfig({ keyterms, sessionId: body.sessionId as string }),
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   return NextResponse.json(
     {
-      accessToken: data.access_token,
+      accessToken,
       credits: Number(credit.remaining_credits),
       // 자료도 용어집도 없는 수업에만, 한 번. 그때쯤이면 무엇에 대한 수업인지
       // 스크립트에 드러나 있고, 남은 시간이 갱신값을 회수할 만큼 길다.

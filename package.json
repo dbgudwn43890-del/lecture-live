@@ -15,6 +15,7 @@
     "test:materials": "node --experimental-strip-types --test app/lib/material-text.test.ts",
     "test:anchor": "node --experimental-strip-types --test app/lib/material-anchor.test.ts",
     "test:deepgram": "node --experimental-strip-types --test app/lib/deepgram.test.ts",
+    "test:soniox": "node --experimental-strip-types --test app/lib/soniox.test.ts",
     "test:cer": "node --experimental-strip-types --test app/lib/cer.test.ts",
     "test:audio": "node --experimental-strip-types --test app/lib/audio.test.ts",
     "test:billing": "node --experimental-strip-types --test app/lib/billing.test.ts",

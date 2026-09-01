@@ -8,6 +8,7 @@ import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import type { DeepgramFinal, DeepgramLanguage } from "../lib/deepgram";
 import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
+import { adaptSonioxMessages, type SonioxMessage } from "../lib/soniox";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
@@ -233,6 +234,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const consentDialogRef = useRef<HTMLDialogElement | null>(null);
   const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
   const meterRef = useRef<HTMLSpanElement | null>(null);
+  // 현재 소켓이 Soniox인지. 레코더 onstop이 종료 메시지 형식을 고를 때 읽는다.
+  const sonioxModeRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -1236,7 +1239,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       // Its CloseStream must not close the new Deepgram connection.
       if (recorderRef.current !== recorder) return;
       const socket = socketRef.current;
-      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "CloseStream" }));
+      // Soniox의 정상 종료는 빈 프레임, Deepgram은 CloseStream 메시지다.
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(sonioxModeRef.current ? "" : JSON.stringify({ type: "CloseStream" }));
+      }
     };
     recorder.start(250);
   }
@@ -1251,7 +1257,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
       body: JSON.stringify({ sessionId: activeSessionIdRef.current, language: speechLanguage }),
     });
-    const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; refreshInMs?: number | null; error?: string };
+    const tokenData = (await tokenResponse.json()) as { accessToken?: string; credits?: number; listenUrl?: string; refreshInMs?: number | null; sonioxConfig?: Record<string, unknown>; error?: string };
     if (!tokenResponse.ok || !tokenData.accessToken || !tokenData.listenUrl) {
       throw new Error(tokenData.error ?? (isEnglish
         ? "Could not obtain a speech-recognition token."
@@ -1261,9 +1267,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       ? { ...current, credits: tokenData.credits }
       : current);
 
-    // 파라미터도 용어집도 서버가 정한다 (app/lib/deepgram.ts). 클라이언트를 다시
-    // 배포하지 않고 모델·엔드포인팅·keyterm 예산을 조정하기 위해서다.
-    const socket = new WebSocket(tokenData.listenUrl, ["bearer", tokenData.accessToken]);
+    // 파라미터도 용어집도 서버가 정한다 (app/lib/deepgram.ts, app/lib/soniox.ts).
+    // 클라이언트를 다시 배포하지 않고 모델·엔드포인팅·용어 예산을 조정하기 위해서다.
+    // Soniox는 인증·설정이 URL이 아니라 첫 JSON 메시지로 간다.
+    const sonioxConfig = tokenData.sonioxConfig;
+    sonioxModeRef.current = Boolean(sonioxConfig);
+    const socket = sonioxConfig
+      ? new WebSocket(tokenData.listenUrl)
+      : new WebSocket(tokenData.listenUrl, ["bearer", tokenData.accessToken]);
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -1279,6 +1290,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       setError("");
       const firstConnection = !socketOpenedRef.current;
       socketOpenedRef.current = true;
+      // Soniox는 오디오보다 먼저 설정 메시지를 받아야 한다.
+      if (sonioxConfig) socket.send(JSON.stringify({ api_key: tokenData.accessToken, ...sonioxConfig }));
       startMediaRecorder(stream);
       for (const chunk of pendingAudioRef.current.splice(0)) socket.send(chunk);
       if (!firstConnection) {
@@ -1300,34 +1313,40 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       }
       keepAliveTimerRef.current = window.setInterval(() => {
         if (socket.readyState === WebSocket.OPEN && Date.now() - lastSentAtRef.current > 5_000) {
-          socket.send(JSON.stringify({ type: "KeepAlive" }));
+          socket.send(JSON.stringify({ type: sonioxConfig ? "keepalive" : "KeepAlive" }));
         }
       }, 5_000);
     };
 
     socket.onmessage = (event) => {
       if (socketRef.current !== socket) return;
-      const message = JSON.parse(event.data as string) as DeepgramResult;
-      // utterance_end_ms를 요청해 놓고 버리던 신호다. speech_final이 뜨지 않는
-      // 발화를 끊어 주는 안전망이자, 실시간 자막이 멈춰 보이지 않게 하는 장치다.
-      if (message.type === "UtteranceEnd") {
-        flushUtterance();
-        return;
-      }
-      if (message.type !== "Results") return;
-      const text = message.channel?.alternatives?.[0]?.transcript?.trim() ?? "";
+      const parsed = JSON.parse(event.data as string);
+      // Soniox 토큰 응답은 어댑터가 Deepgram 모양으로 바꾼다. 아래 로직은 공용.
+      const messages = sonioxConfig
+        ? adaptSonioxMessages(parsed as SonioxMessage)
+        : [parsed as DeepgramResult];
+      for (const message of messages) {
+        // utterance_end_ms를 요청해 놓고 버리던 신호다. speech_final이 뜨지 않는
+        // 발화를 끊어 주는 안전망이자, 실시간 자막이 멈춰 보이지 않게 하는 장치다.
+        if (message.type === "UtteranceEnd") {
+          flushUtterance();
+          continue;
+        }
+        if (message.type !== "Results") continue;
+        const text = message.channel?.alternatives?.[0]?.transcript?.trim() ?? "";
 
-      if (message.is_final) {
-        if (text) finalBufferRef.current.push(message);
-        if (message.speech_final || utteranceOverflowed(finalBufferRef.current)) flushUtterance();
-        else showInterim(utteranceSegment(finalBufferRef.current)?.text ?? "");
-        return;
+        if (message.is_final) {
+          if (text) finalBufferRef.current.push(message);
+          if (message.speech_final || utteranceOverflowed(finalBufferRef.current)) flushUtterance();
+          else showInterim(utteranceSegment(finalBufferRef.current)?.text ?? "");
+          continue;
+        }
+        if (!text) continue;
+        // 진행 중인 문장 전체를 보여 준다. 마지막 조각만 띄우면 말이 길어질수록
+        // 화면이 앞말을 잃는다.
+        const buffered = utteranceSegment(finalBufferRef.current)?.text ?? "";
+        showInterim(buffered ? `${buffered} ${text}` : text);
       }
-      if (!text) return;
-      // 진행 중인 문장 전체를 보여 준다. 마지막 조각만 띄우면 말이 길어질수록
-      // 화면이 앞말을 잃는다.
-      const buffered = utteranceSegment(finalBufferRef.current)?.text ?? "";
-      showInterim(buffered ? `${buffered} ${text}` : text);
     };
 
     socket.onerror = () => {
@@ -2060,14 +2079,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   <h3 id="profile-speech-title">{isEnglish ? "Speech recognition" : "음성 인식 언어"}</h3>
                   <span>{speechLanguage === "default"
                     ? (isEnglish ? "Deepgram defaults" : "Deepgram 기본값")
-                    : speechLanguage === "en" ? "English" : (isEnglish ? "Korean-focused" : "한국어 중심")}</span>
+                    : speechLanguage === "en" ? "English" : (isEnglish ? "Korean + English" : "한·영 혼용")}</span>
                 </div>
                 <fieldset className="settings-choice">
                   <legend>{isEnglish ? "Lecture language" : "강의 언어"}</legend>
                   <div className="settings-choice-list">
                     {([
                       { id: "default", label: isEnglish ? "Deepgram defaults" : "Deepgram 기본값" },
-                      { id: "ko", label: isEnglish ? "Korean-focused" : "한국어 중심" },
+                      { id: "ko", label: isEnglish ? "Korean + English" : "한·영 혼용" },
                       { id: "en", label: "English" },
                     ] as Array<{ id: DeepgramLanguage; label: string }>).map((option) => (
                       <button
@@ -2085,8 +2104,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   </div>
                 </fieldset>
                 <p>{isEnglish
-                  ? "Deepgram defaults sends no model, language, formatting, or keyterm options. Korean-focused uses your materials to improve English technical terms."
-                  : "Deepgram 기본값은 모델·언어·포맷·전문용어를 지정하지 않습니다. 한국어 중심은 자료의 영어 전공용어까지 함께 보정합니다."}</p>
+                  ? "Korean + English recognizes both languages in the same sentence and keeps technical terms from your materials in Latin script. Deepgram defaults sends no options at all — English-only in practice."
+                  : "한·영 혼용은 한 문장 안에 섞인 두 언어를 함께 인식하고, 자료의 전공용어를 영문 그대로 적습니다. Deepgram 기본값은 아무 옵션도 보내지 않아 사실상 영어 전용입니다."}</p>
               </section>
 
               <section className="profile-model-settings" aria-labelledby="profile-model-title">
