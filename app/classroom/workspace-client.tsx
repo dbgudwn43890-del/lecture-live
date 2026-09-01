@@ -232,7 +232,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     const saved = window.localStorage.getItem("lecue-speech-language");
     // Deepgram's streaming `multi` model does not support Korean. Migrate the
     // old default instead of letting a saved value keep producing mixed-script noise.
-    const language = saved === "en" ? "en" : "ko";
+    const language = saved === "default" || saved === "en" ? saved : "ko";
     setSpeechLanguage(language);
     window.localStorage.setItem("lecue-speech-language", language);
   }, []);
@@ -1914,12 +1914,15 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               <section className="profile-model-settings" aria-labelledby="profile-speech-title">
                 <div className="profile-model-heading">
                   <h3 id="profile-speech-title">{isEnglish ? "Speech recognition" : "음성 인식 언어"}</h3>
-                  <span>{speechLanguage === "en" ? "English" : (isEnglish ? "Korean-focused" : "한국어 중심")}</span>
+                  <span>{speechLanguage === "default"
+                    ? (isEnglish ? "Deepgram defaults" : "Deepgram 기본값")
+                    : speechLanguage === "en" ? "English" : (isEnglish ? "Korean-focused" : "한국어 중심")}</span>
                 </div>
                 <fieldset className="settings-choice">
                   <legend>{isEnglish ? "Lecture language" : "강의 언어"}</legend>
                   <div className="settings-choice-list">
                     {([
+                      { id: "default", label: isEnglish ? "Deepgram defaults" : "Deepgram 기본값" },
                       { id: "ko", label: isEnglish ? "Korean-focused" : "한국어 중심" },
                       { id: "en", label: "English" },
                     ] as Array<{ id: DeepgramLanguage; label: string }>).map((option) => (
@@ -1938,8 +1941,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   </div>
                 </fieldset>
                 <p>{isEnglish
-                  ? "Korean-focused recognizes Korean sentences and uses your materials to improve English technical terms. Choose English for lectures spoken mainly in English."
-                  : "한국어 중심은 한국어 문장을 인식하고 자료의 영어 전공용어를 함께 보정합니다. 영어로 진행하는 강의는 English를 선택하세요."}</p>
+                  ? "Deepgram defaults sends no model, language, formatting, or keyterm options. Korean-focused uses your materials to improve English technical terms."
+                  : "Deepgram 기본값은 모델·언어·포맷·전문용어를 지정하지 않습니다. 한국어 중심은 자료의 영어 전공용어까지 함께 보정합니다."}</p>
               </section>
 
               <section className="profile-model-settings" aria-labelledby="profile-model-title">

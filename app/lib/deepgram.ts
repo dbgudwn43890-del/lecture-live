@@ -5,7 +5,7 @@ export type DeepgramFinal = {
   channel?: { alternatives?: Array<{ transcript?: string; words?: DeepgramWord[] }> };
 };
 
-export type DeepgramLanguage = "ko" | "en" | "multi";
+export type DeepgramLanguage = "default" | "ko" | "en" | "multi";
 
 export type ListenOptions = {
   language: DeepgramLanguage;
@@ -36,7 +36,7 @@ export const MAX_KEYTERMS = 50;
 export const KEYTERM_CHARACTER_BUDGET = 400;
 
 export function deepgramLanguage(value: unknown, fallback: DeepgramLanguage): DeepgramLanguage {
-  return value === "ko" || value === "en" || value === "multi" ? value : fallback;
+  return value === "default" || value === "ko" || value === "en" || value === "multi" ? value : fallback;
 }
 
 export function keytermBudget(terms: string[]): string[] {
@@ -59,7 +59,7 @@ export function keytermBudget(terms: string[]): string[] {
  * 클라이언트 재빌드 없이 한 파일에서 조정할 수 있다.
  */
 export function listenUrl({ language, keyterms, sessionId, pcm = false }: ListenOptions): string {
-  const params = new URLSearchParams({
+  const params = language === "default" ? new URLSearchParams() : new URLSearchParams({
     model: "nova-3",
     language,
     smart_format: "true",
@@ -84,8 +84,11 @@ export function listenUrl({ language, keyterms, sessionId, pcm = false }: Listen
     params.set("sample_rate", "16000");
     params.set("channels", "1");
   }
-  for (const term of keytermBudget(keyterms)) params.append("keyterm", term);
-  return `wss://api.deepgram.com/v1/listen?${params.toString()}`;
+  if (language !== "default") {
+    for (const term of keytermBudget(keyterms)) params.append("keyterm", term);
+  }
+  const query = params.toString();
+  return `wss://api.deepgram.com/v1/listen${query ? `?${query}` : ""}`;
 }
 
 /**

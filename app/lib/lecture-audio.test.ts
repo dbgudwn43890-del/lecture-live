@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { callbackToken, callbackTokenMatches, segmentsFromPrerecorded } from "./lecture-audio.ts";
+import { callbackToken, callbackTokenMatches, prerecordedUrl, segmentsFromPrerecorded } from "./lecture-audio.ts";
 
 test("utterances become one segment each, in lecture-clock milliseconds", () => {
   const segments = segmentsFromPrerecorded({
@@ -69,4 +69,17 @@ test("a callback token only matches the upload it was minted for", () => {
   assert.ok(callbackTokenMatches("11111111-1111-4111-8111-111111111111", token));
   assert.equal(callbackTokenMatches("22222222-2222-4222-8222-222222222222", token), false);
   assert.equal(callbackTokenMatches("11111111-1111-4111-8111-111111111111", "not-a-token"), false);
+});
+
+test("default transcription keeps only callback delivery settings", () => {
+  const url = new URL(prerecordedUrl({
+    language: "default",
+    keyterms: ["ignored"],
+    callbackUrl: "https://lecue.test/callback",
+    sessionId: "bare",
+  }));
+  assert.equal(url.searchParams.get("callback"), "https://lecue.test/callback");
+  assert.equal(url.searchParams.get("model"), null);
+  assert.equal(url.searchParams.get("language"), null);
+  assert.equal(url.searchParams.get("keyterm"), null);
 });

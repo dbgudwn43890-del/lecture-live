@@ -100,6 +100,12 @@ test("accepts multilingual recognition and rejects unknown language values", () 
   assert.ok(url.includes("endpointing=100"));
 });
 
+test("uses the bare Deepgram endpoint in default mode", () => {
+  assert.equal(deepgramLanguage("default", "ko"), "default");
+  assert.equal(listenUrl({ language: "default", keyterms: ["ignored"], sessionId: "bare" }),
+    "wss://api.deepgram.com/v1/listen");
+});
+
 test("describes raw PCM explicitly for the browser worklet", () => {
   const url = listenUrl({ language: "ko", keyterms: [], sessionId: "lab", pcm: true });
   assert.ok(url.includes("encoding=linear16"));

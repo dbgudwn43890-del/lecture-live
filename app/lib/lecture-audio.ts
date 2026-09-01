@@ -133,18 +133,20 @@ export function callbackTokenMatches(uploadId: string, token: string): boolean {
  */
 export function prerecordedUrl(options: { language: DeepgramLanguage; keyterms: string[]; callbackUrl: string; sessionId: string }): string {
   const params = new URLSearchParams({
-    model: "nova-3",
-    language: options.language,
-    smart_format: "true",
-    punctuate: "true",
-    // Sentence boundaries with timings — the closest prerecorded equivalent to
-    // what the live path builds out of speech_final.
-    utterances: "true",
-    mip_opt_out: "true",
     callback: options.callbackUrl,
     callback_method: "post",
     tag: `upload-${options.sessionId}`,
   });
-  for (const term of keytermBudget(options.keyterms)) params.append("keyterm", term);
+  if (options.language !== "default") {
+    params.set("model", "nova-3");
+    params.set("language", options.language);
+    params.set("smart_format", "true");
+    params.set("punctuate", "true");
+    // Sentence boundaries with timings — the closest prerecorded equivalent to
+    // what the live path builds out of speech_final.
+    params.set("utterances", "true");
+    params.set("mip_opt_out", "true");
+    for (const term of keytermBudget(options.keyterms)) params.append("keyterm", term);
+  }
   return `https://api.deepgram.com/v1/listen?${params.toString()}`;
 }

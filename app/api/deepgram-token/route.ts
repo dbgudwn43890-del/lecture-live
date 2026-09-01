@@ -135,6 +135,7 @@ export async function POST(request: Request) {
   // 손으로 넣은 용어와 슬라이드 용어를 밀어내지 않는다.
   const spoken = (spokenRows ?? []).map((row) => String((row as { text?: unknown }).text ?? "")).join(" ");
   const keyterms = mergeKeyterms(declared, bootstrapTerms(spoken, declared));
+  const language = deepgramLanguage(body.language, "ko");
 
   return NextResponse.json(
     {
@@ -142,9 +143,9 @@ export async function POST(request: Request) {
       credits: Number(credit.remaining_credits),
       // 자료도 용어집도 없는 수업에만, 한 번. 그때쯤이면 무엇에 대한 수업인지
       // 스크립트에 드러나 있고, 남은 시간이 갱신값을 회수할 만큼 길다.
-      refreshInMs: declared.length ? null : 600_000,
+      refreshInMs: language === "default" || declared.length ? null : 600_000,
       listenUrl: listenUrl({
-        language: deepgramLanguage(body.language, "ko"),
+        language,
         keyterms,
         sessionId: body.sessionId,
       }),
