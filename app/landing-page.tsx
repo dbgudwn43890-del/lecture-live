@@ -93,7 +93,7 @@ const content = {
     privacy: "개인정보처리방침",
     terms: "이용약관",
     refund: "환불 정책",
-    support: "dbgudwn43890@gmail.com",
+    support: "support@lecue.app",
     recordingNotice: "강의자와 기관의 녹음 정책을 확인한 뒤 사용하세요.",
   },
   en: {
@@ -180,7 +180,7 @@ const content = {
     privacy: "Privacy Policy",
     terms: "Terms of Service",
     refund: "Refund Policy",
-    support: "dbgudwn43890@gmail.com",
+    support: "support@lecue.app",
     recordingNotice: "Check the lecturer's and institution's recording rules before use.",
   },
 } as const;

@@ -23,7 +23,7 @@ export default function RefundPolicyPage() {
 
       <section><h2>제5조 운영자 책임</h2><div><p>운영자 책임으로 서비스를 제공하지 못했거나 표시된 내용과 현저히 다르게 제공한 경우, 7일 기준과 무관하게 관계 법령에 따른 환불이나 보상을 제공합니다.</p></div></section>
 
-      <section><h2>제6조 신청 방법</h2><div><p>계정 이메일과 결제일을 적어 <a href="mailto:dbgudwn43890@gmail.com">dbgudwn43890@gmail.com</a>으로 요청하세요. 영업일 기준 2일 이내 답변합니다. 승인된 환불은 Paddle과 결제수단의 처리 기간에 따라 반영됩니다.</p></div></section>
+      <section><h2>제6조 신청 방법</h2><div><p>계정 이메일과 결제일을 적어 <a href="mailto:support@lecue.app">support@lecue.app</a>으로 요청하세요. 영업일 기준 2일 이내 답변합니다. 승인된 환불은 Paddle과 결제수단의 처리 기간에 따라 반영됩니다.</p></div></section>
     </LegalPage>
   );
 }

@@ -75,8 +75,9 @@ export default function PrivacyPage() {
             <table>
               <thead><tr><th>받는 사업자</th><th>목적·항목</th><th>국가·시점·기간</th></tr></thead>
               <tbody>
-                <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>계정 인증과 서비스 데이터 보관: 이메일, 계정 정보, 강의 기록, 저장을 선택한 암호화된 API 키</td><td className={styles.placeholder}>프로젝트 리전 입력 필요 / 가입·저장 시 / 삭제 또는 탈퇴 시까지</td></tr>
-                <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>실시간 음성 인식: 마이크 음성</td><td>미국 / 기록 중 / 사업자 정책에 따른 처리 기간</td></tr>
+                <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>계정 인증과 서비스 데이터 보관: 이메일, 계정 정보, 강의 기록, 저장을 선택한 암호화된 API 키</td><td>대한민국(AWS 서울 리전) / 가입·저장 시 / 삭제 또는 탈퇴 시까지</td></tr>
+                <tr><td><a href="https://soniox.com/privacy" target="_blank" rel="noreferrer">Soniox, Inc.</a></td><td>한국어 수업 실시간 음성 인식: 마이크 음성</td><td>미국 / 기록 중 / 사업자 정책에 따른 처리 기간</td></tr>
+                <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>영어 수업 실시간 음성 인식과 녹음 파일 변환: 마이크 음성, 업로드한 녹음</td><td>미국 / 기록·변환 중 / 사업자 정책에 따른 처리 기간</td></tr>
                 <tr><td><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI, L.L.C.</a></td><td>AI 답변, 필요한 웹 검색과 관련 강의 내용 확인: 스크립트, 질문, 관련 강의 기록</td><td>미국 등 사업자 처리 국가 / 질문 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">Anthropic, PBC</a></td><td>이용자가 선택한 AI 답변: 스크립트, 질문, 개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google LLC</a></td><td>Google 로그인 또는 이용자가 선택한 AI 답변: 계정 정보 또는 스크립트·질문·개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
@@ -129,7 +130,7 @@ export default function PrivacyPage() {
       <section>
         <h2>10. 담당자, 구제와 변경</h2>
         <div>
-          <p className={styles.placeholder}>개인정보 보호책임자 또는 담당 부서: [입력 필요] / 이메일·전화번호: [입력 필요]</p>
+          <p>개인정보 관련 문의: support@lecue.app</p>
           <p>개인정보 관련 상담이나 분쟁조정은 개인정보 포털, 개인정보침해 신고센터(국번 없이 118), 개인정보분쟁조정위원회(1833-6972)에 문의할 수 있습니다.</p>
           <p>이 방침을 변경하면 시행 7일 전부터 알립니다. 이용자 권리에 중대한 변경은 최소 30일 전에 알리고 법령상 필요한 경우 별도 동의를 받습니다.</p>
         </div>

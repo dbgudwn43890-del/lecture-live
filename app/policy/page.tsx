@@ -21,11 +21,11 @@ export default function LecturePolicyPage() {
 
       <section><h2>4. 저작권</h2><div><p>강의는 교·강사의 어문저작물입니다. Lecue는 학생 본인의 학습을 위한 개인적 이용만을 전제로 하며, 스크립트나 강의 자료를 제3자에게 제공·판매·게시하는 행위는 이용약관 위반이자 저작권 침해입니다.</p><p>학생이 올린 강의 자료(PDF 등)는 해당 학생의 답변 품질을 높이는 데에만 쓰이고 다른 이용자에게 제공되지 않습니다.</p></div></section>
 
-      <section><h2>5. 사용을 원하지 않는 경우</h2><div><p>강좌 단위로 사용을 차단할 수 있습니다. 학교명, 강좌명, 담당 교·강사 성함, 학기를 적어 <a href="mailto:dbgudwn43890@gmail.com">dbgudwn43890@gmail.com</a>으로 보내 주시면 영업일 기준 2일 이내에 해당 강좌에서 서비스가 동작하지 않도록 조치하고 결과를 회신합니다.</p><p>차단 요청에 별도 비용이나 절차는 없습니다.</p></div></section>
+      <section><h2>5. 사용을 원하지 않는 경우</h2><div><p>강좌 단위로 사용을 차단할 수 있습니다. 학교명, 강좌명, 담당 교·강사 성함, 학기를 적어 <a href="mailto:support@lecue.app">support@lecue.app</a>으로 보내 주시면 영업일 기준 2일 이내에 해당 강좌에서 서비스가 동작하지 않도록 조치하고 결과를 회신합니다.</p><p>차단 요청에 별도 비용이나 절차는 없습니다.</p></div></section>
 
       <section><h2>6. 강의계획서에 넣을 수 있는 문구</h2><div><p>수업의 AI 활용 방침을 밝힐 때 아래 문장을 그대로 쓰거나 고쳐 쓸 수 있습니다.</p><p>&ldquo;이 수업에서는 개인 학습 목적의 실시간 전사·질의 도구(Lecue 등) 사용을 허용한다. 단, 시험과 평가 중에는 사용할 수 없으며, 생성된 스크립트를 수업 외부에 공유·배포하는 것을 금지한다.&rdquo;</p><p>&ldquo;이 수업에서는 강의 녹음과 실시간 전사 도구의 사용을 허용하지 않는다.&rdquo;</p></div></section>
 
-      <section><h2>7. 문의</h2><div><p>정책, 데이터 처리, 차단 요청 등 모든 문의는 <a href="mailto:dbgudwn43890@gmail.com">dbgudwn43890@gmail.com</a>으로 받습니다.</p></div></section>
+      <section><h2>7. 문의</h2><div><p>정책, 데이터 처리, 차단 요청 등 모든 문의는 <a href="mailto:support@lecue.app">support@lecue.app</a>으로 받습니다.</p></div></section>
     </LegalPage>
   );
 }

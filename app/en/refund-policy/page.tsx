@@ -24,7 +24,7 @@ export default function EnglishRefundPolicyPage() {
 
       <section><h2>5. Our fault</h2><div><p>If we fail to deliver the Service due to our fault, or the Service is materially different from its description, we provide the refund or remedy required by applicable law regardless of the 7-day window.</p></div></section>
 
-      <section><h2>6. How to request</h2><div><p>Email <a href="mailto:dbgudwn43890@gmail.com">dbgudwn43890@gmail.com</a> with your account email and payment date. We typically respond within 2 business days. An approved refund is processed by Paddle and reflected according to your payment method's processing time.</p></div></section>
+      <section><h2>6. How to request</h2><div><p>Email <a href="mailto:support@lecue.app">support@lecue.app</a> with your account email and payment date. We typically respond within 2 business days. An approved refund is processed by Paddle and reflected according to your payment method's processing time.</p></div></section>
     </LegalPage>
   );
 }

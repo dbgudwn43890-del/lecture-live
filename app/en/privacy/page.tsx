@@ -54,8 +54,9 @@ export default function EnglishPrivacyPage() {
       <section><h2>5. Service providers and international transfers</h2><div>
         <p>Data is transferred over encrypted networks when the relevant feature is used. A user can avoid an optional transfer by not selecting that feature; refusing a transfer needed for a core function makes that function unavailable.</p>
         <div className={styles.tableWrap}><table><thead><tr><th>Recipient</th><th>Purpose and data</th><th>Location, time, and retention</th></tr></thead><tbody>
-          <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>Account authentication and service data storage: email, account data, lecture records, uploaded lecture materials, and an optionally saved encrypted API key</td><td className={styles.placeholder}>Project region required / at sign-up and storage / until deletion or account closure</td></tr>
-          <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>Live speech recognition: microphone audio</td><td>United States / while recording / provider retention policy</td></tr>
+          <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>Account authentication and service data storage: email, account data, lecture records, uploaded lecture materials, and an optionally saved encrypted API key</td><td>Republic of Korea (AWS Seoul region) / at sign-up and storage / until deletion or account closure</td></tr>
+          <tr><td><a href="https://soniox.com/privacy" target="_blank" rel="noreferrer">Soniox, Inc.</a></td><td>Live speech recognition for Korean lectures: microphone audio</td><td>United States / while recording / provider retention policy</td></tr>
+          <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>Live speech recognition for English lectures and uploaded-recording transcription: microphone audio, uploaded recordings</td><td>United States / while recording or transcribing / provider retention policy</td></tr>
           <tr><td><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI, L.L.C.</a></td><td>AI answers, necessary web search, and relevant lecture retrieval: transcript, question, and related lecture records</td><td>United States and other disclosed processing locations / when asking / provider policy and account settings</td></tr>
           <tr><td><a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">Anthropic, PBC</a></td><td>User-selected AI answers: transcript, question, and personal API key</td><td>United States and other disclosed processing locations / when selected / provider policy and account settings</td></tr>
           <tr><td><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google LLC</a></td><td>Google sign-in or user-selected AI answers: account data or transcript, question, and personal API key</td><td>United States and other disclosed processing locations / when selected / provider policy and account settings</td></tr>
@@ -73,7 +74,7 @@ export default function EnglishPrivacyPage() {
       <section><h2>9. Children</h2><div><p>We do not accept accounts from children under 14 because the Service has no verified parental-consent flow. A higher minimum age applies where local law requires it.</p></div></section>
 
       <section><h2>10. Contact, complaints, and changes</h2><div>
-        <p className={styles.placeholder}>Privacy officer or team: [required] / email and phone: [required]</p>
+        <p>Privacy inquiries: support@lecue.app</p>
         <p>Users in Korea may also contact the privacy portal, the Korea Internet &amp; Security Agency privacy center at 118, or the Personal Information Dispute Mediation Committee at 1833-6972.</p>
         <p>We normally announce changes at least 7 days before they take effect. Material changes are announced at least 30 days in advance, and consent is obtained where required.</p>
       </div></section>

@@ -152,12 +152,10 @@ export default function TermsPage() {
 
       <section>
         <h2>제14조 운영자 정보</h2>
+        {/* 사업자 등록 정보(상호·주소·등록번호·통신판매신고)는 유료 판매 개시
+            시점에 채워 표시한다. 그 전까지는 문의처만 노출한다. */}
         <div><div className={styles.tableWrap}><table><tbody>
-          <tr><th>상호·대표자</th><td className={styles.placeholder}>[입력 필요]</td></tr>
-          <tr><th>사업장 주소</th><td className={styles.placeholder}>[입력 필요]</td></tr>
-          <tr><th>사업자등록번호</th><td className={styles.placeholder}>[입력 필요]</td></tr>
-          <tr><th>통신판매업 신고번호</th><td className={styles.placeholder}>[유료 판매 전 입력 필요]</td></tr>
-          <tr><th>문의</th><td className={styles.placeholder}>[이메일·전화번호 입력 필요]</td></tr>
+          <tr><th>문의</th><td>support@lecue.app</td></tr>
         </tbody></table></div></div>
       </section>
     </LegalPage>

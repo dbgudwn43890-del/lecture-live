@@ -22,11 +22,11 @@ export default function EnglishLecturePolicyPage() {
 
       <section><h2>4. Copyright</h2><div><p>A lecture is the instructor&rsquo;s copyrighted work. Lecue assumes personal study use by the student alone; providing, selling, or publishing transcripts or course materials to third parties violates our terms and the instructor&rsquo;s copyright.</p><p>Course materials a student uploads are used only to improve that student&rsquo;s answers and are never served to other users.</p></div></section>
 
-      <section><h2>5. If you do not want it used</h2><div><p>We block the service course by course. Email the institution, course name, instructor name, and term to <a href="mailto:dbgudwn43890@gmail.com">dbgudwn43890@gmail.com</a>. We apply the block and reply within two business days.</p><p>There is no fee and no additional process.</p></div></section>
+      <section><h2>5. If you do not want it used</h2><div><p>We block the service course by course. Email the institution, course name, instructor name, and term to <a href="mailto:support@lecue.app">support@lecue.app</a>. We apply the block and reply within two business days.</p><p>There is no fee and no additional process.</p></div></section>
 
       <section><h2>6. Syllabus language you can reuse</h2><div><p>Use or adapt either sentence when stating your AI policy.</p><p>&ldquo;Real-time transcription and question tools (such as Lecue) may be used for personal study in this course. They may not be used during exams or assessments, and transcripts may not be shared or distributed outside the course.&rdquo;</p><p>&ldquo;Recording and real-time transcription tools may not be used in this course.&rdquo;</p></div></section>
 
-      <section><h2>7. Contact</h2><div><p>Policy questions, data handling questions, and block requests all go to <a href="mailto:dbgudwn43890@gmail.com">dbgudwn43890@gmail.com</a>.</p></div></section>
+      <section><h2>7. Contact</h2><div><p>Policy questions, data handling questions, and block requests all go to <a href="mailto:support@lecue.app">support@lecue.app</a>.</p></div></section>
     </LegalPage>
   );
 }

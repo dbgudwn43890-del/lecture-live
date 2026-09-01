@@ -58,12 +58,10 @@ export default function EnglishTermsPage() {
 
       <section><h2>13. Law, disputes, and language</h2><div><p>We and the member should first try to resolve disputes in good faith. Korean consumer, content, and privacy mediation bodies may be available.</p><p>These Terms are governed by the laws of the Republic of Korea and disputes follow the court jurisdiction provided by Korean civil procedure law, without removing mandatory protections in the consumer's country. If this translation conflicts with the Korean Terms, the Korean text controls to the extent permitted by law.</p></div></section>
 
+      {/* Business registration details appear once paid sales begin; until
+          then only the support contact is shown. */}
       <section><h2>14. Operator details</h2><div><div className={styles.tableWrap}><table><tbody>
-        <tr><th>Legal name and representative</th><td className={styles.placeholder}>[required]</td></tr>
-        <tr><th>Business address</th><td className={styles.placeholder}>[required]</td></tr>
-        <tr><th>Business registration</th><td className={styles.placeholder}>[required]</td></tr>
-        <tr><th>E-commerce registration</th><td className={styles.placeholder}>[required before paid sales]</td></tr>
-        <tr><th>Support</th><td className={styles.placeholder}>[email and phone required]</td></tr>
+        <tr><th>Support</th><td>support@lecue.app</td></tr>
       </tbody></table></div></div></section>
     </LegalPage>
   );
