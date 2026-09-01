@@ -2450,3 +2450,42 @@ button:active,
   cursor: pointer;
 }
 .signup-consent input { margin-top: 2px; flex: 0 0 auto; accent-color: var(--signal); }
+
+/* ── 워크스페이스 소품: 검색·마이크 미터·삭제 확인 ─────────────────── */
+
+.sidebar-search {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-hard);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+.sidebar-search::placeholder { color: var(--muted); }
+
+/* 입력 피크를 그대로 따라가는 막대. 값은 JS가 --level(0~1)로만 흘려 넣는다. */
+.mic-meter {
+  width: 36px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tint);
+  overflow: hidden;
+}
+.mic-meter::after {
+  content: "";
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  transform: scaleX(var(--level, 0));
+  background: var(--status);
+}
+
+.confirm-modal .consent-gate span { justify-content: flex-end; gap: 10px; }
+.confirm-modal .confirm-cancel {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+}
+.confirm-modal .confirm-delete { background: #b3402f; }

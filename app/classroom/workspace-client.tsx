@@ -185,6 +185,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   // UPL-03. The upload being watched right now, if any.
   const [audioUpload, setAudioUpload] = useState<AudioUpload | null>(null);
   const [materialDragOver, setMaterialDragOver] = useState(false);
+  const [sessionQuery, setSessionQuery] = useState("");
+  const [deletingSessionId, setDeletingSessionId] = useState("");
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
   const sessionsById = useMemo(
@@ -229,6 +231,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const socketOpenedRef = useRef(false);
   const initialRouteRef = useRef(false);
   const consentDialogRef = useRef<HTMLDialogElement | null>(null);
+  const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
+  const meterRef = useRef<HTMLSpanElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("lecue-speech-language");
@@ -237,6 +242,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     const language = saved === "default" || saved === "en" ? saved : "ko";
     setSpeechLanguage(language);
     window.localStorage.setItem("lecue-speech-language", language);
+    // 답변 모델 선택도 새로고침을 견딘다. 언어 저장과 같은 방식.
+    const provider = window.localStorage.getItem("lecue-ai-provider");
+    if (provider && provider !== "lecture-live" && provider in personalModelOptions) {
+      const options = personalModelOptions[provider as PersonalProvider];
+      const model = window.localStorage.getItem("lecue-ai-model");
+      setAiProvider(provider as AiProvider);
+      setAiModel(options.some((option) => option.id === model) ? model! : options[0].id);
+    }
   }, []);
 
   // 끝난 10분 구간을 강의 중에 미리 접어 둔다. 질문할 때 세 시간짜리 원문을
@@ -463,9 +476,25 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       // rejoins the job already running instead of paying for it twice.
       formData.set("idempotencyKey", `${file.name}:${file.size}:${file.lastModified}`);
 
-      const response = await fetch("/api/lecture-audio", { method: "POST", headers: { "X-Site-Locale": locale }, body: formData });
-      const data = await response.json() as { upload?: AudioUpload; error?: string };
-      if (!response.ok || !data.upload) throw new Error(data.error);
+      // fetch는 업로드 진행률을 주지 않는다. 1GB짜리 파일을 침묵 속에 올리게
+      // 하지 않으려고 이 요청만 XHR로 보낸다.
+      const data = await new Promise<{ upload?: AudioUpload; error?: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/lecture-audio");
+        xhr.setRequestHeader("X-Site-Locale", locale);
+        xhr.responseType = "json";
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const percent = Math.round((event.loaded / event.total) * 100);
+          setNotice(isEnglish
+            ? `Uploading the recording… ${percent}%`
+            : `녹음 파일을 올리는 중입니다… ${percent}%`);
+        };
+        xhr.onload = () => resolve((xhr.response ?? {}) as { upload?: AudioUpload; error?: string });
+        xhr.onerror = () => reject(new Error());
+        xhr.send(formData);
+      });
+      if (!data.upload) throw new Error(data.error);
       setAudioUpload(data.upload);
       setNotice(isEnglish
         ? "Transcribing. You can leave this page — the lecture appears in the sidebar when it is done."
@@ -583,6 +612,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       recorderRef.current?.stop();
       socketRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      stopMicMeter();
     },
     [],
   );
@@ -733,11 +763,6 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   async function deleteSession(sessionId: string) {
     const session = sessionsById.get(sessionId);
     if (!session) return;
-    const confirmed = window.confirm(isEnglish
-      ? `Delete "${session.title}"? Its transcript and questions are deleted with it. This cannot be undone.`
-      : `"${session.title}" 수업을 삭제할까요? 스크립트와 질문 기록도 함께 지워지며 되돌릴 수 없습니다.`);
-    if (!confirmed) return;
-
     setClassroomPending(true);
     setError("");
     try {
@@ -1156,6 +1181,35 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }, RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)]);
   }
 
+  /**
+   * "지금 내 소리를 듣고 있나?"는 상태 점만으로 알 수 없고, 인식이 안 되는
+   * 가장 흔한 원인이 마이크 문제다. 입력 피크를 작은 막대로 보여 준다.
+   * 리렌더 없이 CSS 변수로만 그린다 — 60fps로 상태를 바꿀 이유가 없다.
+   */
+  function startMicMeter(stream: MediaStream) {
+    stopMicMeter();
+    const context = new AudioContext();
+    audioContextRef.current = context;
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    context.createMediaStreamSource(stream).connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      if (audioContextRef.current !== context) return;
+      analyser.getByteTimeDomainData(data);
+      let peak = 0;
+      for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
+      meterRef.current?.style.setProperty("--level", String(Math.min(1, peak / 56)));
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  function stopMicMeter() {
+    void audioContextRef.current?.close().catch(() => {});
+    audioContextRef.current = null;
+  }
+
   function startMediaRecorder(stream: MediaStream) {
     if (recorderRef.current?.state === "recording") return;
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -1293,6 +1347,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             : { sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
         }).then(() => loadCredits());
         stream.getTracks().forEach((track) => track.stop());
+        stopMicMeter();
       }
       setError(isEnglish
         ? "Speech recognition could not connect. Check the network and API settings."
@@ -1341,6 +1396,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         },
       });
       streamRef.current = stream;
+      startMicMeter(stream);
       streamOffsetMsRef.current = 0;
       pendingAudioRef.current = [];
       socketOpenedRef.current = false;
@@ -1378,6 +1434,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     } catch (caught) {
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      stopMicMeter();
       pendingAudioRef.current = [];
       startedAtRef.current = 0;
       if (startedSessionId && !socketOpenedRef.current) {
@@ -1409,6 +1466,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       flushUtterance();
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      stopMicMeter();
       pendingAudioRef.current = [];
       socketRef.current?.close();
       const recordedMs = data.recordedMs ?? currentElapsedMs();
@@ -1450,6 +1508,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       streamOffsetMsRef.current = recordedMs;
       startedAtRef.current = Date.now();
       streamRef.current = stream;
+      startMicMeter(stream);
       pendingAudioRef.current = [];
       socketOpenedRef.current = false;
       reconnectAttemptRef.current = 0;
@@ -1457,6 +1516,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       await connectDeepgram(stream, true);
     } catch (caught) {
       stream?.getTracks().forEach((track) => track.stop());
+      stopMicMeter();
       startedAtRef.current = 0;
       if (resumed) {
         await fetch("/api/lecture-sessions", {
@@ -1488,6 +1548,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     // 마이크는 여기서 놓는다. 재연결이 같은 스트림을 다시 쓰므로 레코더가 멈출
     // 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.
     streamRef.current?.getTracks().forEach((track) => track.stop());
+    stopMicMeter();
     setStatus("ended");
     const sessionId = activeSessionIdRef.current;
     if (sessionId) {
@@ -1535,6 +1596,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     if (consentGate && !dialog.open) dialog.showModal();
     if (!consentGate && dialog.open) dialog.close();
   }, [consentGate]);
+
+  useEffect(() => {
+    const dialog = deleteDialogRef.current;
+    if (!dialog) return;
+    if (deletingSessionId && !dialog.open) dialog.showModal();
+    if (!deletingSessionId && dialog.open) dialog.close();
+  }, [deletingSessionId]);
 
   /** ACC-02/ACC-03. Asks the server, which owns the wording version. */
   async function refreshConsent() {
@@ -1819,7 +1887,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <button
               type="button"
               className="session-menu-delete"
-              onClick={(event) => { closeMenu(event); void deleteSession(session.id); }}
+              onClick={(event) => { closeMenu(event); setDeletingSessionId(session.id); }}
             >{isEnglish ? "Delete lecture" : "수업 삭제"}</button>
           </div>
         </details>
@@ -1829,6 +1897,12 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   /** A classroom and its lectures. The whole group is a drop target. */
   function renderClassroomGroup(key: string, label: string, sessions: SessionSummary[], glossary = "") {
+    const query = sessionQuery.trim().toLowerCase();
+    const visibleSessions = query
+      ? sessions.filter((session) => session.title.toLowerCase().includes(query))
+      : sessions;
+    // 검색 중에는 결과 없는 강의실을 치운다. 빈 그룹 목록은 소음이다.
+    if (query && visibleSessions.length === 0) return null;
     return (
       <ClassroomDropTarget key={key || "unassigned"} id={key} disabled={sidebarLocked}>
         <div className="sidebar-classroom-row">
@@ -1842,7 +1916,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             disabled={status === "recording" || status === "connecting"}
           >
             <span>{label}</span>
-            <small>{sessions.length}</small>
+            <small>{visibleSessions.length}</small>
           </button>
           {key && (
             <details className="classroom-menu">
@@ -1870,7 +1944,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             </details>
           )}
         </div>
-        <div className="sidebar-sessions">{sessions.map(renderSessionRow)}</div>
+        <div className="sidebar-sessions">{visibleSessions.map(renderSessionRow)}</div>
       </ClassroomDropTarget>
     );
   }
@@ -1903,6 +1977,15 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           <div className="sidebar-section-heading">
             <span>{isEnglish ? "Classrooms" : "강의실"}</span>
           </div>
+
+          <input
+            className="sidebar-search"
+            type="search"
+            value={sessionQuery}
+            onChange={(event) => setSessionQuery(event.target.value)}
+            placeholder={isEnglish ? "Search lectures" : "수업 검색"}
+            aria-label={isEnglish ? "Search lectures" : "수업 검색"}
+          />
 
           <DragDropProvider onDragEnd={(event) => {
             if (event.canceled) return;
@@ -2029,7 +2112,12 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                           const provider = option.id;
                           setAiProvider(provider);
                           setPersonalApiKey("");
-                          if (provider !== "lecture-live") setAiModel(personalModelOptions[provider][0].id);
+                          window.localStorage.setItem("lecue-ai-provider", provider);
+                          if (provider !== "lecture-live") {
+                            const model = personalModelOptions[provider][0].id;
+                            setAiModel(model);
+                            window.localStorage.setItem("lecue-ai-model", model);
+                          }
                         }}
                       >{option.label}</button>
                     ))}
@@ -2047,7 +2135,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                             key={model.id}
                             className={aiModel === model.id ? "active" : undefined}
                             aria-pressed={aiModel === model.id}
-                            onClick={() => setAiModel(model.id)}
+                            onClick={() => {
+                              setAiModel(model.id);
+                              window.localStorage.setItem("lecue-ai-model", model.id);
+                            }}
                           >{model.label}</button>
                         ))}
                       </div>
@@ -2119,6 +2210,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
           <div className="session-state" aria-live="polite">
             <span className={`state-dot state-${status}`} />
+            {status === "recording" && <span className="mic-meter" ref={meterRef} aria-hidden="true" />}
             <span>{statusCopy[status]}</span>
             <time>{formatTime(elapsedMs)}</time>
           </div>
@@ -2193,6 +2285,33 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               >{consentPending
                 ? isEnglish ? "Saving…" : "저장 중…"
                 : isEnglish ? "Agree and continue" : "동의하고 계속"}</button>
+            </span>
+          </div>
+        </dialog>
+        {/* HIS-03. window.confirm 대신 앱과 같은 모양의 확인 창. Esc·바깥 클릭은 취소. */}
+        <dialog
+          ref={deleteDialogRef}
+          className="consent-modal confirm-modal"
+          aria-label={isEnglish ? "Delete lecture" : "수업 삭제"}
+          onClose={() => setDeletingSessionId("")}
+        >
+          <div className="consent-gate">
+            <p>{isEnglish
+              ? `Delete "${sessionsById.get(deletingSessionId)?.title ?? ""}"? Its transcript and questions are deleted with it. This cannot be undone.`
+              : `"${sessionsById.get(deletingSessionId)?.title ?? ""}" 수업을 삭제할까요? 스크립트와 질문 기록도 함께 지워지며 되돌릴 수 없습니다.`}</p>
+            <span>
+              <button type="button" className="confirm-cancel" onClick={() => setDeletingSessionId("")}>
+                {isEnglish ? "Cancel" : "취소"}
+              </button>
+              <button
+                type="button"
+                className="confirm-delete"
+                onClick={() => {
+                  const sessionId = deletingSessionId;
+                  setDeletingSessionId("");
+                  void deleteSession(sessionId);
+                }}
+              >{isEnglish ? "Delete lecture" : "수업 삭제"}</button>
             </span>
           </div>
         </dialog>
