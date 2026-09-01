@@ -28,11 +28,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Invalid lecture session." : "수업 정보를 확인해 주세요." }, { status: 400 });
   }
 
-  // 한국어 수업은 Soniox로 간다: 한·영 혼용을 문장 안에서 같이 인식하고,
-  // 스트리밍 단가가 Deepgram의 1/3.8이다 (CER 실측: scripts/eval-stt.mts).
-  // "default"(bare)와 "en"은 Deepgram에 남는다.
-  const language = deepgramLanguage(body.language, "ko");
-  const useSoniox = language === "ko" && Boolean(process.env.SONIOX_API_KEY);
+  // Deepgram은 지원 프로그램이라 당장 원가 0, Soniox는 실비($0.12/hr)다.
+  // 그래서 기본 "ko"는 Deepgram에 남고, 한·영 혼용을 고른 수업만 Soniox로
+  // 간다 (문장 안 두 언어 동시 인식, CER 실측 0%: scripts/eval-stt.mts).
+  let language = deepgramLanguage(body.language, "ko");
+  const useSoniox = language === "multi" && Boolean(process.env.SONIOX_API_KEY);
+  // Deepgram의 multi 모델은 한국어를 지원하지 않는다. Soniox 키가 없으면
+  // 혼용 선택을 한국어 중심으로 낮춰서 영어 전용 소켓이 열리는 걸 막는다.
+  if (language === "multi" && !useSoniox) language = "ko";
 
   const apiKey = useSoniox ? process.env.SONIOX_API_KEY : process.env.DEEPGRAM_API_KEY;
 

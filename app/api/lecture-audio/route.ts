@@ -112,7 +112,10 @@ export async function POST(request: Request) {
   const title = String(formData.get("title") ?? "").trim().slice(0, 80);
   const classroomId = formData.get("classroomId");
   const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim();
-  const language = deepgramLanguage(formData.get("language"), "ko");
+  const raw = deepgramLanguage(formData.get("language"), "ko");
+  // 업로드는 지원받는 Deepgram 배치로 간다. Deepgram의 multi는 한국어를
+  // 지원하지 않으므로 혼용(실시간 Soniox 전용) 선택은 여기서 ko로 내린다.
+  const language = raw === "multi" ? "ko" : raw;
   // The browser reads this off an <audio> element before uploading. It decides
   // whether to accept the job at all; the charge below uses Deepgram's own
   // measurement, so a client lying here cannot buy a cheaper transcription.

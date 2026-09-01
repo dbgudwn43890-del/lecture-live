@@ -164,7 +164,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [lectureTitle, setLectureTitle] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
-  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>("ko");
+  // 기본값 "multi" = 한국어 수업(화면 표기는 그냥 "한국어"). 실시간은 Soniox가
+  // 한 문장 속 한·영을 함께 인식하고, 업로드는 Deepgram ko로 내려간다.
+  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>("multi");
   const [personalApiKey, setPersonalApiKey] = useState("");
   const [savedCredentials, setSavedCredentials] = useState<SavedCredential[]>([]);
   const [credentialPending, setCredentialPending] = useState(false);
@@ -243,7 +245,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     const saved = window.localStorage.getItem("lecue-speech-language");
     // Deepgram's streaming `multi` model does not support Korean. Migrate the
     // old default instead of letting a saved value keep producing mixed-script noise.
-    const language = saved === "default" || saved === "en" ? saved : "ko";
+    // 이제 선택지는 한국어(multi)와 English 둘뿐. 옛 저장값(ko/default)은
+    // 한국어로 옮긴다.
+    const language = saved === "en" ? "en" : "multi";
     setSpeechLanguage(language);
     window.localStorage.setItem("lecue-speech-language", language);
     const storedTheme = window.localStorage.getItem("lecue-theme");
@@ -2120,16 +2124,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               <section className="profile-model-settings" aria-labelledby="profile-speech-title">
                 <div className="profile-model-heading">
                   <h3 id="profile-speech-title">{isEnglish ? "Speech recognition" : "음성 인식 언어"}</h3>
-                  <span>{speechLanguage === "default"
-                    ? (isEnglish ? "Deepgram defaults" : "Deepgram 기본값")
-                    : speechLanguage === "en" ? "English" : (isEnglish ? "Korean + English" : "한·영 혼용")}</span>
+                  <span>{speechLanguage === "en" ? "English" : (isEnglish ? "Korean" : "한국어")}</span>
                 </div>
                 <fieldset className="settings-choice">
                   <legend>{isEnglish ? "Lecture language" : "강의 언어"}</legend>
                   <div className="settings-choice-list">
                     {([
-                      { id: "default", label: isEnglish ? "Deepgram defaults" : "Deepgram 기본값" },
-                      { id: "ko", label: isEnglish ? "Korean + English" : "한·영 혼용" },
+                      { id: "multi", label: isEnglish ? "Korean" : "한국어" },
                       { id: "en", label: "English" },
                     ] as Array<{ id: DeepgramLanguage; label: string }>).map((option) => (
                       <button
@@ -2147,8 +2148,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   </div>
                 </fieldset>
                 <p>{isEnglish
-                  ? "Korean + English recognizes both languages in the same sentence and keeps technical terms from your materials in Latin script. Deepgram defaults sends no options at all — English-only in practice."
-                  : "한·영 혼용은 한 문장 안에 섞인 두 언어를 함께 인식하고, 자료의 전공용어를 영문 그대로 적습니다. Deepgram 기본값은 아무 옵션도 보내지 않아 사실상 영어 전용입니다."}</p>
+                  ? "Korean also recognizes English terms and sentences mixed into the lecture, keeping technical terms in Latin script."
+                  : "한국어 모드는 수업에 섞인 영어 용어와 문장까지 함께 인식하고, 전공용어를 영문 그대로 적습니다."}</p>
               </section>
 
               {/* 한 층 접어 둔다: 개인 API 키 기능이 기본 제공 무료 기능으로
