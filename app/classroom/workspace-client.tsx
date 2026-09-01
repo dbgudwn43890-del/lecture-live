@@ -151,6 +151,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [mobilePane, setMobilePane] = useState<"chat" | "transcript">("chat");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   // null until the first check answers; the gate never flashes on a returning
   // account that already agreed.
   const [consentSatisfied, setConsentSatisfied] = useState<boolean | null>(null);
@@ -958,6 +960,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       streamOffsetMsRef.current = recordedMs;
       setElapsedMs(recordedMs);
       setStatus(nextStatus);
+      setMobilePane((data.questions?.length ?? 0) > 0 ? "chat" : "transcript");
+      setMobileSidebarOpen(false);
     } catch (caught) {
       setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not load the lecture." : "수업 기록을 불러오지 못했습니다.");
     } finally {
@@ -976,6 +980,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     setMessages([]);
     showInterim("");
     setElapsedMs(0);
+    setMobilePane("chat");
+    setMobileSidebarOpen(false);
     elapsedBaseMsRef.current = 0;
     startedAtRef.current = 0;
     setNotice("");
@@ -1273,6 +1279,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       setElapsedMs(0);
       startMediaRecorder(stream);
       setStatus("recording");
+      setMobilePane("transcript");
 
       const sessionResponse = await fetch("/api/lecture-sessions", {
         method: "POST",
@@ -1536,6 +1543,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       return;
     }
 
+    setMobilePane("chat");
     setError("");
     const selectedModel =
       aiProvider === "lecture-live"
@@ -1676,6 +1684,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       : personalModelOptions[aiProvider].find((model) => model.id === aiModel)?.label ??
         personalModelOptions[aiProvider][0].label;
   const planLabel = getPlanLabel(creditStatus?.planCode, locale);
+  const activeClassroomTitle = classrooms.find((classroom) => classroom.id === activeClassroomId)?.title
+    ?? (isEnglish ? "Unassigned" : "미분류 수업");
 
   const sidebarLocked = classroomPending || status === "recording" || status === "connecting" || status === "paused";
 
@@ -1789,7 +1799,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   return (
     <main className="workspace">
-      <aside className="workspace-sidebar">
+      <aside className={`workspace-sidebar${mobileSidebarOpen ? " is-mobile-open" : ""}`}>
         <Link className="sidebar-brand" href={basePath || "/"} aria-label={isEnglish ? "Lecue home" : "Lecue 홈"}>Lecue</Link>
 
         <button
@@ -1801,6 +1811,15 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           <span aria-hidden="true">＋</span>
           {isEnglish ? "New lecture" : "새 수업"}
         </button>
+
+        <button
+          type="button"
+          className="sidebar-mobile-toggle"
+          aria-expanded={mobileSidebarOpen}
+          onClick={() => setMobileSidebarOpen((open) => !open)}
+        >{mobileSidebarOpen
+            ? isEnglish ? "Close" : "닫기"
+            : isEnglish ? "Lectures" : "수업 목록"}</button>
 
         <div className="sidebar-library">
           <div className="sidebar-section-heading">
@@ -1995,6 +2014,27 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
       <div className="workspace-main">
         <header className="topbar">
+          <label className="lecture-title-field">
+            <span>{activeClassroomTitle}</span>
+            <input
+              value={lectureTitle}
+              onChange={(event) => setLectureTitle(event.target.value)}
+              onBlur={(event) => {
+                if (activeSessionId) void renameSession(activeSessionId, event.target.value);
+                else setLectureTitle(event.target.value.trim());
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && activeSessionId) {
+                  setLectureTitle(sessionsById.get(activeSessionId)?.title ?? "");
+                }
+                if (event.key === "Escape" || event.key === "Enter") event.currentTarget.blur();
+              }}
+              placeholder={isEnglish ? "Name this lecture" : "수업 이름을 입력하세요"}
+              aria-label={isEnglish ? "Lecture name" : "수업 이름"}
+              maxLength={80}
+            />
+          </label>
+
           <div className="session-state" aria-live="polite">
             <span className={`state-dot state-${status}`} />
             <span>{statusCopy[status]}</span>
@@ -2077,9 +2117,20 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         <div className="error-banner" role="alert">{error}</div>
         <div className="notice-banner" role="status">{notice}</div>
 
+        <div className="mobile-pane-switch" aria-label={isEnglish ? "Workspace view" : "작업 화면 선택"}>
+          <button type="button" aria-pressed={mobilePane === "chat"} onClick={() => setMobilePane("chat")}>
+            {isEnglish ? "Questions" : "질문"}
+            <span>{messages.filter((message) => message.role === "user").length}</span>
+          </button>
+          <button type="button" aria-pressed={mobilePane === "transcript"} onClick={() => setMobilePane("transcript")}>
+            {isEnglish ? "Transcript" : "스크립트"}
+            <span>{sentenceCount}</span>
+          </button>
+        </div>
+
         <section className="panes">
           <section
-            className={`chat-pane${materialDragOver ? " material-drop-active" : ""}`}
+            className={`chat-pane${mobilePane === "chat" ? " is-mobile-active" : ""}${materialDragOver ? " material-drop-active" : ""}`}
             aria-labelledby="chat-title"
             onDragOver={(event) => {
               if (!event.dataTransfer.types.includes("Files")) return;
@@ -2230,7 +2281,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           </form>
           </section>
 
-          <section className="transcript-pane" aria-labelledby="transcript-title">
+          <section className={`transcript-pane${mobilePane === "transcript" ? " is-mobile-active" : ""}`} aria-labelledby="transcript-title">
           <div className="pane-heading transcript-heading">
             <div>
               <h2 id="transcript-title">{isEnglish ? "Live transcript" : "실시간 스크립트"}</h2>
@@ -2305,27 +2356,30 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   const reported = reportedKeys.includes(`stt:${key}`);
                   return (
                     <div className="transcript-line" key={key}>
+                      <time dateTime={`PT${Math.floor(paragraph.startMs / 1000)}S`}>{formatTime(paragraph.startMs)}</time>
                       <p>{paragraph.text}</p>
-                      <button
-                        type="button"
-                        className="line-ask"
-                        disabled={!canAsk}
-                        onClick={() => void submitQuestion(isEnglish
-                          ? `Explain this part of the lecture in plain language: "${paragraph.text}"`
-                          : `강의의 이 부분을 쉽게 설명해 줘: "${paragraph.text}"`)}
-                      >
-                        {isEnglish ? "Explain" : "설명"}
-                      </button>
-                      <button
-                        type="button"
-                        className="line-report"
-                        disabled={reported || !activeSessionId}
-                        onClick={() => void reportIssue("stt_error", paragraph.text, `stt:${key}`)}
-                      >
-                        {reported
-                          ? isEnglish ? "Reported" : "신고됨"
-                          : isEnglish ? "Misheard" : "잘못 적힘"}
-                      </button>
+                      <div className="transcript-line-actions">
+                        <button
+                          type="button"
+                          className="line-ask"
+                          disabled={!canAsk}
+                          onClick={() => void submitQuestion(isEnglish
+                            ? `Explain this part of the lecture in plain language: "${paragraph.text}"`
+                            : `강의의 이 부분을 쉽게 설명해 줘: "${paragraph.text}"`)}
+                        >
+                          {isEnglish ? "Explain" : "설명"}
+                        </button>
+                        <button
+                          type="button"
+                          className="line-report"
+                          disabled={reported || !activeSessionId}
+                          onClick={() => void reportIssue("stt_error", paragraph.text, `stt:${key}`)}
+                        >
+                          {reported
+                            ? isEnglish ? "Reported" : "신고됨"
+                            : isEnglish ? "Misheard" : "잘못 적힘"}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

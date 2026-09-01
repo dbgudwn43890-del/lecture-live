@@ -564,7 +564,14 @@ a, button, summary, input, textarea, select {
 /* Pilot reporting (PRD 36.2). The control only appears on hover or keyboard
    focus: a button on every transcript line would compete with the lecture the
    learner is trying to read. */
-.transcript-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: 6px; }
+.transcript-line { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.transcript-line > time {
+  padding-top: 7px;
+  color: #91899d;
+  font: 500 10px/1.4 var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.transcript-line-actions { display: flex; gap: 4px; }
 .transcript-line .line-ask,
 .transcript-line .line-report {
   padding: 3px 7px;
@@ -1582,6 +1589,7 @@ button:active,
 
 .sidebar-new-lecture span { color: var(--focus); font-size: 19px; font-weight: 400; }
 .sidebar-new-lecture:hover { background: #e2e0e5; }
+.sidebar-mobile-toggle { display: none; }
 
 .sidebar-library {
   min-height: 0;
@@ -2056,9 +2064,47 @@ button:active,
    was hiding (start the lecture) is nowhere the learner can see. Auto-fitting
    the trailing controls keeps that from happening again when one is added. */
 .workspace .topbar {
-  grid-template-columns: minmax(0, 1fr) repeat(2, auto);
+  grid-template-columns: minmax(180px, 1fr) repeat(3, auto);
   gap: 16px;
 }
+
+.workspace .lecture-title-field {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.workspace .lecture-title-field span {
+  overflow: hidden;
+  color: #8b8298;
+  font-size: 9px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace .lecture-title-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: #2b2733;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -.015em;
+  text-overflow: ellipsis;
+}
+
+.workspace .lecture-title-field input::placeholder { color: #817891; }
+.workspace .lecture-title-field input:focus { outline: 0; }
+.workspace .lecture-title-field:focus-within span { color: var(--focus); }
+.workspace .lecture-controls { grid-column: span 2; }
+
+.mobile-pane-switch { display: none; }
 
 .workspace .session-state { justify-self: end; font-size: 12px; }
 .workspace .session-state time { font-variant-numeric: tabular-nums; }
@@ -2176,11 +2222,10 @@ button:active,
   }
 
   .workspace-sidebar {
-    max-height: 360px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
     gap: 10px;
-    padding: 14px;
+    padding: 10px 12px;
     border-right: 0;
     border-bottom: 1px solid #d7d5dc;
   }
@@ -2190,15 +2235,35 @@ button:active,
   .workspace-sidebar button,
   .workspace-sidebar summary,
   .workspace-sidebar a { min-height: 44px; }
+  .sidebar-brand { display: inline-flex; align-items: center; }
   .sidebar-new-lecture { min-height: 44px; }
-  .sidebar-library { grid-column: 1 / -1; max-height: 190px; padding-bottom: 8px; }
-  .sidebar-account { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding-top: 8px; }
+  .sidebar-mobile-toggle {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    color: #655a78;
+    background: transparent;
+    border: 1px solid #d2cfd7;
+    border-radius: var(--radius);
+    font-size: 11px;
+    font-weight: 650;
+  }
+  .sidebar-library,
+  .sidebar-account { display: none; }
+  .workspace-sidebar.is-mobile-open .sidebar-library {
+    grid-column: 1 / -1;
+    display: block;
+    max-height: min(320px, 42svh);
+    padding-bottom: 8px;
+  }
+  .workspace-sidebar.is-mobile-open .sidebar-account { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding-top: 8px; }
   .sidebar-credit { gap: 8px; }
   .sidebar-profile { min-width: 210px; }
   .profile-copy small { display: block; }
 
   /* Same five children as the desktop rule; the topbar wraps to two rows here, so it sizes itself. */
-  .workspace-main { min-height: 100svh; grid-template-rows: auto auto auto auto 30px; overflow: visible; }
+  .workspace-main { min-height: 100svh; grid-template-rows: auto auto auto auto auto 30px; overflow: visible; }
   /* Narrow: the state and upload share a row; start/stop gets the next one. */
   .workspace .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2206,6 +2271,8 @@ button:active,
     gap: 6px 12px;
     padding: 8px 12px;
   }
+  .workspace .lecture-title-field { grid-column: 1 / -1; grid-row: 1; padding: 4px 2px 7px; }
+  .workspace .lecture-title-field input { font-size: 15px; }
   .workspace .session-state { grid-column: 1; grid-row: 2; justify-self: start; }
   .workspace .audio-upload-button { grid-column: 2; grid-row: 2; justify-self: end; }
   /* The control that starts the lecture gets its own row here rather than
@@ -2213,14 +2280,47 @@ button:active,
   .workspace .topbar > button { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; justify-content: center; }
   .workspace .lecture-controls { grid-column: 1 / -1; grid-row: 3; }
   .workspace .lecture-controls button { flex: 1; justify-content: center; }
+
+  .mobile-pane-switch {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 8px 12px 0;
+    background: #f8f7f4;
+  }
+  .mobile-pane-switch button {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    color: #776f83;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .mobile-pane-switch button[aria-pressed="true"] { color: #2b2733; border-bottom-color: var(--focus); }
+  .mobile-pane-switch span { color: #8f879d; font-size: 10px; font-variant-numeric: tabular-nums; }
   .workspace .panes { grid-template-columns: 1fr; padding: 12px; }
+  .workspace .chat-pane:not(.is-mobile-active),
+  .workspace .transcript-pane:not(.is-mobile-active) { display: none; }
+  .workspace .chat-pane.is-mobile-active { display: grid; }
+  .workspace .transcript-pane.is-mobile-active { display: flex; }
   .workspace .chat-pane,
   .workspace .transcript-pane { height: min(620px, 72svh); min-height: 480px; }
+  .transcript-line { grid-template-columns: 38px minmax(0, 1fr); }
+  .transcript-line-actions { grid-column: 2; }
+  .transcript-line .line-ask,
+  .transcript-line .line-report { opacity: 1; }
 }
 
 @media (max-width: 540px) {
-  .workspace-sidebar { max-height: 330px; }
-  .sidebar-account { align-items: stretch; flex-direction: column; }
+  .workspace-sidebar.is-mobile-open .sidebar-account { align-items: stretch; flex-direction: column; }
   .sidebar-profile { min-width: 0; }
   /* The app's primary control. It used to shrink here, not grow. */
   .workspace .start-button,
