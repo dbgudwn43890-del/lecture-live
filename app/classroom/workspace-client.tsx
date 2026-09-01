@@ -1506,8 +1506,12 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       if (reconnectTimerRef.current !== null) window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
       stopSocketTimers();
+      // 종료와 같은 이유로, 멈춘 레코더의 꼬리 확정을 기다린 뒤에 비운다.
+      if (recorderRef.current?.state === "recording") {
+        recorderRef.current.stop();
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
+      }
       flushUtterance();
-      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       stopMicMeter();
       pendingAudioRef.current = [];
@@ -1585,8 +1589,15 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     stopSocketTimers();
     const durationMs = currentElapsedMs();
     const reachedLimit = durationMs >= MAX_LECTURE_MS;
+    // 레코더를 먼저 멈춰 종료 신호를 보내고, 공급자가 맺음말을 확정할 시간을
+    // 준다. flush를 먼저 하면 마지막 문장이 버퍼에 닿기 전에 창이 닫힌다.
+    // ponytail: 고정 1.2초 대기. Deepgram 마지막 Results/Soniox finished를
+    // 직접 기다리는 게 정석이지만 배관 대비 이 대기가 짧고 실패 모드가 없다.
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.stop();
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+    }
     flushUtterance();
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     pendingAudioRef.current = [];
     // 마이크는 여기서 놓는다. 재연결이 같은 스트림을 다시 쓰므로 레코더가 멈출
     // 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.

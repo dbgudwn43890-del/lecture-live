@@ -125,6 +125,11 @@ export async function POST(request: Request) {
   });
   if (creditError) {
     console.error("Initial credit consumption failed", creditError.code);
+    // 다른 탭이 닫은 세션으로 연결을 시도한 경우다. "크레딧 미설정"이라는
+    // 엉뚱한 진단 대신 세션이 끝났다고 말한다.
+    if (String(creditError.message ?? "").includes("LECTURE_NOT_RECORDING")) {
+      return NextResponse.json({ error: isEnglish ? "This lecture is no longer recording." : "이 수업은 이미 종료되었습니다." }, { status: 409 });
+    }
     return NextResponse.json({ error: isEnglish ? "Credits are not configured yet." : "크레딧 기능이 아직 설정되지 않았습니다." }, { status: 503 });
   }
   const credit = Array.isArray(creditData) ? creditData[0] : creditData;

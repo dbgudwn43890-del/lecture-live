@@ -34,6 +34,7 @@ export default function AdminPage() {
   useEffect(() => { void load(); }, []);
 
   async function grant(userId: string) {
+    if (pending) return;
     const credits = Number(amounts[userId] ?? "");
     if (!Number.isInteger(credits) || credits < 1) {
       setError("지급할 크레딧 수를 입력하세요.");
@@ -45,7 +46,7 @@ export default function AdminPage() {
       const response = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, credits }),
+        body: JSON.stringify({ userId, credits, key: crypto.randomUUID() }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error);

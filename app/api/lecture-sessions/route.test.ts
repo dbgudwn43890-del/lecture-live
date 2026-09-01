@@ -62,6 +62,7 @@ function queryBuilder(table: string) {
     lt(column: string, value: unknown) { call.filters.push(`lt:${column}=${String(value)}`); return api; },
     gt(column: string, value: unknown) { call.filters.push(`gt:${column}=${String(value)}`); return api; },
     in(column: string, values: unknown[]) { call.filters.push(`in:${column}=${values.join(",")}`); return api; },
+    or(filter: string) { call.filters.push(`or:${filter}`); return api; },
     order() { return api; },
     limit(n: number) { call.filters.push(`limit=${n}`); return api; },
     range(from: number, to: number) { range = [from, to]; return api; },
@@ -295,7 +296,7 @@ test("reconcile indexes a completed lecture that never got chunks, and stops onc
   // indexing run failed or was deferred, so it has no chunks and the stale
   // branch will never look at it again.
   outcomes["lecture_sessions.select"] = (call) =>
-    call.filters.includes("eq:status=recording")
+    call.filters.includes("in:status=recording,paused")
       ? { data: [], error: null }
       : { data: [{ id: sessionId, classroom_id: classroomId, user_id: USER_ID }], error: null };
   segmentsBySession[sessionId] = [
@@ -326,7 +327,7 @@ test("reconcile indexes a completed lecture that never got chunks, and stops onc
 test("reconcile leaves an already-indexed completed lecture alone", async () => {
   const sessionId = randomUUID();
   outcomes["lecture_sessions.select"] = (call) =>
-    call.filters.includes("eq:status=recording")
+    call.filters.includes("in:status=recording,paused")
       ? { data: [], error: null }
       : { data: [{ id: sessionId, classroom_id: null, user_id: USER_ID }], error: null };
   segmentsBySession[sessionId] = [

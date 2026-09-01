@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
+import { isUuid } from "../../lib/billing";
 import { chunkTranscript, type TranscriptPart } from "../../lib/chunk-transcript";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
@@ -136,7 +137,8 @@ async function context(request: Request) {
 }
 
 function validId(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(value);
+  // 예전 정규식은 하이픈 27개짜리 문자열도 통과시켜 Postgres 캐스팅 500을 냈다.
+  return isUuid(value);
 }
 
 function validSegment(value: unknown): value is SegmentBody & { id: string } {
@@ -259,8 +261,11 @@ export async function POST(request: Request) {
     const { data: stale, error } = await current.supabase
       .from("lecture_sessions")
       .select("id,classroom_id,user_id")
-      .eq("status", "recording")
-      .lt("recording_started_at", abandonedBefore)
+      // recording_started_at이 NULL인 두 부류 — 콜백이 끝내 오지 않은 업로드
+      // 세션, 그리고 일시정지한 채 버려진 세션 — 는 lt만으로는 영원히 안 잡힌다.
+      // 그때는 세션 생성 시각으로 대신 판정한다.
+      .in("status", ["recording", "paused"])
+      .or(`recording_started_at.lt.${abandonedBefore},and(recording_started_at.is.null,started_at.lt.${abandonedBefore})`)
       .limit(MAX_RECONCILE_SESSIONS);
     if (error) {
       console.error("Stale lecture lookup failed", error.code);
@@ -412,7 +417,12 @@ export async function POST(request: Request) {
     if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
     if (creditError) {
       console.error("Credit consumption failed", creditError.code);
-      return NextResponse.json({ error: current.isEnglish ? "Could not use credits for this lecture." : "이 수업의 크레딧을 차감하지 못했습니다." }, { status: 409 });
+      // 409는 클라이언트가 강의 종료 사유로 읽는다. 세션이 정말 닫힌 경우에만
+      // 그 의미가 맞고, DB 순간 장애는 재시도 카운터가 다루는 500이어야 한다.
+      if (String(creditError.message ?? "").includes("LECTURE_NOT_RECORDING")) {
+        return NextResponse.json({ error: current.isEnglish ? "This lecture is no longer recording." : "이 수업은 이미 종료되었습니다." }, { status: 409 });
+      }
+      return NextResponse.json({ error: current.isEnglish ? "Could not use credits for this lecture." : "이 수업의 크레딧을 차감하지 못했습니다." }, { status: 500 });
     }
     const credit = Array.isArray(creditData) ? creditData[0] : creditData;
     if (!credit?.allowed) {
@@ -598,11 +608,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 500 });
   }
 
+  // 색인은 요청 본문이 아니라 DB에서 읽는다. 클라이언트 payload는 5,000개에서
+  // 잘리는데, 그걸 그대로 색인하면 긴 강의 뒷부분이 검색에서 영영 빠진다 —
+  // 재색인 캐치업은 청크가 0개인 세션만 구제하기 때문이다.
+  const { rows: storedRows, error: storedError } = await fetchAllSegments(current.supabase, body.sessionId, 50_000);
   const indexResult = await indexLectureChunks(current.supabase, [{
     sessionId: body.sessionId,
     classroomId: session.classroom_id,
     userId: current.userId,
-    segments,
+    segments: storedError || !storedRows.length
+      ? segments
+      : storedRows.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })),
   }]);
   const indexed = indexResult.get(body.sessionId) ?? false;
 

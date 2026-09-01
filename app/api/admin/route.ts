@@ -72,10 +72,10 @@ export async function POST(request: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
 
-  const body = await request.json().catch(() => ({})) as { userId?: unknown; credits?: unknown; days?: unknown };
+  const body = await request.json().catch(() => ({})) as { userId?: unknown; credits?: unknown; days?: unknown; key?: unknown };
   const credits = Number(body.credits);
   const days = Number(body.days ?? 60);
-  if (!isUuid(body.userId) || !Number.isInteger(credits) || credits < 1 || credits > 100_000
+  if (!isUuid(body.userId) || !isUuid(body.key) || !Number.isInteger(credits) || credits < 1 || credits > 100_000
     || !Number.isInteger(days) || days < 1 || days > 365) {
     return NextResponse.json({ error: "지급 값을 확인해 주세요." }, { status: 400 });
   }
@@ -84,13 +84,17 @@ export async function POST(request: Request) {
   const { error } = await admin.from("credit_grants").insert({
     user_id: body.userId,
     source_type: "service_credit",
-    source_id: `admin-${crypto.randomUUID()}`,
+    // 클릭이 만든 멱등키가 곧 source_id다. 같은 요청이 두 번 오면(더블클릭,
+    // 응답 유실 뒤 재전송) unique (source_type, source_id)가 두 번째를 막는다.
+    source_id: `admin-${body.key}`,
     plan_code: "service_credit",
     granted_credits: credits,
     remaining_credits: credits,
-    starts_at: now.toISOString(),
+    // DB의 now()와 앱 시계가 어긋나도 방금 준 크레딧이 보이도록 몇 초 물린다.
+    starts_at: new Date(now.getTime() - 10_000).toISOString(),
     expires_at: new Date(now.getTime() + days * 86_400_000).toISOString(),
   });
-  if (error) return NextResponse.json({ error: error.message }, { status: 502 });
+  // 23505 = 이미 처리된 같은 지급. 성공으로 답해 재전송 루프를 끝낸다.
+  if (error && error.code !== "23505") return NextResponse.json({ error: error.message }, { status: 502 });
   return NextResponse.json({ ok: true });
 }
