@@ -52,37 +52,41 @@ function isMarker(token: SonioxToken) {
   return token.text === "<end>" || token.text === "<fin>";
 }
 
+type AdaptedResult = DeepgramFinal & { type: string; is_final?: boolean; speech_final?: boolean };
+
 /**
  * Soniox 응답 하나를 Deepgram Results 메시지 목록으로 바꾼다.
- * - 확정 토큰들 → is_final Results 하나 (경계 토큰이 있었으면 speech_final)
+ * - 확정 토큰들을 <end> 경계에서 끊어, 경계마다 별도의 is_final Results로 낸다.
+ *   한 메시지에 경계가 문장 사이에 껴 올 수 있고, 이를 무시하면 두 문장이
+ *   한 세그먼트로 붙어 타임스탬프와 앵커가 오염된다.
  * - 미확정 꼬리 → is_final=false Results 하나 (자막 갱신용)
  * 타임스탬프는 ms를 초로 바꿔 utteranceSegment의 기대에 맞춘다.
  */
-export function adaptSonioxMessages(message: SonioxMessage): Array<DeepgramFinal & {
-  type: string; is_final?: boolean; speech_final?: boolean;
-}> {
+export function adaptSonioxMessages(message: SonioxMessage): AdaptedResult[] {
   const tokens = message.tokens ?? [];
   if (!tokens.length) return [];
+  const results: AdaptedResult[] = [];
 
-  const finals = tokens.filter((token) => token.is_final && !isMarker(token));
-  const interims = tokens.filter((token) => !token.is_final && !isMarker(token));
-  const endpointReached = tokens.some((token) => token.is_final && token.text === "<end>");
-  const results: Array<DeepgramFinal & { type: string; is_final?: boolean; speech_final?: boolean }> = [];
-
-  if (finals.length) {
-    const startMs = Math.min(...finals.map((token) => token.start_ms ?? 0));
-    const endMs = Math.max(...finals.map((token) => token.end_ms ?? 0));
+  let run: SonioxToken[] = [];
+  const emitRun = (speechFinal: boolean) => {
+    if (!run.length) {
+      // 본문 없이 경계만 온 경우 — 버퍼에 모인 문장을 닫으라는 신호다.
+      if (speechFinal) results.push({ type: "UtteranceEnd" });
+      return;
+    }
+    const startMs = Math.min(...run.map((token) => token.start_ms ?? 0));
+    const endMs = Math.max(...run.map((token) => token.end_ms ?? 0));
     results.push({
       type: "Results",
       is_final: true,
-      speech_final: endpointReached,
+      speech_final: speechFinal,
       start: startMs / 1_000,
       duration: Math.max(0, endMs - startMs) / 1_000,
       channel: {
         alternatives: [{
           // 토큰이 띄어쓰기를 포함하므로 그대로 이어 붙인다.
-          transcript: finals.map((token) => token.text).join("").trim(),
-          words: finals.map((token) => ({
+          transcript: run.map((token) => token.text).join("").trim(),
+          words: run.map((token) => ({
             start: (token.start_ms ?? 0) / 1_000,
             end: (token.end_ms ?? 0) / 1_000,
             word: token.text.trim(),
@@ -90,11 +94,20 @@ export function adaptSonioxMessages(message: SonioxMessage): Array<DeepgramFinal
         }],
       },
     });
-  } else if (endpointReached) {
-    // 본문 없이 경계만 온 경우 — 버퍼에 모인 문장을 닫으라는 신호다.
-    results.push({ type: "UtteranceEnd" });
-  }
+    run = [];
+  };
 
+  for (const token of tokens) {
+    if (!token.is_final) continue;
+    if (token.text === "<end>") { emitRun(true); continue; }
+    if (token.text === "<fin>") continue;
+    run.push(token);
+  }
+  // 경계 없이 끝난 꼬리. speech_final이 아니므로 클라이언트 버퍼에 남아
+  // 다음 메시지의 이어지는 토큰과 한 문장으로 합쳐진다.
+  emitRun(false);
+
+  const interims = tokens.filter((token) => !token.is_final && !isMarker(token));
   if (interims.length) {
     results.push({
       type: "Results",

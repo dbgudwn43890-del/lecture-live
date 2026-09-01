@@ -47,6 +47,38 @@ test("미확정 꼬리는 is_final=false 자막 메시지로 나온다", () => {
   assert.equal(results[1].channel?.alternatives?.[0]?.transcript, "제어");
 });
 
+test("문장 사이에 낀 <end>가 두 문장을 가른다", () => {
+  const results = adaptSonioxMessages({
+    tokens: [
+      { text: "끝났습니다", start_ms: 0, end_ms: 800, is_final: true },
+      { text: "<end>", is_final: true },
+      { text: " 다음", start_ms: 1_200, end_ms: 1_500, is_final: true },
+      { text: " 주제는", start_ms: 1_500, end_ms: 1_900, is_final: true },
+    ],
+  });
+  assert.equal(results.length, 2);
+  assert.equal(results[0].channel?.alternatives?.[0]?.transcript, "끝났습니다");
+  assert.equal(results[0].speech_final, true);
+  assert.equal(results[1].channel?.alternatives?.[0]?.transcript, "다음 주제는");
+  assert.equal(results[1].speech_final, false);
+  assert.equal(results[1].start, 1.2);
+});
+
+test("한 메시지의 <end> 두 개가 문장 두 개로 나온다", () => {
+  const results = adaptSonioxMessages({
+    tokens: [
+      { text: "첫 문장", start_ms: 0, end_ms: 500, is_final: true },
+      { text: "<end>", is_final: true },
+      { text: " 둘째 문장", start_ms: 900, end_ms: 1_400, is_final: true },
+      { text: "<end>", is_final: true },
+    ],
+  });
+  assert.equal(results.length, 2);
+  assert.equal(results[0].speech_final, true);
+  assert.equal(results[1].speech_final, true);
+  assert.equal(results[1].channel?.alternatives?.[0]?.transcript, "둘째 문장");
+});
+
 test("빈 메시지는 아무것도 만들지 않는다", () => {
   assert.deepEqual(adaptSonioxMessages({}), []);
   assert.deepEqual(adaptSonioxMessages({ tokens: [] }), []);

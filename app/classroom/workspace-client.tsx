@@ -1312,6 +1312,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       socketOpenedRef.current = true;
       // Soniox는 오디오보다 먼저 설정 메시지를 받아야 한다.
       if (sonioxConfig) socket.send(JSON.stringify({ api_key: tokenData.accessToken, ...sonioxConfig }));
+      // 첫 연결의 대기 조각만 재생한다. 그건 방금 시작한 레코더의 것이라
+      // WebM 헤더부터 온전하다. 재연결이면 대기 조각은 죽은 레코더의
+      // 중간 클러스터라, 새 레코더의 헤더 앞에 흘리면 디코딩이 깨진다.
+      if (!firstConnection) pendingAudioRef.current = [];
       startMediaRecorder(stream);
       for (const chunk of pendingAudioRef.current.splice(0)) socket.send(chunk);
       if (!firstConnection) {
