@@ -44,8 +44,10 @@
 
 /* Dark is the same product, not a second one: the same calm purple, moved onto
    near-black paper. Only the tokens change — every rule below reads them. */
-@media (prefers-color-scheme: dark) {
-  :root {
+/* 다크 팔레트는 미디어쿼리가 아니라 data-theme 속성이 정한다. layout.tsx의
+   인라인 스크립트가 저장된 선택(lecue-theme) 또는 OS 설정으로 첫 페인트 전에
+   속성을 찍는다. 토글은 프로필 메뉴에 있다. */
+:root[data-theme="dark"] {
     --paper: #131118;
     /* 배경과 한 단계 확실히 벌린다. 다크에서 표면 구분은 그림자가 아니라
        밝기 차가 한다 (Material dark elevation). */
@@ -74,26 +76,25 @@
     --pop-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 14px 34px -16px rgba(0, 0, 0, .8);
     --brutal-shadow: 0 10px 28px -16px rgba(0, 0, 0, .85);
     color-scheme: dark;
-  }
-
-  /* 밝기가 곧 높이: 배경(--paper) < 사이드바 < 패널(--surface) < 떠 있는 것.
-     라이트에서는 패널이 종이색 그대로여도 테두리·그림자가 구분해 주지만,
-     다크에서는 표면 밝기 단계가 그 역할을 대신한다. */
-  .chat-pane,
-  .transcript-pane { background: var(--surface); }
-
-  /* 떠 있는 메뉴와 다이얼로그는 패널보다 한 단계 더 밝게. */
-  .session-menu-panel,
-  .profile-menu-panel,
-  .classroom-menu form,
-  .consent-modal .consent-gate,
-  .material-list ul { background: #2b2437; }
-
-  /* 밝은 회색 오프셋 그림자는 다크에서 번진 자국처럼 보인다. */
-  .chat-pane,
-  .transcript-pane,
-  .classroom-unit { box-shadow: 4px 4px 0 rgba(0, 0, 0, .5); }
 }
+
+/* 밝기가 곧 높이: 배경(--paper) < 사이드바 < 패널(--surface) < 떠 있는 것.
+   라이트에서는 패널이 종이색 그대로여도 테두리·그림자가 구분해 주지만,
+   다크에서는 표면 밝기 단계가 그 역할을 대신한다. */
+[data-theme="dark"] .chat-pane,
+[data-theme="dark"] .transcript-pane { background: var(--surface); }
+
+/* 떠 있는 메뉴와 다이얼로그는 패널보다 한 단계 더 밝게. */
+[data-theme="dark"] .session-menu-panel,
+[data-theme="dark"] .profile-menu-panel,
+[data-theme="dark"] .classroom-menu form,
+[data-theme="dark"] .consent-modal .consent-gate,
+[data-theme="dark"] .material-list ul { background: #2b2437; }
+
+/* 밝은 회색 오프셋 그림자는 다크에서 번진 자국처럼 보인다. */
+[data-theme="dark"] .chat-pane,
+[data-theme="dark"] .transcript-pane,
+[data-theme="dark"] .classroom-unit { box-shadow: 4px 4px 0 rgba(0, 0, 0, .5); }
 
 * { box-sizing: border-box; }
 
@@ -1616,11 +1617,9 @@ button:active,
   .chat-pane,
   .transcript-pane,
   .classroom-unit { box-shadow: 3px 3px 0 var(--line-strong); }
-  @media (prefers-color-scheme: dark) {
-    .chat-pane,
-    .transcript-pane,
-    .classroom-unit { box-shadow: 3px 3px 0 rgba(0, 0, 0, .5); }
-  }
+  [data-theme="dark"] .chat-pane,
+  [data-theme="dark"] .transcript-pane,
+  [data-theme="dark"] .classroom-unit { box-shadow: 3px 3px 0 rgba(0, 0, 0, .5); }
 }
 
 /* Classroom workspace: quiet sidebar shell inspired by focused writing tools. */
@@ -2561,3 +2560,23 @@ button:active,
 }
 /* 파괴적 동작은 두 테마 모두 붉은 채움 + 흰 글자. --on-signal은 보라 채움용이다. */
 .confirm-modal .confirm-delete { background: #b3402f; color: #fff; }
+
+/* ── 프로필 메뉴: 테마 토글과 접힌 고급 설정 ─────────────────────── */
+
+.profile-advanced summary {
+  cursor: pointer;
+  padding: 9px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+.profile-advanced summary::before { content: "▸ "; }
+.profile-advanced[open] summary::before { content: "▾ "; }
+.profile-advanced summary:hover { color: var(--ink); }
+.profile-advanced-note {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}

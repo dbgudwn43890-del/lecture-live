@@ -187,6 +187,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const [audioUpload, setAudioUpload] = useState<AudioUpload | null>(null);
   const [materialDragOver, setMaterialDragOver] = useState(false);
   const [sessionQuery, setSessionQuery] = useState("");
+  const [theme, setThemeState] = useState<"system" | "light" | "dark">("system");
   const [deletingSessionId, setDeletingSessionId] = useState("");
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
@@ -245,6 +246,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     const language = saved === "default" || saved === "en" ? saved : "ko";
     setSpeechLanguage(language);
     window.localStorage.setItem("lecue-speech-language", language);
+    const storedTheme = window.localStorage.getItem("lecue-theme");
+    if (storedTheme === "dark" || storedTheme === "light") setThemeState(storedTheme);
     // 답변 모델 선택도 새로고침을 견딘다. 언어 저장과 같은 방식.
     const provider = window.localStorage.getItem("lecue-ai-provider");
     if (provider && provider !== "lecture-live" && provider in personalModelOptions) {
@@ -1121,6 +1124,19 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         : isEnglish ? "Could not remove the saved API key." : "저장된 API 키를 삭제하지 못했습니다.");
     } finally {
       setCredentialPending(false);
+    }
+  }
+
+  /** 실제 적용은 html의 data-theme 속성. layout.tsx의 스크립트와 같은 규칙이다. */
+  function applyTheme(next: "system" | "light" | "dark") {
+    setThemeState(next);
+    if (next === "system") {
+      window.localStorage.removeItem("lecue-theme");
+      document.documentElement.dataset.theme =
+        window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } else {
+      window.localStorage.setItem("lecue-theme", next);
+      document.documentElement.dataset.theme = next;
     }
   }
 
@@ -2074,6 +2090,33 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 <strong>{isEnglish ? "한국어로 보기" : "View in English"}</strong>
               </a>
 
+              <section className="profile-model-settings" aria-labelledby="profile-theme-title">
+                <div className="profile-model-heading">
+                  <h3 id="profile-theme-title">{isEnglish ? "Appearance" : "화면 테마"}</h3>
+                  <span>{theme === "system"
+                    ? (isEnglish ? "System" : "시스템 설정")
+                    : theme === "dark" ? (isEnglish ? "Dark" : "다크") : (isEnglish ? "Light" : "라이트")}</span>
+                </div>
+                <fieldset className="settings-choice">
+                  <legend>{isEnglish ? "Theme" : "테마"}</legend>
+                  <div className="settings-choice-list">
+                    {([
+                      { id: "system", label: isEnglish ? "System" : "시스템 설정" },
+                      { id: "light", label: isEnglish ? "Light" : "라이트" },
+                      { id: "dark", label: isEnglish ? "Dark" : "다크" },
+                    ] as Array<{ id: "system" | "light" | "dark"; label: string }>).map((option) => (
+                      <button
+                        type="button"
+                        key={option.id}
+                        className={theme === option.id ? "active" : undefined}
+                        aria-pressed={theme === option.id}
+                        onClick={() => applyTheme(option.id)}
+                      >{option.label}</button>
+                    ))}
+                  </div>
+                </fieldset>
+              </section>
+
               <section className="profile-model-settings" aria-labelledby="profile-speech-title">
                 <div className="profile-model-heading">
                   <h3 id="profile-speech-title">{isEnglish ? "Speech recognition" : "음성 인식 언어"}</h3>
@@ -2108,6 +2151,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   : "한·영 혼용은 한 문장 안에 섞인 두 언어를 함께 인식하고, 자료의 전공용어를 영문 그대로 적습니다. Deepgram 기본값은 아무 옵션도 보내지 않아 사실상 영어 전용입니다."}</p>
               </section>
 
+              {/* 한 층 접어 둔다: 개인 API 키 기능이 기본 제공 무료 기능으로
+                  오해되지 않게, 열어야만 보이고 비용 주체를 먼저 말한다. */}
+              <details className="profile-advanced">
+                <summary>{isEnglish ? "Advanced · answer with your own AI key" : "고급 · 내 API 키로 답변 모델 바꾸기"}</summary>
+                <p className="profile-advanced-note">{isEnglish
+                  ? "Optional. Questions answered this way are billed to your own provider account, not to Lecue credits."
+                  : "선택 기능입니다. 이 방식의 답변 비용은 Lecue 크레딧이 아니라 본인 공급자 계정에 청구됩니다."}</p>
               <section className="profile-model-settings" aria-labelledby="profile-model-title">
                 <div className="profile-model-heading">
                   <h3 id="profile-model-title">{isEnglish ? "Answer model" : "답변 모델"}</h3>
@@ -2194,6 +2244,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   </>
                 )}
               </section>
+              </details>
 
               <form className="profile-signout" action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
                 <button type="submit">{isEnglish ? "Sign out" : "로그아웃"}</button>
