@@ -12,7 +12,7 @@
   align-items: center;
   padding: 0 24px;
   color: white;
-  background: var(--ink);
+  background: var(--invert-bg);
   border-bottom: 1px solid #000;
 }
 
@@ -56,7 +56,7 @@
 .setup p { margin: 0; color: var(--muted); line-height: 1.6; }
 .setup .ready { color: var(--focus); font-weight: 750; }
 .setup a { color: var(--focus); font-weight: 800; }
-.setup code { padding: 2px 5px; background: white; border: 1px solid var(--line); }
+.setup code { padding: 2px 5px; background: var(--surface); border: 1px solid var(--line); }
 
 .controls {
   min-height: 80px;
@@ -71,7 +71,7 @@
 .controls button {
   min-width: 170px;
   padding: 12px 16px;
-  color: white;
+  color: var(--on-signal);
   background: var(--focus);
   border: 1px solid var(--focus);
   font-weight: 800;
@@ -81,7 +81,7 @@
 .idleDot, .liveDot { width: 9px; height: 9px; border-radius: 50%; background: #8f999c; }
 .liveDot { background: var(--signal); animation: pulse 1.4s ease-in-out infinite; }
 
-.error { margin-bottom: 16px; padding: 12px 14px; color: #7e2014; background: #ffe1dc; border: 1px solid #e7aaa0; font-size: 12px; }
+.error { margin-bottom: 16px; padding: 12px 14px; color: var(--danger); background: var(--danger-tint); border: 1px solid var(--danger-line); font-size: 12px; }
 
 .workspace {
   min-height: 560px;
@@ -89,19 +89,19 @@
   grid-template-columns: .9fr 1.1fr;
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  box-shadow: 8px 9px 0 #cfd8d9;
+  box-shadow: 8px 9px 0 var(--line-strong);
 }
 .script, .results { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .script { border-right: 1px solid var(--line-strong); }
 .script > header, .results > header { display: flex; justify-content: space-between; gap: 16px; padding: 19px 22px; border-bottom: 1px solid var(--line); }
 .script > header span, .results > header span { font-size: 14px; font-weight: 850; }
 .script > header small, .results > header small { color: var(--muted); font-size: 10px; }
-.script > div { padding: 24px 28px; background: #e9eeee; }
+.script > div { padding: 24px 28px; background: color-mix(in srgb, var(--ink) 8%, var(--surface)); }
 .script textarea,
 .script input {
   width: 100%;
   color: var(--ink);
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line-strong);
   font: inherit;
 }
@@ -113,13 +113,13 @@
 .empty { min-height: 420px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; color: var(--muted); text-align: center; }
 .empty b { color: var(--ink); font-size: 16px; }
 .empty span { font-size: 12px; }
-.resultList article { margin-bottom: 16px; padding: 16px; background: white; border: 1px solid var(--line); }
+.resultList article { margin-bottom: 16px; padding: 16px; background: var(--surface); border: 1px solid var(--line); }
 .resultList article > header { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font: 700 10px/1.4 ui-monospace, monospace; }
 .resultList article p { margin: 14px 0; font-size: 14px; line-height: 1.7; }
 .resultList article > div { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .resultList article > div span { margin-right: auto; color: var(--muted); font-size: 10px; }
-.resultList article button { padding: 5px 9px; color: var(--muted); background: white; border: 1px solid var(--line); font-size: 10px; }
-.resultList article button.selected { color: white; background: var(--ink); border-color: var(--ink); }
+.resultList article button { padding: 5px 9px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); font-size: 10px; }
+.resultList article button.selected { color: white; background: var(--invert-bg); border-color: var(--invert-bg); }
 
 .metrics {
   display: grid;
@@ -153,25 +153,25 @@
 }
 
 /* Keep the lab visually aligned with the product's hard-edged structure. */
-.intro { border-bottom: 2px solid var(--ink); }
+.intro { border-bottom: 2px solid var(--edge); }
 .intro > div > p,
 .controls time,
 .resultList article > header {
   font-family: var(--font-mono), ui-monospace, monospace;
 }
 .controls button {
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px 0 var(--ink);
+  border: 2px solid var(--edge);
+  box-shadow: 3px 3px 0 var(--edge);
 }
-.workspace { border: 2px solid var(--ink); box-shadow: 7px 7px 0 var(--focus); }
-.script { border-color: var(--ink); }
+.workspace { border: 2px solid var(--edge); box-shadow: 7px 7px 0 var(--focus); }
+.script { border-color: var(--edge); }
 .script > header,
-.results > header { border-bottom: 2px solid var(--ink); }
-.resultList article { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--line-strong); }
-.resultList article button { border-color: var(--ink); }
+.results > header { border-bottom: 2px solid var(--edge); }
+.resultList article { border: 2px solid var(--edge); box-shadow: 3px 3px 0 var(--line-strong); }
+.resultList article button { border-color: var(--edge); }
 
 @media (hover: hover) {
-  .controls button:not(:disabled):hover { box-shadow: 5px 5px 0 var(--ink); transform: translate(-2px, -2px); }
+  .controls button:not(:disabled):hover { box-shadow: 5px 5px 0 var(--edge); transform: translate(-2px, -2px); }
 }
 
 .controls button:active { box-shadow: none; transform: translate(2px, 2px); }
