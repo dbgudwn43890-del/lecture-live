@@ -10,6 +10,9 @@ type AdminUser = {
   credits: number;
   sessionCount: number;
   lastSessionAt: string | null;
+  socketsOpened: number;
+  segmentsSaved: number;
+  abuseFlag: boolean;
 };
 
 /** 운영자 전용 콘솔. 권한 검사는 전부 /api/admin이 한다 — 이 화면은 그저 표. */
@@ -83,16 +86,24 @@ export default function AdminPage() {
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
-              <tr><th>이메일</th><th>이름</th><th>가입일</th><th>수업</th><th>마지막 수업</th><th>크레딧</th><th>지급</th></tr>
+              <tr><th>이메일</th><th>이름</th><th>가입일</th><th>수업</th><th>마지막 수업</th><th>소켓·문장(7일)</th><th>크레딧</th><th>지급</th></tr>
             </thead>
             <tbody>
               {shown.map((user) => (
-                <tr key={user.id}>
-                  <td>{user.email}</td>
+                <tr key={user.id} className={user.abuseFlag ? "admin-flagged" : undefined}>
+                  <td>
+                    {user.abuseFlag && (
+                      <span className="admin-flag" title="소켓은 여는데 스크립트 저장이 거의 없음 — 남용 의심">⚠ 의심</span>
+                    )}
+                    {user.email}
+                  </td>
                   <td>{user.name}</td>
                   <td>{new Date(user.createdAt).toLocaleDateString("ko-KR")}</td>
                   <td>{user.sessionCount}</td>
                   <td>{user.lastSessionAt ? new Date(user.lastSessionAt).toLocaleDateString("ko-KR") : "—"}</td>
+                  <td className={user.abuseFlag ? "admin-flag-cell" : undefined}>
+                    {user.socketsOpened.toLocaleString("ko-KR")} · {user.segmentsSaved.toLocaleString("ko-KR")}
+                  </td>
                   <td>{user.credits.toLocaleString("ko-KR")}</td>
                   <td className="admin-grant">
                     <input

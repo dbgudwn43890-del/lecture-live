@@ -2604,3 +2604,6 @@ button:active,
 .admin-grant { display: flex; gap: 6px; }
 .admin-grant input { width: 90px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-hard); background: var(--surface); color: var(--ink); }
 .admin-grant button { padding: 5px 12px; border: 0; border-radius: var(--radius-hard); background: var(--focus); color: var(--on-signal); font-weight: 700; }
+.admin-table tr.admin-flagged td { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.admin-flag { margin-right: 6px; color: var(--danger); font-weight: 700; }
+.admin-flag-cell { color: var(--danger); font-weight: 700; }

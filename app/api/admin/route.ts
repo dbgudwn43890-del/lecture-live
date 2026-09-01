@@ -29,9 +29,14 @@ export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
 
+  // 소켓은 여는데 스크립트는 안 남기는 사용자를 찾는 남용 신호 창(최근 7일).
+  // 정상 수업은 몇 초마다 한 문장씩 저장한다 — 분당 수십 개. 소켓만 열고
+  // 저장이 ~0이면 오디오만 흘려보내고 미터를 피한 것이다.
+  const ABUSE_WINDOW_MS = 7 * 86_400_000;
+  const since = new Date(Date.now() - ABUSE_WINDOW_MS).toISOString();
   // ponytail: 페이지네이션 없이 첫 1,000명. 사용자가 그보다 많아지는 날
   // perPage 루프를 돈다 — 그날은 좋은 날이다.
-  const [{ data: userData, error: userError }, { data: grants }, { data: sessions }] = await Promise.all([
+  const [{ data: userData, error: userError }, { data: grants }, { data: sessions }, { data: signals }] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     admin.from("credit_grants")
       .select("user_id, remaining_credits, expires_at, revoked_at")
@@ -39,6 +44,9 @@ export async function GET() {
       .is("revoked_at", null)
       .gt("expires_at", new Date().toISOString()),
     admin.from("lecture_sessions").select("user_id, started_at"),
+    // transcript_segments는 최대 볼륨 테이블이라 앱에서 세면 PostgREST의 1,000행
+    // 상한에 잘려 오히려 헤비 유저가 남용자처럼 보인다. 집계는 Postgres에서.
+    admin.rpc("admin_abuse_signals", { p_since: since }),
   ]);
   if (userError) return NextResponse.json({ error: userError.message }, { status: 502 });
 
@@ -53,18 +61,41 @@ export async function GET() {
     if (session.started_at > current.lastAt) current.lastAt = session.started_at;
     sessionsByUser.set(session.user_id, current);
   }
+  const signalsByUser = new Map<string, { socketsOpened: number; segmentsSaved: number }>();
+  for (const signal of (signals ?? []) as { user_id: string; sockets_opened: number; segments_saved: number }[]) {
+    signalsByUser.set(signal.user_id, { socketsOpened: signal.sockets_opened, segmentsSaved: signal.segments_saved });
+  }
+
+  // 최소 3번은 소켓을 열었고, 소켓당 평균 5문장에도 못 미치면 남용 의심. 정상
+  // 수업은 1분만 녹음해도 수십 문장을 남기므로 우발적 오조작 한두 번은 안 걸린다.
+  const MIN_SOCKETS_TO_FLAG = 3;
+  const MIN_SEGMENTS_PER_SOCKET = 5;
+  function flagged(signal: { socketsOpened: number; segmentsSaved: number }): boolean {
+    return signal.socketsOpened >= MIN_SOCKETS_TO_FLAG
+      && signal.segmentsSaved < signal.socketsOpened * MIN_SEGMENTS_PER_SOCKET;
+  }
 
   return NextResponse.json({
-    users: userData.users.map((user) => ({
-      id: user.id,
-      email: user.email,
-      name: (user.user_metadata as { full_name?: string; name?: string })?.full_name
-        ?? (user.user_metadata as { name?: string })?.name ?? "",
-      createdAt: user.created_at,
-      credits: creditsByUser.get(user.id) ?? 0,
-      sessionCount: sessionsByUser.get(user.id)?.count ?? 0,
-      lastSessionAt: sessionsByUser.get(user.id)?.lastAt || null,
-    })).sort((a, b) => (b.lastSessionAt ?? "").localeCompare(a.lastSessionAt ?? "")),
+    users: userData.users.map((user) => {
+      const signal = signalsByUser.get(user.id) ?? { socketsOpened: 0, segmentsSaved: 0 };
+      return {
+        id: user.id,
+        email: user.email,
+        name: (user.user_metadata as { full_name?: string; name?: string })?.full_name
+          ?? (user.user_metadata as { name?: string })?.name ?? "",
+        createdAt: user.created_at,
+        credits: creditsByUser.get(user.id) ?? 0,
+        sessionCount: sessionsByUser.get(user.id)?.count ?? 0,
+        lastSessionAt: sessionsByUser.get(user.id)?.lastAt || null,
+        socketsOpened: signal.socketsOpened,
+        segmentsSaved: signal.segmentsSaved,
+        abuseFlag: flagged(signal),
+      };
+    }).sort((a, b) => {
+      // 의심 계정을 맨 위로, 그 다음은 기존대로 최근 수업 순.
+      if (a.abuseFlag !== b.abuseFlag) return a.abuseFlag ? -1 : 1;
+      return (b.lastSessionAt ?? "").localeCompare(a.lastSessionAt ?? "");
+    }),
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
