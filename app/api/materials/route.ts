@@ -107,6 +107,16 @@ export async function POST(request: Request) {
   if ("response" in current) return current.response;
   const { isEnglish, supabase, userId } = current;
 
+  // The per-minute limit alone allowed 43k platform-key LLM extractions a
+  // day. No real learner uploads anywhere near this many materials.
+  const dailyLimit = await checkSharedRateLimit(`materials-daily:${userId}`, 100, 86_400_000);
+  if (!dailyLimit.allowed) {
+    return NextResponse.json(
+      { error: isEnglish ? "Daily material upload limit reached. Try again tomorrow." : "오늘 올릴 수 있는 강의 자료 수를 모두 사용했습니다. 내일 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(dailyLimit.retryAfterSeconds) } },
+    );
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: isEnglish ? "Material indexing is not configured yet." : "강의 자료 색인이 아직 설정되지 않았습니다." }, { status: 503 });
   }

@@ -26,13 +26,18 @@ export default function AdminPage() {
 
   async function load() {
     setError("");
-    const response = await fetch("/api/admin", { cache: "no-store" });
-    const data = await response.json() as { users?: AdminUser[]; error?: string };
-    if (!response.ok || !data.users) {
-      setError(data.error ?? "목록을 불러오지 못했습니다.");
-      return;
+    try {
+      const response = await fetch("/api/admin", { cache: "no-store" });
+      const data = await response.json() as { users?: AdminUser[]; error?: string };
+      if (!response.ok || !data.users) {
+        setError(data.error ?? "목록을 불러오지 못했습니다.");
+        return;
+      }
+      setUsers(data.users);
+    } catch {
+      // 네트워크 오류·비JSON 응답이 "불러오는 중…"에 화면을 영영 묶어두지 않게.
+      setError("목록을 불러오지 못했습니다.");
     }
-    setUsers(data.users);
   }
   useEffect(() => { void load(); }, []);
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isUuid } from "../../lib/billing";
 import { getClassroomData } from "../../lib/classroom-data";
 import { parseGlossary } from "../../lib/glossary";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
@@ -78,7 +79,7 @@ export async function PATCH(request: Request) {
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const editsTitle = body.title !== undefined;
   const editsGlossary = body.glossary !== undefined;
-  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(classroomId) || (editsTitle && (!title || title.length > 80))) {
+  if (!isUuid(classroomId) || (editsTitle && (!title || title.length > 80))) {
     return NextResponse.json({ error: current.isEnglish ? "Check the classroom name." : "강의실 이름을 확인해 주세요." }, { status: 400 });
   }
   if (!editsTitle && !editsGlossary) {

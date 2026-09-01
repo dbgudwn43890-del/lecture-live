@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type BillingPlan = "monthly" | "term" | "semester";
 type Locale = "ko" | "en";
@@ -52,6 +52,11 @@ export function usePaddleCheckout(
   // Paddle's eventCallback is registered once, so it would close over the
   // first render's `pending`. Read it through a ref instead.
   const pendingRef = useRef<BillingPlan | "webhook" | null>(null);
+  // The 20-second poll after checkout used to keep running after the buyer
+  // navigated away, then yanked them to /classroom from whatever page they
+  // were reading.
+  const unmountedRef = useRef(false);
+  useEffect(() => () => { unmountedRef.current = true; }, []);
   const t = copy[locale];
 
   function updatePending(next: BillingPlan | "webhook" | null) {
@@ -93,16 +98,23 @@ export function usePaddleCheckout(
     const baseline = baselineRef.current;
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-      const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
-      if (response.ok) {
-        const current = await response.json() as { credits?: number; latestGrantAt?: string | null };
-        if ((current.credits ?? 0) > baseline.credits || current.latestGrantAt !== baseline.grantAt) {
-          updatePending(null);
-          onCreditsGranted();
-          return;
+      if (unmountedRef.current) return;
+      try {
+        const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
+        if (response.ok) {
+          const current = await response.json() as { credits?: number; latestGrantAt?: string | null };
+          if (unmountedRef.current) return;
+          if ((current.credits ?? 0) > baseline.credits || current.latestGrantAt !== baseline.grantAt) {
+            updatePending(null);
+            onCreditsGranted();
+            return;
+          }
         }
+      } catch {
+        // A flaky poll is just a missed attempt, not an unhandled rejection.
       }
     }
+    if (unmountedRef.current) return;
     // Refresh in place. Calling onCreditsGranted here navigated the buyer to
     // a "payment success" screen with none of the credits actually granted.
     onRefresh?.();

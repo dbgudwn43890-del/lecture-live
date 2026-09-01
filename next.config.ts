@@ -12,6 +12,21 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/materials": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
   },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+          // 마이크는 워크스페이스가 쓰고, 나머지 강력 권한은 어디서도 안 쓴다.
+          { key: "Permissions-Policy", value: "camera=(), geolocation=(), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)" },
+        ],
+      },
+    ];
+  },
   async redirects() {
     const preview = [
       { source: "/preview", destination: "/", permanent: true },

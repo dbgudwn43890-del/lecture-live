@@ -97,17 +97,23 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
   }, [ready, status, statusFailed]);
 
   async function loadStatus() {
-    const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
-    if (!response.ok) {
-      // Returning silently left status null, which disabled every purchase
-      // button behind a message saying everything was fine.
+    try {
+      const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
+      if (!response.ok) {
+        // Returning silently left status null, which disabled every purchase
+        // button behind a message saying everything was fine.
+        setStatusFailed(true);
+        return null;
+      }
+      setStatusFailed(false);
+      const data = await response.json() as CreditStatus;
+      setStatus(data);
+      return data;
+    } catch {
+      // A network failure is the same story as a non-OK response.
       setStatusFailed(true);
       return null;
     }
-    setStatusFailed(false);
-    const data = await response.json() as CreditStatus;
-    setStatus(data);
-    return data;
   }
 
   async function openPortal() {

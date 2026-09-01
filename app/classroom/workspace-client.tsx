@@ -217,6 +217,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const segmentsRef = useRef<Segment[]>([]);
   const activeSessionIdRef = useRef("");
   const finishingRef = useRef(false);
+  // startLecture in-flight guard: state alone lets a double-click race the
+  // re-render and start everything twice.
+  const startingRef = useRef(false);
   const saveFailuresRef = useRef(0);
   // Deepgram's stream clock restarts at 0 on every socket, so a reconnect would
   // collide with earlier segments without this.
@@ -254,7 +257,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     if (storedTheme === "dark" || storedTheme === "light") setThemeState(storedTheme);
     // 답변 모델 선택도 새로고침을 견딘다. 언어 저장과 같은 방식.
     const provider = window.localStorage.getItem("lecue-ai-provider");
-    if (provider && provider !== "lecture-live" && provider in personalModelOptions) {
+    if (provider && provider !== "lecture-live" && Object.hasOwn(personalModelOptions, provider)) {
       const options = personalModelOptions[provider as PersonalProvider];
       const model = window.localStorage.getItem("lecue-ai-model");
       setAiProvider(provider as AiProvider);
@@ -1354,7 +1357,12 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
     socket.onmessage = (event) => {
       if (socketRef.current !== socket) return;
-      const parsed = JSON.parse(event.data as string);
+      let parsed;
+      try {
+        parsed = JSON.parse(event.data as string);
+      } catch {
+        return; // 공급자가 비JSON 프레임을 보내도 세션은 계속 간다.
+      }
       // Soniox 토큰 응답은 어댑터가 Deepgram 모양으로 바꾼다. 아래 로직은 공용.
       const messages = sonioxConfig
         ? adaptSonioxMessages(parsed as SonioxMessage)
@@ -1419,7 +1427,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   }
 
   async function startLecture() {
-    if (finishingRef.current) return;
+    // 더블클릭이 리렌더보다 빠르면 status 검사만으로는 두 번 다 통과해서
+    // getUserMedia·세션 생성·소켓이 전부 이중으로 뜬다.
+    if (finishingRef.current || startingRef.current || status === "connecting" || status === "recording" || status === "paused") return;
+    startingRef.current = true;
     // ACC-02/ACC-03의 계정 동의는 여기서 묻지 않는다. 가입할 때 받고, 기록이
     // 없는 계정은 강의실에 들어오는 순간 한 번 묻는다 — 강의가 막 시작되려는
     // 순간에 약관을 읽히는 것은 동의를 받는 방법이 아니라 누르게 만드는 방법이다.
@@ -1484,7 +1495,9 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       setMessages([]);
 
       await connectDeepgram(stream);
+      startingRef.current = false;
     } catch (caught) {
+      startingRef.current = false;
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       stopMicMeter();

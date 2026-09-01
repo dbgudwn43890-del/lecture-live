@@ -6,6 +6,7 @@ import {
   isPersonalProvider,
   type PersonalProvider,
 } from "../../lib/llm-models";
+import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createAdminClient } from "../../lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -33,6 +34,15 @@ function unavailable(request: Request) {
 async function authenticatedAdmin(request: Request) {
   const userId = await getAuthenticatedUserId();
   if (!userId) return { response: NextResponse.json({ error: isEnglishRequest(request) ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
+  // The only authenticated route that had no shared limit — PUT reaches the
+  // Vault write RPC.
+  const rateLimit = await checkSharedRateLimit(`llm-credentials:${userId}`, 20, 60_000);
+  if (!rateLimit.allowed) {
+    return { response: NextResponse.json(
+      { error: isEnglishRequest(request) ? "Too many requests. Try again shortly." : "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    ) };
+  }
   const admin = createAdminClient();
   if (!admin) return { response: unavailable(request) };
   return { userId, admin };

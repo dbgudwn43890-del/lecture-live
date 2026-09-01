@@ -11,7 +11,9 @@ import {
   MAX_AUDIO_MS,
   prerecordedUrl,
 } from "../../lib/lecture-audio";
+import { hasRecordingConsents } from "../../lib/consent";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
+import { createAdminClient } from "../../lib/supabase/admin";
 import { createClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -35,7 +37,14 @@ async function context(request: Request) {
       { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
     ) };
   }
-  return { userId: user.id, supabase, isEnglish };
+  // uploads rows are read-only for the authenticated role (20260902010000);
+  // every write in this route goes through the service key.
+  const admin = createAdminClient();
+  if (!admin) {
+    console.error("Lecture audio has no admin client");
+    return { response: NextResponse.json({ error: isEnglish ? "File transcription is not configured yet." : "녹음 파일 변환이 아직 설정되지 않았습니다." }, { status: 503 }) };
+  }
+  return { userId: user.id, supabase, admin, isEnglish };
 }
 
 /**
@@ -47,7 +56,7 @@ async function context(request: Request) {
  * ponytail: piggybacked on polling. Move to a scheduled function if uploads
  * ever outlive the sessions that watch them.
  */
-async function sweepExpired(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function sweepExpired(supabase: Awaited<ReturnType<typeof createClient>>, admin: NonNullable<ReturnType<typeof createAdminClient>>) {
   const { data: expired } = await supabase
     .from("uploads")
     .select("id,object_key")
@@ -56,7 +65,7 @@ async function sweepExpired(supabase: Awaited<ReturnType<typeof createClient>>) 
     .limit(20);
   for (const upload of expired ?? []) {
     if (upload.object_key) await supabase.storage.from("lecture-audio").remove([upload.object_key]);
-    await supabase
+    await admin
       .from("uploads")
       .update({ status: "deleted", object_key: null, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("id", upload.id);
@@ -67,7 +76,7 @@ async function sweepExpired(supabase: Awaited<ReturnType<typeof createClient>>) 
 export async function GET(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
-  await sweepExpired(current.supabase);
+  await sweepExpired(current.supabase, current.admin);
 
   const sessionId = new URL(request.url).searchParams.get("sessionId");
   const query = current.supabase
@@ -93,7 +102,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
-  const { isEnglish, supabase, userId } = current;
+  const { admin, isEnglish, supabase, userId } = current;
+
+  // Uploads are recordings too: the same legal gate as live lectures
+  // (ACC-02/03), enforced here rather than only in the dialog.
+  if (!(await hasRecordingConsents(supabase))) {
+    return NextResponse.json({
+      error: isEnglish ? "Transcription requires the age and recording agreements." : "녹음 파일을 변환하려면 만 14세 확인과 녹음 고지에 동의해야 합니다.",
+    }, { status: 403 });
+  }
 
   const apiKey = process.env.DEEPGRAM_API_KEY;
   const callbackBase = process.env.SITE_URL;
@@ -197,7 +214,7 @@ export async function POST(request: Request) {
   }
 
   const objectKey = `${userId}/${randomUUID()}.${extension}`;
-  const { data: upload, error: uploadRowError } = await supabase
+  const { data: upload, error: uploadRowError } = await admin
     .from("uploads")
     .insert({
       session_id: session.id,
@@ -219,7 +236,7 @@ export async function POST(request: Request) {
 
   const fail = async (code: string, message: string, status: number) => {
     await supabase.storage.from("lecture-audio").remove([objectKey]);
-    await supabase.from("uploads").update({ status: "failed", error_code: code, updated_at: new Date().toISOString() }).eq("id", upload.id);
+    await admin.from("uploads").update({ status: "failed", error_code: code, updated_at: new Date().toISOString() }).eq("id", upload.id);
     // The lecture never existed as far as the learner is concerned: no
     // transcript, no charge. Leaving an empty session in the sidebar would be
     // a row they have to clean up themselves.
@@ -274,7 +291,7 @@ export async function POST(request: Request) {
     return fail("provider", isEnglish ? "Could not start transcription." : "받아쓰기를 시작하지 못했습니다.", 502);
   }
 
-  const { data: queued } = await supabase
+  const { data: queued } = await admin
     .from("uploads")
     .update({ status: "processing", provider_request_id: requestId, updated_at: new Date().toISOString() })
     .eq("id", upload.id)

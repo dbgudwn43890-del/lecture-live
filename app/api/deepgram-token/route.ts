@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../lib/auth";
 import { isUuid } from "../../lib/billing";
+import { hasRecordingConsents } from "../../lib/consent";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { bootstrapTerms } from "../../lib/bootstrap-terms";
 import { deepgramLanguage, listenUrl } from "../../lib/deepgram";
@@ -59,6 +60,14 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+
+  // The consent dialog only gates the UI; this is the enforcement (ACC-02/03).
+  if (!(await hasRecordingConsents(supabase))) {
+    return NextResponse.json({
+      error: isEnglish ? "Recording requires the age and recording agreements." : "녹음을 시작하려면 만 14세 확인과 녹음 고지에 동의해야 합니다.",
+    }, { status: 403 });
+  }
+
   // The grant is independent of our database. Mint it while the credit,
   // glossary and transcript preflight run instead of adding another network
   // round trip after them. An unused 30-second grant is never returned.
