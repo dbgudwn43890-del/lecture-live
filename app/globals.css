@@ -386,6 +386,31 @@ a, button, summary, input, textarea, select {
   border: 0;
 }
 
+.error-banner, .notice-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.banner-dismiss {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: .65;
+  cursor: pointer;
+  font-size: 12px;
+}
+.banner-dismiss:hover { opacity: 1; }
+.banner-action {
+  flex: 0 0 auto;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .panes {
   min-height: 0;
   display: grid;

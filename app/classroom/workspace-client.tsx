@@ -1037,9 +1037,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     }
   }
 
-  const canAsk = (segments.length > 0 || interim.length > 0)
+  const hasTranscript = segments.length > 0 || interim.length > 0;
+  // 진행 중인 강의는 크레딧이 다 떨어져도 질문까지는 막지 않는다.
+  const creditsAllowAsk = creditStatus === null || creditStatus.credits > 0 || status === "recording" || status === "paused";
+  const outOfCredits = creditStatus !== null && creditStatus.credits <= 0;
+  const canAsk = hasTranscript
     && !messages.some((message) => message.pending)
-    && (creditStatus === null || creditStatus.credits > 0 || status === "recording" || status === "paused");
+    && creditsAllowAsk;
 
   /**
    * 놓친 구간 복구. 질문을 문장으로 못 쓰는 순간이 강의에서는 훨씬 잦다 — 무엇을
@@ -1742,8 +1746,23 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             </span>
           </div>
         </dialog>
-        <div className="error-banner" role="alert">{error}</div>
-        <div className="notice-banner" role="status">{notice}</div>
+        <div className="error-banner" role="alert">{error && <>
+          <span>{error}</span>
+          <button type="button" className="banner-dismiss" onClick={() => setError("")} aria-label={isEnglish ? "Dismiss" : "닫기"}>✕</button>
+        </>}</div>
+        <div className="notice-banner" role="status">{notice && <>
+          <span>{notice}</span>
+          <button type="button" className="banner-dismiss" onClick={() => setNotice("")} aria-label={isEnglish ? "Dismiss" : "닫기"}>✕</button>
+        </>}</div>
+        {/* 크레딧 0은 버튼만 죽는 게 아니라 이유와 다음 행동이 보여야 한다. */}
+        {outOfCredits && status !== "recording" && status !== "paused" && (
+          <div className="notice-banner">
+            <span>{isEnglish
+              ? "You are out of credits, so new recordings and questions are paused."
+              : "크레딧을 모두 사용해 새 녹음과 질문이 잠시 멈춰 있습니다."}</span>
+            <Link className="banner-action" href={`${basePath}/billing`}>{isEnglish ? "Get credits" : "크레딧 충전하기"}</Link>
+          </div>
+        )}
 
         <div className="mobile-pane-switch" aria-label={isEnglish ? "Workspace view" : "작업 화면 선택"}>
           <button type="button" aria-pressed={mobilePane === "chat"} onClick={() => setMobilePane("chat")}>
@@ -1898,11 +1917,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   event.currentTarget.form?.requestSubmit();
                 }
               }}
-              placeholder={canAsk
-                ? isEnglish ? "Ask about this lecture" : "이 강의에 대해 질문하세요"
-                : isEnglish ? "You can ask once the transcript begins" : "스크립트가 들어오면 질문할 수 있습니다"}
+              placeholder={!creditsAllowAsk
+                ? isEnglish ? "Add credits to keep asking" : "크레딧을 충전하면 질문할 수 있습니다"
+                : hasTranscript
+                  ? isEnglish ? "Ask about this lecture" : "이 강의에 대해 질문하세요"
+                  : isEnglish ? "You can ask once the transcript begins" : "스크립트가 들어오면 질문할 수 있습니다"}
               maxLength={1_000}
-              disabled={!canAsk}
+              // 답변을 기다리는 동안에도 다음 질문은 미리 쓸 수 있다. 전송만 막는다.
+              disabled={!hasTranscript || !creditsAllowAsk}
               rows={2}
             />
             <button type="submit" disabled={!canAsk || !question.trim()} aria-label={isEnglish ? "Send question" : "질문 보내기"}>
