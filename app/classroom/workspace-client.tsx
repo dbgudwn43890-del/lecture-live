@@ -167,6 +167,15 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     : { idle: "시작 전", connecting: "연결 중", recording: "기록 중", paused: "일시정지", ended: "종료됨", error: "연결 확인 필요" };
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
+  // 시간대 인사는 클라이언트 시계 기준이라 마운트 후에 채운다(SSR 불일치 방지).
+  const [greeting, setGreeting] = useState("");
+  useEffect(() => {
+    const hour = new Date().getHours();
+    const slot = hour < 5 ? 3 : hour < 11 ? 0 : hour < 17 ? 1 : hour < 22 ? 2 : 3;
+    setGreeting((isEnglish
+      ? ["Good morning — let's learn something today.", "Good afternoon — ready when you are.", "Good evening — one more lecture to go.", "Studying late? Let's make it count."]
+      : ["좋은 아침이에요, 오늘도 공부해 볼까요?", "좋은 오후예요, 준비되면 시작해요.", "좋은 저녁이에요, 오늘 마지막 강의까지 힘내요.", "늦은 시간까지 대단해요, 알차게 남겨드릴게요."])[slot]);
+  }, [isEnglish]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [mobilePane, setMobilePane] = useState<"chat" | "transcript">("chat");
@@ -252,6 +261,17 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   // 지난 부분을 다시 읽는 중에는 새 문장이 와도 바닥으로 끌어내리지 않는다.
   const transcriptFollowRef = useRef(true);
   const initialRouteRef = useRef(false);
+  // 방금 녹음을 끝낸 순간에만 격려 배너를 띄운다. 복원으로 열린 ended 세션엔 안 띄운다.
+  const previousStatusRef = useRef(status);
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = status;
+    if (status === "ended" && (previous === "recording" || previous === "paused" || previous === "connecting")) {
+      setNotice(isEnglish
+        ? "Nice work! Generate a lecture note to lock in what you learned today."
+        : "수고했어요! 강의 노트를 만들면 오늘 배운 내용이 깔끔하게 정리돼요.");
+    }
+  }, [status, isEnglish]);
   const consentDialogRef = useRef<HTMLDialogElement | null>(null);
   const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
 
@@ -2200,6 +2220,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           >
             {segments.length === 0 && !interim ? (
               <div className="empty-transcript">
+                {status === "idle" && greeting && <strong className="empty-greeting">{greeting}</strong>}
                 <p>{status === "connecting"
                   ? isEnglish ? "Connecting to the microphone" : "마이크와 연결하는 중입니다"
                   : isEnglish ? "Speech will appear here once you start the lecture" : "강의를 시작하면 말이 이곳에 쌓입니다"}</p>

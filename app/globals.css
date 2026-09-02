@@ -3321,3 +3321,12 @@ button:active,
   border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
   background: color-mix(in srgb, var(--signal) 6%, var(--surface));
 }
+
+/* 시작 전 빈 화면의 시간대 인사. 안내문보다 한 단 크게, 잉크색으로. */
+.empty-greeting {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
