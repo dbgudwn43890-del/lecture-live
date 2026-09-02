@@ -2049,9 +2049,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             {messages.length === 0 ? (
               <div className="empty-chat">
                 <p>{isEnglish ? "Ask as soon as the lecture starts." : "강의가 시작되면 바로 물어보세요."}</p>
-                <span>{isEnglish
-                  ? "Answers are grounded in the lecture flow up to the moment you ask."
-                  : "질문한 시점까지의 강의 흐름을 근거로 답합니다."}</span>
                 <div className="empty-chat-examples">
                   {(isEnglish
                     ? ["Explain that formula again, simply", "Summarize the last 10 minutes"]
@@ -2229,30 +2226,35 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           >
             {segments.length === 0 && !interim ? (
               <div className="empty-transcript">
-                {status === "idle" && greeting && <strong className="empty-greeting">{greeting}</strong>}
-                <p>{status === "connecting"
-                  ? isEnglish ? "Connecting to the microphone" : "마이크와 연결하는 중입니다"
-                  : isEnglish ? "Speech will appear here once you start the lecture" : "강의를 시작하면 말이 이곳에 쌓입니다"}</p>
-                <span>{isEnglish
-                  ? "Place your laptop near the speaker for better recognition."
-                  : "노트북을 강사와 가까운 곳에 두면 인식률이 좋아집니다."}</span>
-                {/* 이 화면의 유일한 할 일이 우상단 구석에만 있으면 멀다.
-                    빈 화면 한가운데에서도 바로 시작할 수 있게 한다. */}
-                {status === "idle" && canStart && (
-                  <button type="button" className="start-button empty-start-button" onClick={startLecture}>
-                    {isEnglish ? "Start lecture" : "강의 시작"}
-                  </button>
-                )}
-                {/* 계정에 세션이 하나도 없을 때만: 첫 사용 3단계. */}
-                {status === "idle" && sessionsById.size === 0 && (
-                  <ol className="onboarding-steps">
-                    {(isEnglish
-                      ? ["Sit near the speaker and check your mic", "Press Start lecture — speech piles up here live", "Ask anything the moment you get lost"]
-                      : ["강사 가까이에 앉아 마이크를 확인하세요", "강의 시작을 누르면 말이 실시간으로 쌓여요", "놓친 순간 바로 왼쪽 채팅에 물어보세요"]
-                    ).map((step, index) => (
-                      <li key={step}><em>{index + 1}</em>{step}</li>
-                    ))}
-                  </ol>
+                {/* 시작 전: 인사 + 팁 한 줄 + 버튼. 첫 방문이면 팁 대신 3단계. */}
+                {status === "idle" ? (
+                  <>
+                    {greeting && <strong className="empty-greeting">{greeting}</strong>}
+                    {sessionsById.size === 0 ? (
+                      <ol className="onboarding-steps">
+                        {(isEnglish
+                          ? ["Sit near the speaker and check your mic", "Press Start lecture — speech piles up here live", "Ask anything the moment you get lost"]
+                          : ["강사 가까이에 앉아 마이크를 확인하세요", "강의 시작을 누르면 말이 실시간으로 쌓여요", "놓친 순간 바로 왼쪽 채팅에 물어보세요"]
+                        ).map((step, index) => (
+                          <li key={step}><em>{index + 1}</em>{step}</li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <span>{isEnglish
+                        ? "Place your laptop near the speaker for better recognition."
+                        : "노트북을 강사 가까이 두면 인식률이 좋아져요."}</span>
+                    )}
+                    {/* 이 화면의 유일한 할 일이 우상단 구석에만 있으면 멀다. */}
+                    {canStart && (
+                      <button type="button" className="start-button empty-start-button" onClick={startLecture}>
+                        {isEnglish ? "Start lecture" : "강의 시작"}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <p>{status === "connecting"
+                    ? isEnglish ? "Connecting to the microphone" : "마이크와 연결하는 중입니다"
+                    : isEnglish ? "Speech will appear here once you start the lecture" : "강의를 시작하면 말이 이곳에 쌓입니다"}</p>
                 )}
               </div>
             ) : (
