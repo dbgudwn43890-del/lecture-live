@@ -1605,12 +1605,6 @@ a, button, summary, input, textarea, select {
   border-color: var(--edge);
 }
 
-.lecture-title-field input,
-.classroom-create input,
-.classroom-rename input {
-  border-width: 2px;
-}
-
 .start-button,
 .stop-button,
 .classroom-create button,
@@ -1748,6 +1742,9 @@ button:active,
   width: 22px;
   height: 22px;
   padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   border-radius: 6px;
   color: var(--muted);
   font-size: 13px;
@@ -3191,3 +3188,55 @@ button:active,
 
 .note-quota { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .note-regenerate:disabled { opacity: .45; }
+
+/* ── 필드 디자인 시스템 ──────────────────────────────────────
+   흩어져 있던 인풋들을 한 벌로 통일한다: 같은 표면, 1px 테두리, 10px 라운드,
+   포커스에서 브라우저 기본 아웃라인 대신 브랜드 글로우 링. 파일 끝이라
+   기존 개별 규칙을 이긴다. */
+.sidebar-search,
+.sidebar-create-classroom input,
+.workspace .sidebar-create-classroom input,
+.classroom-rename input,
+.classroom-edit-form input,
+.classroom-edit-form textarea,
+.profile-api-key input,
+.settings-select,
+.admin-search {
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--ink);
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.sidebar-search:focus,
+.sidebar-create-classroom input:focus,
+.classroom-rename input:focus,
+.classroom-edit-form input:focus,
+.classroom-edit-form textarea:focus,
+.profile-api-key input:focus,
+.settings-select:focus,
+.admin-search:focus {
+  outline: none;
+  border-color: var(--signal);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 20%, transparent);
+}
+
+/* 강의실 추가의 ＋는 필드와 한 몸: 같은 높이, 브랜드 채움. */
+.sidebar-create-classroom > div { grid-template-columns: minmax(0, 1fr) 32px; gap: 6px; }
+.workspace .sidebar-create-classroom button,
+.sidebar-create-classroom button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--signal);
+  color: var(--on-signal);
+  font-size: 15px;
+  font-weight: 700;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+.workspace .sidebar-create-classroom button:hover:not(:disabled),
+.sidebar-create-classroom button:hover:not(:disabled) { background: var(--signal-dark); color: var(--on-signal); }
+.sidebar-create-classroom button:disabled { opacity: .4; }
