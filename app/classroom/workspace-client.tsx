@@ -859,7 +859,11 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       confirmedSegmentIdsRef.current = new Set(segmentIdsRef.current);
       setMessages((data.questions ?? []).flatMap((item) => [
         { id: `${item.id}-q`, role: "user" as const, text: item.question },
-        { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerText(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: `${item.provider} · ${item.model}` },
+        // 저장된 provider는 내부 식별자다("lecture-live", "openai"). 그대로
+        // 보여주지 않고 화면용 이름으로 바꾼다. 기본 AI는 모델명도 숨긴다.
+        { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerText(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, assistantLabel: item.provider === "lecture-live"
+          ? (isEnglish ? "Lecture assistant · Default AI" : "강의 조교 · 기본 AI")
+          : `${providerNames[item.provider as PersonalProvider] ?? item.provider} · ${item.model}` },
       ]));
       showInterim("");
       let recordedMs = data.session.recorded_ms ?? data.session.duration_seconds * 1_000;
@@ -2007,6 +2011,13 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 <span>{isEnglish
                   ? "Place your laptop near the speaker for better recognition."
                   : "노트북을 강사와 가까운 곳에 두면 인식률이 좋아집니다."}</span>
+                {/* 이 화면의 유일한 할 일이 우상단 구석에만 있으면 멀다.
+                    빈 화면 한가운데에서도 바로 시작할 수 있게 한다. */}
+                {status === "idle" && canStart && (
+                  <button type="button" className="start-button empty-start-button" onClick={startLecture}>
+                    {isEnglish ? "Start lecture" : "강의 시작"}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="transcript-copy">

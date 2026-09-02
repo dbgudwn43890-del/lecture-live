@@ -500,6 +500,8 @@ a, button, summary, input, textarea, select {
 
 .empty-chat span, .empty-transcript span { max-width: 380px; font-size: 13px; line-height: 1.65; }
 
+.empty-start-button { margin-top: 10px; }
+
 .message { margin: 0 0 24px; }
 .message-user { margin-left: 15%; }
 
