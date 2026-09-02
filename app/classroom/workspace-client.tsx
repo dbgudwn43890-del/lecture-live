@@ -1,6 +1,7 @@
 "use client";
 
 import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, MoreHorizontal, MoreVertical, Plus, Search, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { DragDropProvider, useDraggable, useDroppable } from "@dnd-kit/react";
@@ -1322,7 +1323,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           title={session.title}
         >{session.title}</button>
         <details className="session-menu">
-          <summary aria-label={isEnglish ? "Lecture options" : "수업 옵션"}>⋮</summary>
+          <summary aria-label={isEnglish ? "Lecture options" : "수업 옵션"}><MoreVertical size={14} aria-hidden="true" /></summary>
           <div className="session-menu-panel">
             <button type="button" onClick={(event) => { closeMenu(event); setRenamingSessionId(session.id); }}>
               {isEnglish ? "Rename" : "이름 변경"}
@@ -1402,7 +1403,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 setEditingClassroomTitle(label);
                 setEditingGlossary(glossary);
               }}
-            >⋯</button>
+            ><MoreHorizontal size={14} aria-hidden="true" /></button>
           )}
         </div>
         <div className="sidebar-sessions">{visibleSessions.map(renderSessionRow)}</div>
@@ -1421,7 +1422,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           onClick={prepareNewLecture}
           disabled={status === "recording" || status === "connecting"}
         >
-          <span aria-hidden="true">＋</span>
+          <Plus size={16} aria-hidden="true" />
           {isEnglish ? "New lecture" : "새 수업"}
         </button>
 
@@ -1449,7 +1450,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                   return !open;
                 })}
               >
-                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.6" /><line x1="10.4" y1="10.4" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                <Search size={13} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -1457,7 +1458,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 aria-expanded={createOpen}
                 aria-label={isEnglish ? "Add a classroom" : "강의실 추가"}
                 onClick={() => setCreateOpen((open) => !open)}
-              >＋</button>
+              ><Plus size={14} aria-hidden="true" /></button>
             </div>
           </div>
 
@@ -1492,7 +1493,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                   disabled={classroomPending}
                   aria-label={isEnglish ? "New classroom name" : "새 강의실 이름"}
                 />
-                <button type="submit" disabled={classroomPending || !newClassroomTitle.trim()} aria-label={isEnglish ? "Add classroom" : "강의실 추가"}>＋</button>
+                <button type="submit" disabled={classroomPending || !newClassroomTitle.trim()} aria-label={isEnglish ? "Add classroom" : "강의실 추가"}><Plus size={15} aria-hidden="true" /></button>
               </div>
             </form>
           )}
@@ -1804,7 +1805,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               </label>
               {status === "ended" && activeSessionId && (
                 <button className="note-button" type="button" onClick={() => setNoteOpen(true)}>
-                  <span aria-hidden="true">✦</span>
+                  <Sparkles size={13} aria-hidden="true" />
                   {isEnglish ? "Lecture note" : "강의 노트"}
                 </button>
               )}
@@ -2106,7 +2107,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               rows={1}
             />
             <button type="submit" disabled={!canAsk || !question.trim()} aria-label={isEnglish ? "Send question" : "질문 보내기"}>
-              ↑
+              <ArrowUp size={16} aria-hidden="true" />
             </button>
           </form>
           </section>

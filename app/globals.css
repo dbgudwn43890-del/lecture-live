@@ -34,8 +34,8 @@
   /* Soft, not sharp: two radii and light-diffusing shadows, since the brand
      reads premium rather than brutalist. The --brutal-* names are kept because
      a dozen app stylesheets already reference them. */
-  --radius: 12px;
-  --radius-hard: 8px;
+  --radius: 14px;
+  --radius-hard: 10px;
   --pop-shadow: 0 1px 2px rgba(28, 24, 37, .05), 0 14px 34px -16px rgba(28, 24, 37, .22);
   --brutal-border: 1px solid var(--line-strong);
   --brutal-shadow: 0 10px 28px -16px rgba(28, 24, 37, .32);
@@ -95,7 +95,7 @@
 /* 밝은 회색 오프셋 그림자는 다크에서 번진 자국처럼 보인다. */
 [data-theme="dark"] .chat-pane,
 [data-theme="dark"] .transcript-pane,
-[data-theme="dark"] .classroom-unit { box-shadow: 4px 4px 0 rgba(0, 0, 0, .5); }
+[data-theme="dark"] .classroom-unit { box-shadow: 0 12px 30px -14px rgba(0, 0, 0, .7); }
 
 /* 라이트의 --paper 띠는 다크에서 시커먼 골이 된다. 패널과 반 단계만 벌린다. */
 [data-theme="dark"] .material-toolbar { background: color-mix(in srgb, var(--paper) 45%, var(--surface)); }
@@ -433,7 +433,7 @@ a, button, summary, input, textarea, select {
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  box-shadow: 3px 4px 0 var(--line-strong);
+  box-shadow: var(--brutal-shadow);
   overflow: hidden;
 }
 
@@ -456,7 +456,7 @@ a, button, summary, input, textarea, select {
   margin: 0;
   font-size: clamp(19px, 2vw, 25px);
   line-height: 1.15;
-  letter-spacing: -.045em;
+  letter-spacing: -.025em;
 }
 
 .count {
@@ -649,6 +649,8 @@ a, button, summary, input, textarea, select {
 }
 
 .question-form button {
+  display: grid;
+  place-items: center;
   width: 38px;
   height: 38px;
   margin-bottom: 3px;
@@ -884,8 +886,8 @@ a, button, summary, input, textarea, select {
 .login-topbar .brand {
   color: var(--ink);
   font-size: 18px;
-  font-weight: 900;
-  letter-spacing: -.045em;
+  font-weight: 760;
+  letter-spacing: -.025em;
   text-decoration: none;
 }
 
@@ -943,9 +945,9 @@ a, button, summary, input, textarea, select {
 .auth-heading h1 {
   margin: 0 0 10px;
   font-size: 31px;
-  font-weight: 900;
+  font-weight: 760;
   line-height: 1.12;
-  letter-spacing: -.05em;
+  letter-spacing: -.03em;
 }
 
 .auth-heading p {
@@ -1123,8 +1125,8 @@ a, button, summary, input, textarea, select {
 .email-confirmation h2 {
   margin: 14px 0 24px;
   font-size: 31px;
-  font-weight: 900;
-  letter-spacing: -.05em;
+  font-weight: 760;
+  letter-spacing: -.03em;
 }
 
 .email-confirmation p {
@@ -1212,7 +1214,7 @@ a, button, summary, input, textarea, select {
 .classrooms-intro > div > span {
   color: var(--focus);
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 760;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
@@ -1239,13 +1241,13 @@ a, button, summary, input, textarea, select {
   padding: 21px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  box-shadow: 4px 5px 0 var(--line-strong);
+  box-shadow: var(--brutal-shadow);
 }
 
-.classroom-create label { font-size: 11px; font-weight: 850; }
+.classroom-create label { font-size: 11px; font-weight: 700; }
 .classroom-create > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
 .classroom-create input { min-width: 0; min-height: 46px; padding: 10px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); }
-.classroom-create button { padding: 0 16px; color: var(--on-signal); background: var(--focus); border: 0; border-radius: var(--radius); font-size: 11px; font-weight: 850; }
+.classroom-create button { padding: 0 16px; color: var(--on-signal); background: var(--focus); border: 0; border-radius: var(--radius); font-size: 11px; font-weight: 700; }
 
 .classrooms-error {
   width: min(1180px, calc(100% - 36px));
@@ -1296,8 +1298,8 @@ a, button, summary, input, textarea, select {
 .classroom-index { color: var(--focus); font: 800 16px/1 ui-monospace, monospace; }
 .classroom-unit-unassigned .classroom-index { color: var(--muted); }
 .classroom-unit header > div:nth-child(2) { min-width: 0; }
-.classroom-unit header span { color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
-.classroom-unit h2 { margin: 5px 0 0; overflow: hidden; font-size: clamp(20px, 2.5vw, 29px); letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
+.classroom-unit header span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.classroom-unit h2 { margin: 5px 0 0; overflow: hidden; font-size: clamp(20px, 2.5vw, 29px); letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
 .classroom-unit header > p { margin: 0; color: var(--muted); font-size: 10px; white-space: nowrap; }
 
 .classroom-actions { display: flex; align-items: center; gap: 6px; }
@@ -1333,7 +1335,7 @@ a, button, summary, input, textarea, select {
 
 .classroom-rename label { color: var(--muted); font-size: 10px; font-weight: 800; }
 .classroom-rename input { min-height: 38px; padding: 7px 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); }
-.classroom-rename button { min-height: 38px; padding: 0 13px; color: var(--on-signal); background: var(--focus); border: 0; border-radius: var(--radius); font-size: 10px; font-weight: 850; }
+.classroom-rename button { min-height: 38px; padding: 0 13px; color: var(--on-signal); background: var(--focus); border: 0; border-radius: var(--radius); font-size: 10px; font-weight: 700; }
 
 /* The glossary reuses the rename row's shell but needs a text area and a
    caption line, so it takes the same grid over two rows. */
@@ -1412,9 +1414,9 @@ a, button, summary, input, textarea, select {
 .classroom-empty { margin: 0; padding: 22px 21px 24px 96px; color: var(--muted); font-size: 11px; }
 
 .classrooms-first-run { padding: 46px; background: var(--invert-bg); color: white; }
-.classrooms-first-run strong { font-size: clamp(22px, 3vw, 34px); letter-spacing: -.04em; }
+.classrooms-first-run strong { font-size: clamp(22px, 3vw, 34px); letter-spacing: -.025em; }
 .classrooms-first-run p { margin: 13px 0 24px; color: #bdb9c5; font-size: 12px; line-height: 1.7; }
-.classrooms-first-run a { display: inline-flex; padding: 11px 14px; color: var(--invert-bg); background: white; font-size: 11px; font-weight: 850; text-decoration: none; }
+.classrooms-first-run a { display: inline-flex; padding: 11px 14px; color: var(--invert-bg); background: white; font-size: 11px; font-weight: 700; text-decoration: none; }
 
 .billing-shell {
   min-height: 100svh;
@@ -1442,7 +1444,7 @@ a, button, summary, input, textarea, select {
 }
 
 .billing-heading { max-width: 650px; }
-.billing-heading h1 { margin: 0; font-size: clamp(38px, 5vw, 64px); line-height: 1; letter-spacing: -.055em; }
+.billing-heading h1 { margin: 0; font-size: clamp(38px, 5vw, 64px); line-height: 1; letter-spacing: -.03em; }
 .billing-heading p { margin: 22px 0 0; color: var(--muted); font-size: 15px; line-height: 1.7; }
 
 .credit-summary {
@@ -1458,17 +1460,17 @@ a, button, summary, input, textarea, select {
 }
 
 .credit-summary > span { font-size: 12px; font-weight: 800; }
-.credit-summary > strong { grid-column: 1; font-size: clamp(40px, 6vw, 70px); line-height: 1; letter-spacing: -.05em; }
+.credit-summary > strong { grid-column: 1; font-size: clamp(40px, 6vw, 70px); line-height: 1; letter-spacing: -.03em; }
 .credit-summary > small { grid-column: 2; grid-row: 2; color: #c1bcc9; font-size: 12px; }
 .credit-summary > time { grid-column: 1 / -1; color: #968fa3; font-size: 10px; }
 
 .billing-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .billing-plan { min-height: 350px; display: flex; flex-direction: column; padding: 27px 26px 24px; background: var(--surface); border: 1px solid var(--line-strong); }
-.billing-plan > span { font-size: 12px; font-weight: 850; }
-.billing-plan h2 { margin: 34px 0 0; font-size: 31px; letter-spacing: -.045em; }
+.billing-plan > span { font-size: 12px; font-weight: 700; }
+.billing-plan h2 { margin: 34px 0 0; font-size: 31px; letter-spacing: -.025em; }
 .billing-plan > strong { margin-top: 12px; color: var(--focus); font-size: 12px; }
 .billing-plan p { max-width: 390px; margin: 22px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
-.billing-plan button { min-height: 50px; margin-top: auto; padding: 0 16px; color: white; background: var(--invert-bg); border: 0; font-size: 12px; font-weight: 850; }
+.billing-plan button { min-height: 50px; margin-top: auto; padding: 0 16px; color: white; background: var(--invert-bg); border: 0; font-size: 12px; font-weight: 700; }
 .billing-plan button:not(:disabled):hover { background: color-mix(in srgb, var(--invert-bg), #fff 7%); }
 .billing-plan-featured { border: 2px solid var(--focus); }
 .billing-plan-featured button { background: var(--focus); }
@@ -1595,7 +1597,7 @@ a, button, summary, input, textarea, select {
 .classroom-unit,
 .billing-plan {
   border: var(--brutal-border);
-  box-shadow: 4px 4px 0 var(--line-strong);
+  box-shadow: 0 1px 2px rgba(28, 24, 37, .04), var(--brutal-shadow);
 }
 
 .workspace .topbar,
@@ -1616,7 +1618,7 @@ a, button, summary, input, textarea, select {
 .classroom-rename button,
 .billing-plan button {
   border: 2px solid var(--edge);
-  box-shadow: 3px 3px 0 var(--edge);
+  box-shadow: var(--pop-shadow);
 }
 
 .stop-button { border-color: #000; }
@@ -1627,8 +1629,8 @@ a, button, summary, input, textarea, select {
 .pane-heading h2,
 .classrooms-intro h1,
 .billing-heading h1 {
-  font-weight: 900;
-  letter-spacing: -.055em;
+  font-weight: 760;
+  letter-spacing: -.03em;
 }
 
 .settings-choice legend,
@@ -1644,7 +1646,7 @@ a, button, summary, input, textarea, select {
 
 .classrooms-intro { border-bottom-width: 2px; }
 .classroom-unit::before { height: 7px; }
-.credit-summary { border: var(--brutal-border); box-shadow: 5px 5px 0 var(--signal); }
+.credit-summary { border: var(--brutal-border); box-shadow: 0 14px 36px -14px color-mix(in srgb, var(--signal) 55%, transparent); }
 
 @media (hover: hover) {
   .start-button:not(:disabled):hover,
@@ -1652,15 +1654,14 @@ a, button, summary, input, textarea, select {
   .classroom-create button:not(:disabled):hover,
   .classroom-rename button:not(:disabled):hover,
   .billing-plan button:not(:disabled):hover {
-    box-shadow: 5px 5px 0 var(--edge);
-    transform: translate(-2px, -2px);
+    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--ink) 45%, transparent);
+    transform: translateY(-1px);
   }
 }
 
 button:active,
 .billing-plan button:active {
-  box-shadow: none;
-  transform: translate(2px, 2px);
+  transform: translateY(1px);
 }
 
 .login-shell button:active { transform: none; }
@@ -1698,7 +1699,7 @@ button:active,
   color: var(--ink);
   font-size: 20px;
   font-weight: 800;
-  letter-spacing: -.05em;
+  letter-spacing: -.03em;
   text-decoration: none;
 }
 
@@ -1794,6 +1795,9 @@ button:active,
   display: grid;
   place-items: center;
   padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--muted);
   border-radius: 6px;
   font-size: 14px;
@@ -2416,7 +2420,7 @@ button:active,
 .workspace .sidebar-classroom.active { color: var(--ink); background: color-mix(in srgb, var(--ink) 12%, var(--paper)); }
 .workspace .sidebar-classroom.active small { color: var(--muted); }
 .workspace .sidebar-sessions button.active { font-weight: 600; }
-.workspace .sidebar-brand { font-weight: 700; letter-spacing: -.04em; }
+.workspace .sidebar-brand { font-weight: 700; letter-spacing: -.025em; }
 
 
 /* Adding a classroom is a rare, secondary act; it was wearing the same filled
@@ -2565,7 +2569,7 @@ button:active,
   padding: 40px 20px;
   text-align: center;
 }
-.status-page h1 { margin: 0; font-size: clamp(24px, 3vw, 34px); letter-spacing: -.04em; }
+.status-page h1 { margin: 0; font-size: clamp(24px, 3vw, 34px); letter-spacing: -.025em; }
 .status-page p { max-width: 460px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
 .status-page a,
 .status-page button {
@@ -2802,7 +2806,7 @@ button:active,
   border: var(--brutal-border);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: 8px 8px 0 color-mix(in srgb, var(--signal) 30%, transparent);
+  box-shadow: 0 2px 6px rgba(20, 16, 30, .08), 0 24px 60px -24px color-mix(in srgb, var(--signal) 45%, transparent);
   overflow: hidden;
   animation: note-panel-in 220ms cubic-bezier(.2, .9, .3, 1.1);
 }
@@ -2856,7 +2860,7 @@ button:active,
   background: color-mix(in srgb, var(--signal) 10%, var(--surface));
   color: var(--signal-dark);
   font-size: 24px;
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--signal) 35%, transparent);
+  box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--signal) 50%, transparent);
 }
 .note-empty h2 { margin: 0 0 8px; color: var(--ink); font-size: 20px; }
 .note-empty p { max-width: 400px; margin: 0; line-height: 1.65; }
@@ -2885,15 +2889,15 @@ button:active,
   color: var(--on-signal);
   font-size: 14px;
   font-weight: 800;
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--ink) 55%, transparent);
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--signal) 60%, transparent);
   transition: transform 90ms ease-out, box-shadow 90ms ease-out, background-color 120ms ease;
 }
 .note-create-button:hover {
   background: var(--signal-dark);
-  transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--ink) 55%, transparent);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -10px color-mix(in srgb, var(--signal) 70%, transparent);
 }
-.note-create-button:active { transform: translate(2px, 2px); box-shadow: 0 0 0 transparent; }
+.note-create-button:active { transform: translateY(0); }
 .note-empty .note-create-button { margin-top: 20px; }
 
 /* 생성 중 */
@@ -3006,7 +3010,7 @@ button:active,
 .note-section h2 > span {
   color: var(--signal);
   font-size: 13px;
-  font-weight: 850;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .note-section p { margin: 10px 0; }
@@ -3054,7 +3058,7 @@ button:active,
   border: var(--brutal-border);
   border-radius: var(--radius-hard);
   overflow: hidden;
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--signal) 18%, transparent);
+  box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--signal) 40%, transparent);
 }
 .note-material canvas { display: block; width: 100%; height: auto; background: #fff; }
 .note-material figcaption {
@@ -3232,6 +3236,8 @@ button:active,
 .sidebar-create-classroom > div { grid-template-columns: minmax(0, 1fr) 32px; gap: 6px; }
 .workspace .sidebar-create-classroom button,
 .sidebar-create-classroom button {
+  display: grid;
+  place-items: center;
   min-height: 0;
   padding: 0;
   border: 0;
