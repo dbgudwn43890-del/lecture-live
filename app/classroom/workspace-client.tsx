@@ -8,6 +8,7 @@ import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
 import { CONSENT_COPY } from "../lib/consent";
 import type { DeepgramLanguage } from "../lib/deepgram";
+import { FREE_PILOT } from "../lib/free-pilot";
 import { buildAnchor } from "../lib/material-anchor";
 import { personalModelOptions, type PersonalProvider } from "../lib/llm-models";
 import { getPlanLabel } from "../lib/plan-label";
@@ -1764,7 +1765,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <span>{isEnglish
               ? "You are out of credits, so new recordings and questions are paused."
               : "크레딧을 모두 사용해 새 녹음과 질문이 잠시 멈춰 있습니다."}</span>
-            <Link className="banner-action" href={`${basePath}/billing`}>{isEnglish ? "Get credits" : "크레딧 충전하기"}</Link>
+            <Link className="banner-action" href={`${basePath}/billing`}>{FREE_PILOT ? (isEnglish ? "See details" : "안내 보기") : (isEnglish ? "Get credits" : "크레딧 충전하기")}</Link>
           </div>
         )}
 

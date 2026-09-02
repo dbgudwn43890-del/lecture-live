@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import styles from "./landing.module.css";
+import { FREE_PILOT, FREE_PILOT_CREDITS } from "./lib/free-pilot";
 import { getPlanLabel } from "./lib/plan-label";
 import type { BillingPlan } from "./lib/use-paddle-checkout";
 import { PricingCheckoutButton, PricingCheckoutMessage, PricingCheckoutProvider } from "./pricing-checkout";
@@ -194,6 +195,15 @@ export default function LandingPage({
   const copy = content[locale];
   const base = locale === "en" ? "/en" : "";
   const classroomPath = `${base}/classroom`;
+  const pilotFaq: readonly [string, string] = locale === "en"
+    ? ["Is Lecue free right now?", `Yes. Every feature is free while we collect feedback, and you receive ${FREE_PILOT_CREDITS} credits when you sign up. If you run out, email support@lecue.app.`]
+    : ["지금은 무료인가요?", `네. 피드백을 받는 기간 동안 모든 기능을 무료로 쓸 수 있고, 가입하면 ${FREE_PILOT_CREDITS}크레딧을 드립니다. 크레딧이 부족하면 support@lecue.app으로 알려주세요.`];
+  const faqs = FREE_PILOT ? copy.faqs.map((item, index) => (index === 3 ? pilotFaq : item)) : copy.faqs;
+  const heroNote = FREE_PILOT
+    ? (locale === "en" ? `Free during the feedback period · ${FREE_PILOT_CREDITS} credits at signup` : `피드백 기간 무료 공개 · 가입하면 ${FREE_PILOT_CREDITS}크레딧`)
+    : copy.heroNote;
+  const heroCta = FREE_PILOT ? (locale === "en" ? "Start free" : "무료로 시작하기") : copy.heroCta;
+  const anonCtaHref = FREE_PILOT ? `${base}/login?mode=signup` : `${base}/billing?plan=monthly`;
 
   return (
     <main className={styles.page} id="top">
@@ -201,7 +211,7 @@ export default function LandingPage({
         <Link className={styles.brand} href={base || "/"} aria-label={copy.homeLabel}>Lecue</Link>
         <nav className={styles.nav} aria-label={copy.navLabel}>
           <a href="#features">{copy.nav[0]}</a>
-          <a href="#pricing">{copy.nav[1]}</a>
+          {!FREE_PILOT && <a href="#pricing">{copy.nav[1]}</a>}
           <a href="#faq">{copy.nav[2]}</a>
         </nav>
         <div className={styles.headerActions}>
@@ -235,9 +245,9 @@ export default function LandingPage({
           <h1 id={`hero-title-${locale}`}>{copy.heroTitle[0]}<br />{copy.heroTitle[1]}</h1>
           <p className={styles.heroDescription}>{copy.heroDescription}</p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryCta} href={isAuthenticated ? classroomPath : `${base}/billing?plan=monthly`}>{isAuthenticated ? copy.openClassroom : copy.heroCta}<span aria-hidden>→</span></Link>
+            <Link className={styles.primaryCta} href={isAuthenticated ? classroomPath : anonCtaHref}>{isAuthenticated ? copy.openClassroom : heroCta}<span aria-hidden>→</span></Link>
           </div>
-          <p className={styles.heroNote}>{copy.heroNote}</p>
+          <p className={styles.heroNote}>{heroNote}</p>
         </div>
 
         <div className={`${styles.productFrame} ${styles.heroProductFrame}`} id="product" aria-label={copy.demoTitle}>
@@ -284,6 +294,7 @@ export default function LandingPage({
         </div>
       </section>
 
+      {!FREE_PILOT && (
       <section className={styles.pricing} id="pricing" aria-labelledby={`pricing-title-${locale}`}>
         <header className={`${styles.pricingIntro} ${styles.reveal}`}><p>{copy.pricingLabel}</p><h2 id={`pricing-title-${locale}`}>{copy.pricingTitle[0]}<br />{copy.pricingTitle[1]}</h2></header>
         <PricingCheckoutProvider locale={locale} basePath={base}>
@@ -319,10 +330,11 @@ export default function LandingPage({
           <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingIncluded}</span></div>
         </PricingCheckoutProvider>
       </section>
+      )}
 
       <section className={`${styles.faq} ${styles.reveal}`} id="faq" aria-labelledby={`faq-title-${locale}`}>
         <h2 id={`faq-title-${locale}`}>{copy.faqTitle}</h2>
-        <div>{copy.faqs.map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden>+</span></summary><p>{answer}</p></details>)}</div>
+        <div>{faqs.map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden>+</span></summary><p>{answer}</p></details>)}</div>
       </section>
 
       <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={isAuthenticated ? classroomPath : `${base}/login?mode=signup`}>{isAuthenticated ? copy.openClassroom : copy.finalCta}<span>→</span></Link></section>

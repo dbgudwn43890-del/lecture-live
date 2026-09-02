@@ -4,6 +4,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
+import { FREE_PILOT, FREE_PILOT_CREDITS } from "../lib/free-pilot";
 import { usePaddleCheckout, type BillingPlan } from "../lib/use-paddle-checkout";
 
 type Locale = "ko" | "en";
@@ -88,7 +89,7 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
   useEffect(() => { void loadStatus(); }, [locale]);
 
   useEffect(() => {
-    if (!ready || (!status && !statusFailed) || autoStartedRef.current) return;
+    if (FREE_PILOT || !ready || (!status && !statusFailed) || autoStartedRef.current) return;
     const plan = new URLSearchParams(window.location.search).get("plan");
     if (plan === "monthly" || plan === "term" || plan === "semester") {
       autoStartedRef.current = true;
@@ -133,7 +134,7 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
 
   // A missing credit snapshot is not a reason to block buying credits.
   const disabled = !ready || (!status && !statusFailed) || pending !== null || portalPending;
-  const displayMessage = message || portalMessage || (statusFailed ? t.statusFailed : t.ready);
+  const displayMessage = message || portalMessage || (FREE_PILOT ? "" : statusFailed ? t.statusFailed : t.ready);
 
   function label(plan: BillingPlan, fallback: string) {
     return pending === plan ? t.opening : fallback;
@@ -141,21 +142,28 @@ export default function BillingPage({ locale = "ko" }: { locale?: Locale }) {
 
   return (
     <main className="billing-shell">
-      <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" strategy="afterInteractive" onLoad={initializePaddle} onReady={initializePaddle} />
+      {!FREE_PILOT && <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" strategy="afterInteractive" onLoad={initializePaddle} onReady={initializePaddle} />}
       <header className="billing-topbar"><Link className="brand" href={basePath || "/"}>Lecue</Link><Link href={`${basePath}/classroom`}>{t.classroom}</Link></header>
       <section className="billing-stage" aria-labelledby="billing-title">
         <header className="billing-heading"><h1 id="billing-title">{t.title}</h1><p>{t.description}</p></header>
         <section className="credit-summary" aria-live="polite"><span>{t.credits}</span><strong>{status ? status.credits.toLocaleString(locale === "en" ? "en-US" : "ko-KR") : "—"}</strong><small>{t.unit}</small>{status?.nextExpiry && <time>{t.expiry} · {new Date(status.nextExpiry).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR")}</time>}</section>
+        {FREE_PILOT && (
+          <p className="billing-methods">{locale === "en"
+            ? `Lecue is free while we collect feedback. You received ${FREE_PILOT_CREDITS} credits at signup — if you run out, email support@lecue.app and we will top you up.`
+            : `피드백을 받는 기간 동안 Lecue는 무료입니다. 가입할 때 ${FREE_PILOT_CREDITS}크레딧을 드렸고, 부족하면 support@lecue.app으로 알려주시면 채워 드립니다.`}</p>
+        )}
+        {!FREE_PILOT && (<>
         <div className="billing-plans">
           <article className="billing-plan billing-plan-featured"><span>{t.monthly}</span><h2>{t.monthlyPrice}</h2><strong>{t.monthlyCredits}</strong><p>{t.trial}</p><button type="button" onClick={() => void startCheckout("monthly")} disabled={disabled}>{label("monthly", status?.trialUsed ? t.subscribe : t.startTrial)}</button></article>
           <article className="billing-plan"><span>{t.term}</span><h2>{t.termPrice}</h2><strong>{t.termCredits}</strong><p>{t.oneTime}</p><button type="button" onClick={() => void startCheckout("term")} disabled={disabled}>{label("term", t.buyTerm)}</button></article>
           <article className="billing-plan"><span>{t.semester}</span><h2>{t.semesterPrice}</h2><strong>{t.semesterCredits}</strong><p>{t.oneTime}</p><button type="button" onClick={() => void startCheckout("semester")} disabled={disabled}>{label("semester", t.buy)}</button></article>
         </div>
         <p className="billing-methods">{t.methods}</p>
+        </>)}
         <p className="billing-message" role="status">{(pending || portalPending) && <i className="auth-spinner auth-spinner-dark" aria-hidden="true" />}{displayMessage}</p>
         {status?.subscriptionStatus && <button className="billing-manage" type="button" onClick={() => void openPortal()} disabled={pending !== null || portalPending}>{t.manage}</button>}
       </section>
-      <footer className="billing-footer"><Link href={`${basePath}/terms`}>{locale === "en" ? "Terms" : "이용약관"}</Link><Link href={`${basePath}/privacy`}>{locale === "en" ? "Privacy" : "개인정보처리방침"}</Link><span>Paddle secure checkout</span></footer>
+      <footer className="billing-footer"><Link href={`${basePath}/terms`}>{locale === "en" ? "Terms" : "이용약관"}</Link><Link href={`${basePath}/privacy`}>{locale === "en" ? "Privacy" : "개인정보처리방침"}</Link>{!FREE_PILOT && <span>Paddle secure checkout</span>}</footer>
     </main>
   );
 }
