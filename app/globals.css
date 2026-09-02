@@ -2717,3 +2717,111 @@ button:active,
 .admin-table tr.admin-flagged td { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .admin-flag { margin-right: 6px; color: var(--danger); font-weight: 700; }
 .admin-flag-cell { color: var(--danger); font-weight: 700; }
+
+/* ── 강의 노트 ─────────────────────────────────────────────── */
+.note-button {
+  min-width: 104px;
+  padding: 10px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--soft-blue);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.note-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 24, 37, .45);
+}
+
+.note-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 100%);
+  max-height: min(88vh, 1000px);
+  border: var(--brutal-border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.note-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.note-topbar > div { display: flex; align-items: center; gap: 10px; }
+.note-regenerate {
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-hard);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.note-status, .note-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.note-empty { flex-direction: column; text-align: center; }
+.note-empty p { max-width: 420px; margin: 0; }
+
+.note-body {
+  padding: 24px 28px 40px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.note-body h1 { margin: 0 0 6px; font-size: 22px; }
+.note-summary { margin: 0 0 20px; color: var(--muted); }
+.note-body h2 {
+  margin: 26px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font-size: 16px;
+}
+.note-body ul { margin: 8px 0; padding-left: 22px; }
+
+.note-callout, .note-qa {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--signal);
+  border-radius: 0 var(--radius-hard) var(--radius-hard) 0;
+  background: color-mix(in srgb, var(--signal) 7%, var(--surface));
+}
+.note-qa { border-left-color: var(--focus, var(--signal-dark)); }
+.note-callout strong, .note-qa strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.note-callout p, .note-qa p { margin: 0; }
+
+.note-formula {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-hard);
+  background: var(--surface);
+  overflow-x: auto;
+}
+.note-diagram { margin: 14px 0; text-align: center; overflow-x: auto; }
+.note-diagram svg { max-width: 100%; height: auto; }
+.note-formula figcaption, .note-diagram figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}

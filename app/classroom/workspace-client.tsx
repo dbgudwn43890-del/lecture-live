@@ -1,8 +1,12 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { DragDropProvider, useDraggable, useDroppable } from "@dnd-kit/react";
+
+// KaTeX·Mermaid를 노트를 열 때만 내려받는다. 평소 강의 화면 번들에서 제외.
+const LectureNotePanel = dynamic(() => import("./lecture-note"), { ssr: false });
 
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
@@ -890,6 +894,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       setStatus(nextStatus);
       setMobilePane((data.questions?.length ?? 0) > 0 ? "chat" : "transcript");
       setMobileSidebarOpen(false);
+      setNoteOpen(false);
     } catch (caught) {
       setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not load the lecture." : "수업 기록을 불러오지 못했습니다.");
     } finally {
@@ -1222,6 +1227,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
   const canStart = (status === "idle" || status === "ended" || status === "error")
     && (creditStatus === null || creditStatus.credits > 0);
+  const [noteOpen, setNoteOpen] = useState(false);
   const activeModelLabel =
     aiProvider === "lecture-live"
       ? isEnglish ? "Default AI" : "기본 AI"
@@ -1686,12 +1692,21 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                   ? isEnglish ? "Transcribing…" : "변환 중…"
                   : isEnglish ? "Upload recording" : "녹음 파일"}
               </label>
+              {status === "ended" && activeSessionId && (
+                <button className="note-button" type="button" onClick={() => setNoteOpen(true)}>
+                  {isEnglish ? "Lecture note" : "강의 노트"}
+                </button>
+              )}
               <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
                 {isEnglish ? "Start lecture" : "강의 시작"}
               </button>
             </>
           )}
         </header>
+
+        {noteOpen && activeSessionId && (
+          <LectureNotePanel sessionId={activeSessionId} isEnglish={isEnglish} onClose={() => setNoteOpen(false)} />
+        )}
 
         <dialog
           ref={consentDialogRef}
