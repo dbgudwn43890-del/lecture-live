@@ -2025,8 +2025,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                   : "질문한 시점까지의 강의 흐름을 근거로 답합니다."}</span>
                 <div className="empty-chat-examples">
                   {(isEnglish
-                    ? ["What did CIB mean just now?", "Explain that formula again, simply", "Summarize the last 10 minutes"]
-                    : ["방금 말한 CIB가 뭐야?", "아까 그 수식 쉽게 다시 설명해줘", "최근 10분 요약해줘"]
+                    ? ["Explain that formula again, simply", "Summarize the last 10 minutes"]
+                    : ["아까 그 수식 쉽게 다시 설명해줘", "최근 10분 요약해줘"]
                   ).map((example) => (
                     <button key={example} type="button" onClick={() => setQuestion(example)}>{example}</button>
                   ))}
