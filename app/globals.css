@@ -3330,3 +3330,34 @@ button:active,
   color: var(--ink);
   margin-bottom: 2px;
 }
+
+/* 첫 세션 전에만 보이는 3단계 안내. */
+.onboarding-steps {
+  list-style: none;
+  margin: 22px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+.onboarding-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.onboarding-steps em {
+  font-style: normal;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--signal) 10%, var(--surface));
+  color: var(--signal-dark);
+  font-size: 11.5px;
+  font-weight: 700;
+}

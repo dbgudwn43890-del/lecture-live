@@ -36,6 +36,10 @@ export default function LectureNotePanel({
   async function generate(force: boolean) {
     setPhase("generating");
     setMessage("");
+    // 생성은 1~2분 걸린다. 다른 탭에 가 있어도 끝나면 알려줄 수 있게 미리 허락을 받는다.
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
     try {
       const response = await fetch("/api/lecture-notes", {
         method: "POST",
@@ -61,6 +65,19 @@ export default function LectureNotePanel({
     const timer = setInterval(() => void load(), 5_000);
     return () => clearInterval(timer);
   }, [phase]);
+
+  // 생성 완료 순간, 사용자가 이 탭을 보고 있지 않을 때만 브라우저 알림.
+  const previousPhaseRef = useRef(phase);
+  useEffect(() => {
+    const previous = previousPhaseRef.current;
+    previousPhaseRef.current = phase;
+    if (previous === "generating" && phase === "ready" && document.hidden
+      && typeof Notification !== "undefined" && Notification.permission === "granted") {
+      new Notification(isEnglish ? "Your lecture note is ready" : "강의 노트가 완성됐어요", {
+        body: isEnglish ? "Come back to review today's lecture." : "돌아와서 오늘 강의를 복습해 보세요.",
+      });
+    }
+  }, [phase, isEnglish]);
 
   return (
     <div

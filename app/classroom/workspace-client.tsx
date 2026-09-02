@@ -167,14 +167,18 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     : { idle: "시작 전", connecting: "연결 중", recording: "기록 중", paused: "일시정지", ended: "종료됨", error: "연결 확인 필요" };
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
-  // 시간대 인사는 클라이언트 시계 기준이라 마운트 후에 채운다(SSR 불일치 방지).
+  // 시간대 인사·질문 예시는 클라이언트 시계 기준이라 마운트 후에 채운다(SSR 불일치 방지).
   const [greeting, setGreeting] = useState("");
+  const [askHint, setAskHint] = useState("");
   useEffect(() => {
     const hour = new Date().getHours();
     const slot = hour < 5 ? 3 : hour < 11 ? 0 : hour < 17 ? 1 : hour < 22 ? 2 : 3;
     setGreeting((isEnglish
       ? ["Good morning — let's learn something today.", "Good afternoon — ready when you are.", "Good evening — one more lecture to go.", "Studying late? Let's make it count."]
       : ["좋은 아침이에요, 오늘도 공부해 볼까요?", "좋은 오후예요, 준비되면 시작해요.", "좋은 저녁이에요, 오늘 마지막 강의까지 힘내요.", "늦은 시간까지 대단해요, 알차게 남겨드릴게요."])[slot]);
+    setAskHint((isEnglish
+      ? ["e.g. Explain that with an example", "e.g. How might this show up on the exam?", "e.g. Summarize the key points so far", "e.g. What did that term mean?"]
+      : ["예: 방금 내용 예시 들어서 설명해줘", "예: 이 개념 시험에 어떻게 나올까?", "예: 지금까지 핵심만 요약해줘", "예: 방금 그 용어 무슨 뜻이야?"])[slot]);
   }, [isEnglish]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -267,11 +271,16 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     const previous = previousStatusRef.current;
     previousStatusRef.current = status;
     if (status === "ended" && (previous === "recording" || previous === "paused" || previous === "connecting")) {
+      const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
+      const asked = messages.filter((message) => message.role === "user").length;
+      const recap = isEnglish
+        ? `${minutes} min, ${sentenceCount} sentences${asked > 0 ? `, ${asked} questions` : ""}.`
+        : `${minutes}분 동안 문장 ${sentenceCount}개${asked > 0 ? `, 질문 ${asked}개` : ""}를 남겼어요.`;
       setNotice(isEnglish
-        ? "Nice work! Generate a lecture note to lock in what you learned today."
-        : "수고했어요! 강의 노트를 만들면 오늘 배운 내용이 깔끔하게 정리돼요.");
+        ? `Nice work! ${recap} Generate a lecture note to lock in what you learned today.`
+        : `수고했어요! ${recap} 강의 노트를 만들면 오늘 배운 내용이 깔끔하게 정리돼요.`);
     }
-  }, [status, isEnglish]);
+  }, [status, isEnglish, elapsedMs, sentenceCount, messages]);
   const consentDialogRef = useRef<HTMLDialogElement | null>(null);
   const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
 
@@ -2139,7 +2148,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               placeholder={!creditsAllowAsk
                 ? isEnglish ? "Add credits to keep asking" : "크레딧을 충전하면 질문할 수 있습니다"
                 : hasTranscript
-                  ? isEnglish ? "Ask about this lecture" : "이 강의에 대해 질문하세요"
+                  ? askHint || (isEnglish ? "Ask about this lecture" : "이 강의에 대해 질문하세요")
                   : isEnglish ? "You can ask once the transcript begins" : "스크립트가 들어오면 질문할 수 있습니다"}
               maxLength={1_000}
               // 답변을 기다리는 동안에도 다음 질문은 미리 쓸 수 있다. 전송만 막는다.
@@ -2233,6 +2242,17 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                   <button type="button" className="start-button empty-start-button" onClick={startLecture}>
                     {isEnglish ? "Start lecture" : "강의 시작"}
                   </button>
+                )}
+                {/* 계정에 세션이 하나도 없을 때만: 첫 사용 3단계. */}
+                {status === "idle" && sessionsById.size === 0 && (
+                  <ol className="onboarding-steps">
+                    {(isEnglish
+                      ? ["Sit near the speaker and check your mic", "Press Start lecture — speech piles up here live", "Ask anything the moment you get lost"]
+                      : ["강사 가까이에 앉아 마이크를 확인하세요", "강의 시작을 누르면 말이 실시간으로 쌓여요", "놓친 순간 바로 왼쪽 채팅에 물어보세요"]
+                    ).map((step, index) => (
+                      <li key={step}><em>{index + 1}</em>{step}</li>
+                    ))}
+                  </ol>
                 )}
               </div>
             ) : (
