@@ -20,7 +20,7 @@ export default function EnglishPrivacyPage() {
         <tbody>
           <tr><td>Account</td><td>Email, internal account identifier, sign-up and sign-in time; name and profile image if Google sign-in is used</td><td>Identity, sessions, and account security</td><td>Sign-up and sign-in</td></tr>
           <tr><td>Lecture use</td><td>Classroom and lecture titles, transcripts, questions, answers, sources, and recorded time</td><td>Save and review lectures; answer from lecture context</td><td>Recording and questions</td></tr>
-          <tr><td>Lecture materials</td><td>Text and search index extracted from uploaded lecture materials</td><td>Use material content and citations in answers</td><td>Material upload</td></tr>
+          <tr><td>Lecture materials</td><td>Text and search index extracted from uploaded lecture materials, and the original PDF file</td><td>Use material content and citations in answers, show material pages in lecture notes</td><td>Material upload</td></tr>
           <tr><td>Voice</td><td>Microphone audio stream</td><td>Live speech recognition</td><td>While recording</td></tr>
           <tr><td>Personal AI</td><td>Selected provider and model; API key entered by the user</td><td>Use the AI provider selected by the user</td><td>When selected</td></tr>
           <tr><td>Service use</td><td>IP address, browser and device data, access time, cookies, error and security logs</td><td>Security, abuse prevention, and troubleshooting</td><td>Automatically during use</td></tr>
@@ -40,7 +40,7 @@ export default function EnglishPrivacyPage() {
 
       <section><h2>3. Storage and audio</h2><div>
         <p>Classroom names, lecture titles, transcripts, questions, and answers are linked to the account. Relevant earlier lectures in the same classroom may be used to answer a question.</p>
-        <p>Lecue extracts text and a search index from uploaded lecture materials, then discards the original file. Deleting a material also deletes its extracted text and index.</p>
+        <p>Lecue keeps the original PDF of uploaded lecture materials in private storage alongside the extracted text and search index, so lecture notes can show the user the relevant material page. The original opens only through a short-lived signed URL issued to the owner. Non-PDF materials are not kept as originals. Deleting a material also deletes its original file, extracted text, and index.</p>
         <p>Microphone audio is streamed to a speech-recognition provider. Lecue does not separately store the original audio.</p>
         <p>A personal AI key is stored only if the user chooses encrypted account storage. Otherwise it is used only in the current browser tab. A saved key is not redisplayed or written to application logs, and the user may replace or delete it at any time.</p>
       </div></section>

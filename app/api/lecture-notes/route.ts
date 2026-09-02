@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     `# ${isEnglish ? "Lecture" : "수업"}: ${session.title}`,
     `## ${isEnglish ? "Transcript" : "강의 스크립트"}\n${transcript}`,
     questions ? `## ${isEnglish ? "Student questions during the lecture" : "수업 중 학생의 질문과 답변"}\n${questions}` : "",
-    materials ? `## ${isEnglish ? "Lecture materials (with page numbers)" : "강의 자료 (페이지 번호 포함)"}\n${materials}` : "",
+    materials.text ? `## ${isEnglish ? "Lecture materials (with page numbers)" : "강의 자료 (페이지 번호 포함)"}\n${materials.text}` : "",
   ].filter(Boolean).join("\n\n");
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 240_000, maxRetries: 1 });
@@ -133,6 +133,7 @@ export async function POST(request: Request) {
     });
     note = JSON.parse(response.output_text ?? "") as LectureNote;
     if (!note.sections?.length) throw new Error("empty note");
+    linkMaterialBlocks(note, materials.documents);
   } catch (error) {
     console.error("Lecture note generation failed", error && typeof error === "object" && "status" in error ? error.status : "unknown");
     await supabase.from("lecture_notes").update({ status: "failed", updated_at: new Date().toISOString() }).eq("session_id", sessionId);
@@ -196,12 +197,15 @@ async function readQuestions(supabase: Supabase, sessionId: string) {
     .join("\n\n");
 }
 
+type NoteDocument = { id: string; filename: string; page_count: number | null; storage_path: string | null };
+
 async function readMaterials(supabase: Supabase, sessionId: string) {
-  const { data: documents, error } = await supabase
+  const { data, error } = await supabase
     .from("material_documents")
-    .select("id,filename")
+    .select("id,filename,page_count,storage_path")
     .eq("session_id", sessionId);
-  if (error || !documents?.length) return "";
+  const documents = (error ? [] : data ?? []) as NoteDocument[];
+  if (!documents.length) return { text: "", documents };
 
   const parts: string[] = [];
   let total = 0;
@@ -216,9 +220,29 @@ async function readMaterials(supabase: Supabase, sessionId: string) {
     for (const chunk of chunks) {
       const text = `(p.${chunk.start_page}${chunk.end_page !== chunk.start_page ? `-${chunk.end_page}` : ""}) ${chunk.text}`;
       total += text.length;
-      if (total > MAX_MATERIAL_CHARACTERS) return parts.join("\n");
+      if (total > MAX_MATERIAL_CHARACTERS) return { text: parts.join("\n"), documents };
       parts.push(text);
     }
   }
-  return parts.join("\n");
+  return { text: parts.join("\n"), documents };
+}
+
+/**
+ * 모델이 낸 material 블록을 실제 문서에 연결한다. 파일명이 안 맞거나 페이지가
+ * 범위 밖이거나 원본이 보관되지 않은 자료면 블록을 버린다 — 틀린 이미지를
+ * 자신 있게 싣는 것보다 안 싣는 편이 낫다.
+ */
+function linkMaterialBlocks(note: LectureNote, documents: NoteDocument[]) {
+  const byName = new Map(documents.map((document) => [document.filename.trim().toLowerCase(), document]));
+  for (const section of note.sections) {
+    section.blocks = section.blocks.filter((block) => {
+      if (block.type !== "material") return true;
+      const document = byName.get(block.label.trim().toLowerCase());
+      if (!document?.storage_path) return false;
+      if (!Number.isInteger(block.page) || block.page < 1) return false;
+      if (document.page_count && block.page > document.page_count) return false;
+      block.documentId = document.id;
+      return true;
+    });
+  }
 }

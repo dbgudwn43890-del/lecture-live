@@ -4,8 +4,8 @@
  * 다이어그램(Mermaid)만 각자의 렌더러로 넘긴다.
  */
 export type NoteBlock = {
-  type: "paragraph" | "list" | "formula" | "diagram" | "callout" | "qa";
-  /** paragraph·callout 본문, formula·diagram 캡션, qa 답변 */
+  type: "paragraph" | "list" | "formula" | "diagram" | "callout" | "qa" | "material";
+  /** paragraph·callout 본문, formula·diagram·material 캡션, qa 답변 */
   text: string;
   /** list 항목. 다른 타입에서는 빈 배열 */
   items: string[];
@@ -13,8 +13,12 @@ export type NoteBlock = {
   latex: string;
   /** diagram: Mermaid 소스. 다른 타입에서는 빈 문자열 */
   mermaid: string;
-  /** callout 제목("시험 포인트" 등), qa 질문. 다른 타입에서는 빈 문자열 */
+  /** callout 제목("시험 포인트" 등), qa 질문, material 파일명. 다른 타입에서는 빈 문자열 */
   label: string;
+  /** material: 자료 페이지 번호. 다른 타입에서는 0 */
+  page: number;
+  /** material: 서버가 파일명을 검증해 붙이는 문서 id. 모델은 채우지 않는다. */
+  documentId?: string;
 };
 
 export type NoteSection = { heading: string; blocks: NoteBlock[] };
@@ -41,14 +45,15 @@ export const NOTE_SCHEMA = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["type", "text", "items", "latex", "mermaid", "label"],
+              required: ["type", "text", "items", "latex", "mermaid", "label", "page"],
               properties: {
-                type: { type: "string", enum: ["paragraph", "list", "formula", "diagram", "callout", "qa"] },
+                type: { type: "string", enum: ["paragraph", "list", "formula", "diagram", "callout", "qa", "material"] },
                 text: { type: "string" },
                 items: { type: "array", items: { type: "string" } },
                 latex: { type: "string" },
                 mermaid: { type: "string" },
                 label: { type: "string" },
+                page: { type: "integer" },
               },
             },
           },
@@ -76,7 +81,10 @@ export function notePrompt(isEnglish: boolean) {
       ? "Q&A: summarize each question the student asked as a qa block (question in `label`, short answer in `text`) inside the section it belongs to — these mark what the student found hard."
       : "질문: 학생이 한 질문은 해당 섹션 안에 qa 블록으로 정리한다(`label`에 질문, `text`에 짧은 답). 학생이 어려워한 지점이므로 빠뜨리지 않는다.",
     isEnglish
-      ? "When a lecture material page is the source, mention it in the text like (p.12). Unused fields must be empty strings or empty arrays. Write in English."
-      : "강의 자료가 근거일 때는 본문에 (p.12)처럼 페이지를 적는다. 쓰지 않는 필드는 빈 문자열·빈 배열로 둔다. 한국어로 쓴다.",
+      ? "Material pages: when a material page holds an important figure, table, or formula the lecture discussed, add a material block — exact filename in `label`, page number in `page`, one line in `text` on why it matters. The page is shown as an image, so only pick pages with real visual content."
+      : "자료 페이지: 강의에서 다룬 중요한 그림·표·수식이 실린 자료 페이지가 있으면 material 블록을 넣는다 — `label`에 정확한 파일명, `page`에 페이지 번호, `text`에 왜 중요한지 한 줄. 그 페이지가 이미지로 표시되므로 실제 시각 자료가 있는 페이지만 고른다.",
+    isEnglish
+      ? "When a lecture material page is the source, mention it in the text like (p.12). Unused fields must be empty strings, empty arrays, or 0. Write in English."
+      : "강의 자료가 근거일 때는 본문에 (p.12)처럼 페이지를 적는다. 쓰지 않는 필드는 빈 문자열·빈 배열·0으로 둔다. 한국어로 쓴다.",
   ].join("\n");
 }

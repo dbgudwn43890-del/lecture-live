@@ -131,6 +131,8 @@ function Block({ block }: { block: NoteBlock }) {
       return <Formula block={block} />;
     case "diagram":
       return <Diagram block={block} />;
+    case "material":
+      return <MaterialPage block={block} />;
     default:
       return null;
   }
@@ -143,6 +145,64 @@ function Formula({ block }: { block: NoteBlock }) {
     <figure className="note-formula">
       <div dangerouslySetInnerHTML={{ __html: html }} />
       {block.text && <figcaption>{block.text}</figcaption>}
+    </figure>
+  );
+}
+
+/**
+ * 자료 PDF를 문서 단위로 한 번만 내려받아 여러 material 블록이 나눠 쓴다.
+ * ponytail: 모듈 수명 캐시. 서명 URL(15분)이 지나도 이미 연 문서는 계속 그려진다.
+ */
+const materialPdfCache = new Map<string, Promise<import("pdfjs-dist").PDFDocumentProxy>>();
+
+async function openMaterialPdf(documentId: string) {
+  let cached = materialPdfCache.get(documentId);
+  if (!cached) {
+    cached = (async () => {
+      const response = await fetch(`/api/materials?documentId=${encodeURIComponent(documentId)}`);
+      const data = await response.json() as { url?: string; error?: string };
+      if (!response.ok || !data.url) throw new Error(data.error);
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
+      return pdfjs.getDocument({ url: data.url }).promise;
+    })();
+    materialPdfCache.set(documentId, cached);
+    cached.catch(() => materialPdfCache.delete(documentId));
+  }
+  return cached;
+}
+
+function MaterialPage({ block }: { block: NoteBlock }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!block.documentId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pdf = await openMaterialPdf(block.documentId!);
+        const page = await pdf.getPage(block.page);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = canvasRef.current;
+        if (!canvas || cancelled) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvas, canvasContext: canvas.getContext("2d")!, viewport }).promise;
+      } catch {
+        // 원본 미보관·서명 만료·렌더 실패. 이미지만 접고 캡션은 남긴다.
+        if (!cancelled) setFailed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [block.documentId, block.page]);
+
+  if (!block.documentId || failed) return block.text ? <p>{block.text}</p> : null;
+  return (
+    <figure className="note-material">
+      <canvas ref={canvasRef} />
+      <figcaption>{block.label} · p.{block.page}{block.text ? ` — ${block.text}` : ""}</figcaption>
     </figure>
   );
 }

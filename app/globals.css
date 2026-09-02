@@ -2825,3 +2825,17 @@ button:active,
   font-size: 12px;
   text-align: center;
 }
+
+.note-material {
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-hard);
+  overflow: hidden;
+}
+.note-material canvas { display: block; width: 100%; height: auto; background: #fff; }
+.note-material figcaption {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
