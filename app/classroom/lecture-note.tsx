@@ -63,13 +63,24 @@ export default function LectureNotePanel({
   }, [phase]);
 
   return (
-    <div className="note-overlay" role="dialog" aria-modal="true" aria-label={isEnglish ? "Lecture note" : "강의 노트"}>
+    <div
+      className="note-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={isEnglish ? "Lecture note" : "강의 노트"}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
       <div className="note-panel">
         <header className="note-topbar">
           <strong>{isEnglish ? "Lecture note" : "강의 노트"}</strong>
           <div>
             {remaining !== null && phase !== "loading" && (
               <span className="note-quota">{isEnglish ? `${remaining} left this hour` : `이번 시간 ${remaining}회 남음`}</span>
+            )}
+            {phase === "ready" && (
+              <button type="button" className="note-regenerate" onClick={() => window.print()}>
+                {isEnglish ? "Save as PDF" : "PDF 저장"}
+              </button>
             )}
             {phase === "ready" && (
               <button type="button" className="note-regenerate" onClick={() => void generate(true)} disabled={remaining === 0}>

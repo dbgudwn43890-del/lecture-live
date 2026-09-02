@@ -1569,7 +1569,13 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       </aside>
 
       {settingsOpen && (
-        <div className="note-overlay" role="dialog" aria-modal="true" aria-label={isEnglish ? "Settings" : "설정"}>
+        <div
+          className="note-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={isEnglish ? "Settings" : "설정"}
+          onClick={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}
+        >
           <div className="note-panel settings-panel">
             <header className="note-topbar">
               <strong>{isEnglish ? "Settings" : "설정"}</strong>
@@ -1824,7 +1830,13 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
 
         {/* 사이드바 팝오버는 좁아서 잘렸다. 설정은 화면 가운데 모달로 연다. */}
         {editingClassroomId && (
-          <div className="note-overlay" role="dialog" aria-modal="true" aria-label={isEnglish ? "Classroom settings" : "강의실 설정"}>
+          <div
+            className="note-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label={isEnglish ? "Classroom settings" : "강의실 설정"}
+            onClick={(event) => { if (event.target === event.currentTarget) setEditingClassroomId(""); }}
+          >
             <div className="note-panel classroom-edit-panel">
               <header className="note-topbar">
                 <strong>{isEnglish ? "Classroom settings" : "강의실 설정"}</strong>

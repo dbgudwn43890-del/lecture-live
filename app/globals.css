@@ -3251,3 +3251,45 @@ button:active,
 .workspace .sidebar-create-classroom button:hover:not(:disabled),
 .sidebar-create-classroom button:hover:not(:disabled) { background: var(--signal-dark); color: var(--on-signal); }
 .sidebar-create-classroom button:disabled { opacity: .4; }
+
+/* ── 노트 PDF 저장(인쇄) ─────────────────────────────────────
+   PDF 저장 버튼은 window.print()를 부른다. 인쇄에는 노트 본문만 나가고,
+   다크 화면이어도 종이는 라이트 팔레트로 강제한다. */
+@media print {
+  :root, :root[data-theme="dark"] {
+    --paper: #ffffff;
+    --surface: #ffffff;
+    --ink: #1c1825;
+    --muted: #6b6577;
+    --line: rgba(28, 24, 37, .12);
+    --line-strong: rgba(28, 24, 37, .22);
+    --signal: #7859c0;
+    --signal-dark: #5f42a4;
+    --soft-blue: #efeaf9;
+    --on-signal: #ffffff;
+    color-scheme: light;
+  }
+  body * { visibility: hidden; }
+  .note-overlay, .note-overlay * { visibility: visible; }
+  .note-overlay {
+    position: static;
+    display: block;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+  }
+  .note-panel {
+    width: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+    overflow: visible;
+  }
+  .note-topbar { display: none; }
+  .note-body { overflow: visible; }
+  .note-cover { background: none; border-bottom: 2px solid var(--signal); }
+  .note-callout, .note-qa, .note-formula, .note-diagram, .note-material { break-inside: avoid; }
+  .note-section h2 { break-after: avoid; }
+}
