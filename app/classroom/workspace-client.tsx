@@ -194,6 +194,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   const [activeSessionId, setActiveSessionId] = useState("");
   const [classroomPending, setClassroomPending] = useState(false);
   const [newClassroomTitle, setNewClassroomTitle] = useState("");
+  const [sidebarSearchOpen, setSidebarSearchOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingClassroomId, setEditingClassroomId] = useState("");
   const [editingClassroomTitle, setEditingClassroomTitle] = useState("");
   const [editingGlossary, setEditingGlossary] = useState("");
@@ -838,6 +840,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       setClassrooms((current) => [data.classroom!, ...current]);
       setActiveClassroomId(data.classroom.id);
       setNewClassroomTitle("");
+      setCreateOpen(false);
       prepareNewLecture();
     } catch (caught) {
       setError(caught instanceof Error && caught.message
@@ -1260,7 +1263,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     }
   }
 
-  const canStart = (status === "idle" || status === "ended" || status === "error")
+  // 끝난 수업은 다시 시작하지 않는다. 새 수업은 사이드바의 "새 수업"으로 연다.
+  const canStart = (status === "idle" || status === "error")
     && (creditStatus === null || creditStatus.credits > 0);
   const [noteOpen, setNoteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1431,18 +1435,67 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             : isEnglish ? "Lectures" : "수업 목록"}</button>
 
         <div className="sidebar-library">
+          {/* 검색·추가는 상시 노출 대신 헤딩의 아이콘으로 접어 둔다. 누르면 아래로 펼쳐진다. */}
           <div className="sidebar-section-heading">
             <span>{isEnglish ? "Classrooms" : "강의실"}</span>
+            <div className="sidebar-heading-actions">
+              <button
+                type="button"
+                className={sidebarSearchOpen ? "active" : undefined}
+                aria-expanded={sidebarSearchOpen}
+                aria-label={isEnglish ? "Search lectures" : "수업 검색"}
+                onClick={() => setSidebarSearchOpen((open) => {
+                  if (open) setSessionQuery("");
+                  return !open;
+                })}
+              >
+                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.6" /><line x1="10.4" y1="10.4" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+              </button>
+              <button
+                type="button"
+                className={createOpen ? "active" : undefined}
+                aria-expanded={createOpen}
+                aria-label={isEnglish ? "Add a classroom" : "강의실 추가"}
+                onClick={() => setCreateOpen((open) => !open)}
+              >＋</button>
+            </div>
           </div>
 
-          <input
-            className="sidebar-search"
-            type="search"
-            value={sessionQuery}
-            onChange={(event) => setSessionQuery(event.target.value)}
-            placeholder={isEnglish ? "Search lectures" : "수업 검색"}
-            aria-label={isEnglish ? "Search lectures" : "수업 검색"}
-          />
+          {sidebarSearchOpen && (
+            <input
+              className="sidebar-search"
+              type="search"
+              autoFocus
+              value={sessionQuery}
+              onChange={(event) => setSessionQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setSessionQuery("");
+                  setSidebarSearchOpen(false);
+                }
+              }}
+              placeholder={isEnglish ? "Search lectures" : "수업 검색"}
+              aria-label={isEnglish ? "Search lectures" : "수업 검색"}
+            />
+          )}
+
+          {createOpen && (
+            <form className="sidebar-create-classroom" onSubmit={createClassroom}>
+              <div>
+                <input
+                  autoFocus
+                  value={newClassroomTitle}
+                  onChange={(event) => setNewClassroomTitle(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Escape") setCreateOpen(false); }}
+                  placeholder={isEnglish ? "e.g. Economics" : "예: 경제학개론"}
+                  maxLength={80}
+                  disabled={classroomPending}
+                  aria-label={isEnglish ? "New classroom name" : "새 강의실 이름"}
+                />
+                <button type="submit" disabled={classroomPending || !newClassroomTitle.trim()} aria-label={isEnglish ? "Add classroom" : "강의실 추가"}>＋</button>
+              </div>
+            </form>
+          )}
 
           <DragDropProvider onDragEnd={(event) => {
             if (event.canceled) return;
@@ -1458,20 +1511,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             </nav>
           </DragDropProvider>
 
-          <form className="sidebar-create-classroom" onSubmit={createClassroom}>
-            <label htmlFor="new-classroom">{isEnglish ? "Add a classroom" : "강의실 추가하기"}</label>
-            <div>
-              <input
-                id="new-classroom"
-                value={newClassroomTitle}
-                onChange={(event) => setNewClassroomTitle(event.target.value)}
-                placeholder={isEnglish ? "e.g. Economics" : "예: 경제학개론"}
-                maxLength={80}
-                disabled={classroomPending}
-              />
-              <button type="submit" disabled={classroomPending || !newClassroomTitle.trim()} aria-label={isEnglish ? "Add classroom" : "강의실 추가"}>＋</button>
-            </div>
-          </form>
         </div>
 
         <div className="sidebar-account">
@@ -1769,9 +1808,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                   {isEnglish ? "Lecture note" : "강의 노트"}
                 </button>
               )}
-              <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
-                {isEnglish ? "Start lecture" : "강의 시작"}
-              </button>
+              {status !== "ended" && (
+                <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
+                  {isEnglish ? "Start lecture" : "강의 시작"}
+                </button>
+              )}
             </div>
           )}
         </header>
