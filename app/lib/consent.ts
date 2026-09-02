@@ -15,6 +15,28 @@ export function isConsentType(value: unknown): value is ConsentType {
   return typeof value === "string" && (SIGNUP_CONSENT_TYPES as readonly string[]).includes(value);
 }
 
+/**
+ * The exact wording a learner agrees to, in one place next to the version
+ * that stamps it. It used to be copy-pasted between the signup form and the
+ * workspace gate — a reworded checkbox in one spot silently detached the
+ * stored version from what half the users actually read. Change wording here
+ * and bump CONSENT_VERSION together.
+ */
+export const CONSENT_COPY: Record<ConsentType, { ko: string; en: string }> = {
+  age_14: {
+    ko: "만 14세 이상입니다.",
+    en: "I am 14 years of age or older.",
+  },
+  recording: {
+    ko: "Lecue가 마이크로 강의를 녹음하고, 받아쓰기를 위해 음성을 외부 AI 서비스로 보내는 데 동의합니다. 원본 음성은 스크립트를 만든 뒤 보관하지 않습니다.",
+    en: "Lecue records lectures through my microphone and sends the audio to an external AI service for transcription. The original audio is not kept once the transcript is made.",
+  },
+  assessment: {
+    ko: "시험·퀴즈 등 평가 중에는 Lecue를 사용하지 않겠습니다.",
+    en: "I will not use Lecue during an exam, quiz, or graded assessment.",
+  },
+};
+
 // Structural on purpose: naming the real client type here drags the SSR
 // client's generics into a TS2589 blowup at every call site.
 type ConsentReader = {

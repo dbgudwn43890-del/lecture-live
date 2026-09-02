@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
 import { getSafeAuthNext } from "../lib/auth-redirect";
+import { CONSENT_COPY } from "../lib/consent";
 import { createClient } from "../lib/supabase/client";
 
 type Mode = "signin" | "signup";
@@ -313,19 +314,15 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
                   <div className="signup-consent">
                     <label>
                       <input type="checkbox" checked={consentAge} onChange={(event) => setConsentAge(event.target.checked)} disabled={pending} />
-                      {isEnglish ? "I am 14 years of age or older." : "만 14세 이상입니다."}
+                      {CONSENT_COPY.age_14[isEnglish ? "en" : "ko"]}
                     </label>
                     <label>
                       <input type="checkbox" checked={consentRecording} onChange={(event) => setConsentRecording(event.target.checked)} disabled={pending} />
-                      {isEnglish
-                        ? "Lecue records lectures through my microphone and sends the audio to an external AI service for transcription. The original audio is not kept once the transcript is made."
-                        : "Lecue가 마이크로 강의를 녹음하고, 받아쓰기를 위해 음성을 외부 AI 서비스로 보내는 데 동의합니다. 원본 음성은 스크립트를 만든 뒤 보관하지 않습니다."}
+                      {CONSENT_COPY.recording[isEnglish ? "en" : "ko"]}
                     </label>
                     <label>
                       <input type="checkbox" checked={consentAssessment} onChange={(event) => setConsentAssessment(event.target.checked)} disabled={pending} />
-                      {isEnglish
-                        ? "I will not use Lecue during an exam, quiz, or graded assessment."
-                        : "시험·퀴즈 등 평가 중에는 Lecue를 사용하지 않겠습니다."}
+                      {CONSENT_COPY.assessment[isEnglish ? "en" : "ko"]}
                     </label>
                   </div>
                 )}
