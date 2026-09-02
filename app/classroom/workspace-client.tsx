@@ -1331,29 +1331,16 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <small>{visibleSessions.length}</small>
           </button>
           {key && (
-            <details className="classroom-menu">
-              <summary
-                aria-label={isEnglish ? `${label} settings` : `${label} 설정`}
-                onClick={() => {
-                  setEditingClassroomId(key);
-                  setEditingClassroomTitle(label);
-                  setEditingGlossary(glossary);
-                }}
-              >⋯</summary>
-              <form onSubmit={updateClassroom}>
-                <label>
-                  <span>{isEnglish ? "Classroom name" : "강의실 이름"}</span>
-                  <input value={editingClassroomTitle} onChange={(event) => setEditingClassroomTitle(event.target.value)} maxLength={80} />
-                </label>
-                <label>
-                  <span>{isEnglish ? "Terms, separated by commas" : "전문용어, 쉼표로 구분"}</span>
-                  <textarea value={editingGlossary} onChange={(event) => setEditingGlossary(event.target.value)} maxLength={1_200} rows={3} />
-                </label>
-                <button type="submit" disabled={classroomPending || !editingClassroomTitle.trim()}>
-                  {classroomPending ? (isEnglish ? "Saving…" : "저장 중…") : (isEnglish ? "Save" : "저장")}
-                </button>
-              </form>
-            </details>
+            <button
+              type="button"
+              className="classroom-settings-button"
+              aria-label={isEnglish ? `${label} settings` : `${label} 설정`}
+              onClick={() => {
+                setEditingClassroomId(key);
+                setEditingClassroomTitle(label);
+                setEditingGlossary(glossary);
+              }}
+            >⋯</button>
           )}
         </div>
         <div className="sidebar-sessions">{visibleSessions.map(renderSessionRow)}</div>
@@ -1706,6 +1693,45 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
 
         {noteOpen && activeSessionId && (
           <LectureNotePanel sessionId={activeSessionId} isEnglish={isEnglish} onClose={() => setNoteOpen(false)} />
+        )}
+
+        {/* 사이드바 팝오버는 좁아서 잘렸다. 설정은 화면 가운데 모달로 연다. */}
+        {editingClassroomId && (
+          <div className="note-overlay" role="dialog" aria-modal="true" aria-label={isEnglish ? "Classroom settings" : "강의실 설정"}>
+            <div className="note-panel classroom-edit-panel">
+              <header className="note-topbar">
+                <strong>{isEnglish ? "Classroom settings" : "강의실 설정"}</strong>
+                <button type="button" className="banner-dismiss" onClick={() => setEditingClassroomId("")} aria-label={isEnglish ? "Close" : "닫기"}>✕</button>
+              </header>
+              <form className="classroom-edit-form" onSubmit={updateClassroom}>
+                <label>
+                  <span>{isEnglish ? "Classroom name" : "강의실 이름"}</span>
+                  <input value={editingClassroomTitle} onChange={(event) => setEditingClassroomTitle(event.target.value)} maxLength={80} autoFocus />
+                </label>
+                <label>
+                  <span>{isEnglish ? "Technical terms" : "전문용어"}</span>
+                  <textarea
+                    value={editingGlossary}
+                    onChange={(event) => setEditingGlossary(event.target.value)}
+                    maxLength={1_200}
+                    rows={5}
+                    placeholder={isEnglish ? "e.g. duration, coupon rate, YTM" : "예: 듀레이션, 표면금리, 만기수익률"}
+                  />
+                  <small>{isEnglish
+                    ? "Comma-separated. Helps the transcript spell these words correctly."
+                    : "쉼표로 구분합니다. 받아쓰기가 이 단어들을 정확히 적는 데 쓰여요."}</small>
+                </label>
+                <footer>
+                  <button type="button" className="classroom-edit-cancel" onClick={() => setEditingClassroomId("")}>
+                    {isEnglish ? "Cancel" : "취소"}
+                  </button>
+                  <button type="submit" disabled={classroomPending || !editingClassroomTitle.trim()}>
+                    {classroomPending ? (isEnglish ? "Saving…" : "저장 중…") : (isEnglish ? "Save" : "저장")}
+                  </button>
+                </footer>
+              </form>
+            </div>
+          </div>
         )}
 
         <dialog

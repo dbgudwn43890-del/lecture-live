@@ -87,7 +87,6 @@
 /* 떠 있는 메뉴와 다이얼로그는 패널보다 한 단계 더 밝게. */
 [data-theme="dark"] .session-menu-panel,
 [data-theme="dark"] .profile-menu-panel,
-[data-theme="dark"] .classroom-menu form,
 [data-theme="dark"] .consent-modal .consent-gate,
 [data-theme="dark"] .material-list ul { background: #2b2437; }
 
@@ -477,17 +476,19 @@ a, button, summary, input, textarea, select {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   color: var(--muted);
+  text-align: center;
 }
 
 .empty-chat::before,
 .empty-transcript::before {
   content: "";
-  width: 42px;
-  height: 4px;
+  width: 34px;
+  height: 3px;
   margin-bottom: 12px;
+  border-radius: 999px;
   background: var(--focus);
 }
 
@@ -1770,29 +1771,55 @@ button:active,
 .sidebar-classroom.active { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, var(--paper)); }
 .sidebar-classroom.active small { color: var(--focus); }
 
-.classroom-menu { position: relative; }
-.classroom-menu > summary { padding: 5px; color: var(--muted); cursor: pointer; list-style: none; text-align: center; }
-.classroom-menu > summary::-webkit-details-marker { display: none; }
-.classroom-menu > summary:hover { color: var(--ink); }
-.classroom-menu form {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 9;
-  width: 250px;
+.classroom-settings-button {
+  flex: 0 0 auto;
+  width: 24px;
+  min-height: 24px;
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--pop-shadow);
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1;
 }
-.classroom-menu label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; }
-.classroom-menu input,
-.classroom-menu textarea { width: 100%; padding: 8px; color: var(--ink); background: color-mix(in srgb, var(--ink) 3%, var(--surface)); border: 1px solid var(--line-strong); border-radius: var(--radius); font: inherit; }
-.classroom-menu textarea { resize: vertical; }
-.classroom-menu form > button { padding: 7px 9px; color: var(--on-signal); background: var(--focus); border: 0; border-radius: var(--radius); font-size: 10px; font-weight: 650; }
+.classroom-settings-button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, var(--paper)); }
+
+/* 강의실 설정 모달. note-panel 껍데기를 그대로 입는다. */
+.classroom-edit-panel { width: min(460px, 100%); }
+.classroom-edit-form { display: grid; gap: 16px; padding: 20px; }
+.classroom-edit-form label { display: grid; gap: 6px; }
+.classroom-edit-form label > span { color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.classroom-edit-form input,
+.classroom-edit-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.classroom-edit-form textarea { resize: none; }
+.classroom-edit-form input:focus,
+.classroom-edit-form textarea:focus { outline: 0; border-color: var(--signal); }
+.classroom-edit-form label small { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.classroom-edit-form footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.classroom-edit-form footer button {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.classroom-edit-form footer button[type="submit"] { background: var(--signal); color: var(--on-signal); }
+.classroom-edit-form footer button[type="submit"]:hover:not(:disabled) { background: var(--signal-dark); }
+.classroom-edit-form footer button:disabled { opacity: .5; }
+.classroom-edit-cancel { background: transparent; color: var(--muted); }
+.classroom-edit-cancel:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, var(--surface)); }
 
 .sidebar-sessions {
   display: grid;
@@ -2138,15 +2165,15 @@ button:active,
   top: calc(100% + 4px);
   right: 0;
   z-index: 6;
-  width: 196px;
+  width: 208px;
   max-height: 300px;
   display: grid;
   gap: 2px;
   padding: 6px;
   overflow-y: auto;
   background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
   box-shadow: var(--pop-shadow);
 }
 
@@ -2214,17 +2241,17 @@ button:active,
   top: -6px;
   /* Flies out to the right, into the workspace: the sidebar hugs the screen's
      left edge, so a left flyout would run off-screen. */
-  left: calc(100% + 5px);
+  left: calc(100% + 6px);
   z-index: 7;
-  width: 176px;
+  width: 188px;
   max-height: 280px;
   display: grid;
   gap: 2px;
   padding: 6px;
   overflow-y: auto;
   background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
   box-shadow: var(--pop-shadow);
 }
 .sidebar-sessions .session-submenu-panel button {
@@ -2592,7 +2619,7 @@ button:active,
   color: color-mix(in srgb, var(--ink), var(--muted));
   background: transparent;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
@@ -2712,19 +2739,22 @@ button:active,
 .admin-flag-cell { color: var(--danger); font-weight: 700; }
 
 /* ── 강의 노트 ─────────────────────────────────────────────── */
+/* 탑바의 다른 필 버튼(녹음 파일)과 같은 몸집. 보라 텍스트만 정체성으로 남긴다. */
 .note-button {
-  min-width: 104px;
-  padding: 10px 16px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--soft-blue);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 750;
-  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease,
-    transform 90ms ease-out, box-shadow 90ms ease-out;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--signal) 40%, var(--line-strong));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--signal-dark);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }
-.note-button:hover { border-color: var(--signal); color: var(--signal-dark); }
+.note-button:hover { background: color-mix(in srgb, var(--signal) 9%, transparent); border-color: var(--signal); }
 
 .note-overlay {
   position: fixed;

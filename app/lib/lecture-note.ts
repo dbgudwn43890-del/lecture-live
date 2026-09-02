@@ -69,6 +69,9 @@ export function notePrompt(isEnglish: boolean) {
       ? "You are writing a review note for a university student who just attended this lecture. Use ONLY the transcript, the student's Q&A, and the lecture materials below. Never invent content that was not covered."
       : "방금 이 강의를 들은 대학생을 위한 복습 노트를 작성한다. 아래 스크립트, 학생의 질문·답변, 강의 자료만 근거로 쓴다. 강의에서 다루지 않은 내용을 지어내지 않는다.",
     isEnglish
+      ? "The transcript comes from speech recognition, so it contains mishearings. Read for meaning, not spelling: when a word contradicts its own context or the materials (a homophone, a broken term), silently use the word the lecturer clearly meant — especially when later sentences repeat the correct one. Only when you genuinely cannot tell, keep the transcript's word and add the alternative in parentheses. Never build a summary around a mishearing."
+      : "스크립트는 음성 인식 결과라 잘못 받아쓴 단어가 섞여 있다. 표기가 아니라 의미로 읽어라: 문맥이나 강의 자료와 어긋나는 단어(동음이의어, 깨진 전문용어)는 강의자가 명백히 의도한 단어로 조용히 고쳐 쓴다 — 특히 뒤 문장들이 올바른 단어를 반복할 때는 앞의 오인식을 그 단어로 읽는다. 정말 판단이 안 될 때만 원문 표기를 쓰고 괄호로 다른 해석을 병기한다. 오인식된 단어를 중심에 두고 요약을 만들지 않는다.",
+    isEnglish
       ? "Structure: an overall summary, then sections following the lecture's actual flow. Inside sections use paragraphs, lists, callouts (label like 'Exam point' or 'Definition' for things the lecturer emphasized), formulas, diagrams, and qa blocks."
       : "구조: 전체 요약 후, 강의의 실제 흐름을 따르는 섹션들. 섹션 안에서는 문단, 목록, 콜아웃(강의자가 강조한 내용에 '시험 포인트'·'정의' 같은 label), 수식, 다이어그램, qa 블록을 쓴다.",
     isEnglish
