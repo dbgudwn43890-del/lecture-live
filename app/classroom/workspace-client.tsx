@@ -51,10 +51,11 @@ function closeMenu(event: { currentTarget: HTMLElement }) {
   event.currentTarget.closest("details")?.removeAttribute("open");
 }
 
-function DraggableSession({ id, title, disabled, isEnglish, children }: {
+function DraggableSession({ id, title, disabled, active, isEnglish, children }: {
   id: string;
   title: string;
   disabled: boolean;
+  active: boolean;
   isEnglish: boolean;
   children: ReactNode;
 }) {
@@ -64,15 +65,16 @@ function DraggableSession({ id, title, disabled, isEnglish, children }: {
     disabled,
   });
   return (
-    <div ref={ref} className={`sidebar-session${isDragSource ? " is-dragging" : ""}${isDropping ? " is-dropping" : ""}`}>
+    <div ref={ref} className={`sidebar-session${active ? " is-active" : ""}${isDragSource ? " is-dragging" : ""}${isDropping ? " is-dropping" : ""}`}>
+      {/* 점이 곧 드래그 핸들이다: 행마다 ⠿를 늘어놓지 않고도 잡을 곳이 남는다. */}
       <button
         ref={handleRef}
         type="button"
-        className="session-drag-handle"
+        className="session-bullet"
         aria-label={isEnglish ? `Move ${title}` : `${title} 이동`}
         title={isEnglish ? "Drag or press Space to move" : "드래그하거나 Space를 눌러 이동"}
         disabled={disabled}
-      >⠿</button>
+      ><span aria-hidden="true" /></button>
       {children}
     </div>
   );
@@ -1238,7 +1240,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       );
     }
     return (
-      <DraggableSession key={session.id} id={session.id} title={session.title} disabled={sidebarLocked} isEnglish={isEnglish}>
+      <DraggableSession key={session.id} id={session.id} title={session.title} disabled={sidebarLocked} active={session.id === activeSessionId} isEnglish={isEnglish}>
         <button
           type="button"
           className={session.id === activeSessionId ? "active" : undefined}
@@ -1247,7 +1249,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
           title={session.title}
         >{session.title}</button>
         <details className="session-menu">
-          <summary aria-label={isEnglish ? "Lecture options" : "수업 옵션"}>⋯</summary>
+          <summary aria-label={isEnglish ? "Lecture options" : "수업 옵션"}>⋮</summary>
           <div className="session-menu-panel">
             <button type="button" onClick={(event) => { closeMenu(event); setRenamingSessionId(session.id); }}>
               {isEnglish ? "Rename" : "이름 변경"}

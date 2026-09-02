@@ -1767,8 +1767,9 @@ button:active,
   white-space: nowrap;
 }
 
-.sidebar-sessions button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, var(--paper)); }
-.sidebar-sessions button.active { color: var(--ink); background: color-mix(in srgb, var(--ink) 14%, var(--paper)); font-weight: 700; }
+/* 하이라이트는 행(.sidebar-session)이 칠한다. 버튼은 글자색만 바꾼다. */
+.sidebar-sessions button:hover { color: var(--ink); }
+.sidebar-sessions button.active { color: var(--ink); font-weight: 700; }
 
 .sidebar-create-classroom {
   display: grid;
@@ -2030,34 +2031,51 @@ button:active,
 .workspace .transcript { padding: 20px 24px 42px; }
 .workspace .footnote { color: color-mix(in srgb, var(--muted) 78%, var(--paper)); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); border-top: 1px solid var(--line-strong); }
 
-.sidebar-session { display: flex; align-items: center; gap: 2px; }
+.sidebar-session { display: flex; align-items: center; gap: 4px; padding-left: 4px; border-radius: var(--radius); }
+/* 행 전체가 한 덩어리로 하이라이트된다 — 제목 버튼만 칠하던 예전 방식은
+   점·메뉴가 하이라이트 밖에 떠 보였다. */
+.sidebar-session:hover { background: color-mix(in srgb, var(--ink) 7%, var(--paper)); }
+.sidebar-session.is-active { background: color-mix(in srgb, var(--ink) 11%, var(--paper)); }
 .sidebar-session.is-dragging { opacity: .72; }
 .sidebar-session.is-dropping { animation: session-drop 180ms ease-out; }
 @keyframes session-drop { 50% { transform: scale(.985); } }
 .sidebar-session > button { flex: 1 1 auto; }
-.sidebar-sessions .session-drag-handle {
-  flex: 0 0 24px;
-  width: 24px;
+.sidebar-sessions .session-bullet {
+  flex: 0 0 18px;
+  width: 18px;
   min-height: 24px;
-  padding: 3px 0;
-  color: color-mix(in srgb, var(--muted) 78%, var(--paper));
+  display: grid;
+  place-items: center;
+  padding: 0;
   background: transparent;
   cursor: grab;
-  font-size: 12px;
-  line-height: 1;
   touch-action: none;
 }
-.sidebar-sessions .session-drag-handle:active { cursor: grabbing; }
-.sidebar-sessions .session-drag-handle:disabled { cursor: default; opacity: .35; }
+.sidebar-sessions .session-bullet span {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid color-mix(in srgb, var(--muted) 70%, var(--paper));
+  border-radius: 50%;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.sidebar-session.is-active .session-bullet span {
+  background: var(--signal);
+  border-color: var(--signal);
+}
+.sidebar-sessions .session-bullet:active { cursor: grabbing; }
+.sidebar-sessions .session-bullet:disabled { cursor: default; opacity: .35; }
 
 .session-menu { position: relative; flex: 0 0 auto; }
 
 .sidebar-sessions .session-menu summary {
-  width: 20px;
-  padding: 3px 0;
-  color: color-mix(in srgb, var(--muted) 78%, var(--paper));
-  border-radius: var(--radius);
-  font-size: 12px;
+  width: 22px;
+  min-height: 22px;
+  display: grid;
+  place-items: center;
+  margin-right: 2px;
+  color: color-mix(in srgb, var(--muted) 88%, var(--paper));
+  border-radius: 6px;
+  font-size: 13px;
   line-height: 1;
   text-align: center;
   list-style: none;
@@ -2076,22 +2094,23 @@ button:active,
   top: calc(100% + 4px);
   right: 0;
   z-index: 6;
-  width: 176px;
-  max-height: 260px;
+  width: 196px;
+  max-height: 300px;
   display: grid;
-  gap: 1px;
-  padding: 5px;
+  gap: 2px;
+  padding: 6px;
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 12px;
   box-shadow: var(--pop-shadow);
 }
 
 .session-menu-panel p {
-  margin: 5px 0 1px;
-  padding: 0 7px;
+  margin: 7px 0 1px;
+  padding: 7px 8px 0;
   color: color-mix(in srgb, var(--muted) 78%, var(--paper));
+  border-top: 1px solid var(--line);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: .06em;
@@ -2100,18 +2119,17 @@ button:active,
 
 .sidebar-sessions .session-menu-panel button {
   width: 100%;
-  padding: 6px 7px;
-  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
-  border-radius: var(--radius);
-  font-size: 11px;
+  padding: 7px 8px;
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+  border-radius: 7px;
+  font-size: 11.5px;
 }
 
 .sidebar-sessions .session-menu-panel button:hover:not(:disabled) { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
 
 .sidebar-sessions .session-menu-panel .session-menu-delete {
-  margin-top: 5px;
-  padding-top: 10px;
-  color: var(--signal);
+  margin-top: 6px;
+  padding-top: 11px;
   border-top: 1px solid var(--line);
 }
 
@@ -2471,11 +2489,11 @@ button:active,
 }
 
 /* Delete is the one item in this menu that cannot be undone, so it carries the
-   product's signal colour rather than sitting in the same grey as Rename. */
-.sidebar-sessions .session-menu-panel button.session-menu-delete { color: var(--signal); }
+   danger colour rather than sitting in the same grey as Rename. */
+.sidebar-sessions .session-menu-panel button.session-menu-delete { color: var(--danger); }
 .sidebar-sessions .session-menu-panel button.session-menu-delete:hover:not(:disabled) {
-  color: var(--on-signal);
-  background: var(--signal);
+  color: var(--danger);
+  background: var(--danger-tint);
 }
 
 /* UPL-01. Sits beside "Start lecture" in the topbar, so it reads as the other
