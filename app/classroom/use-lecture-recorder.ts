@@ -42,6 +42,8 @@ type RecorderOptions = {
   locale: "ko" | "en";
   isEnglish: boolean;
   speechLanguage: DeepgramLanguage;
+  /** 선택한 마이크. 빈 값이면 시스템 기본. ideal이라 장치가 사라져도 기본으로 진행한다. */
+  micDeviceId?: string;
   /** 강의 시작 시점에 세션을 만들 강의실. */
   activeClassroomId: string;
   /** 화면에 보이는 세션. 훅이 ref로 미러링해 소켓 콜백이 읽는다. */
@@ -66,6 +68,15 @@ type RecorderOptions = {
  * 분리했다 — 재연결·이중 시작 같은 수명주기 버그를 UI와 떼어 두기 위해서다.
  */
 export function useLectureRecorder(options: RecorderOptions) {
+  function audioConstraints(): MediaTrackConstraints {
+    return {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      ...(options.micDeviceId ? { deviceId: { ideal: options.micDeviceId } } : {}),
+    };
+  }
   const { locale, isEnglish, speechLanguage, activeClassroomId, activeSessionId, lectureTitle } = options;
 
   const [status, setStatus] = useState<Status>("idle");
@@ -554,14 +565,7 @@ export function useLectureRecorder(options: RecorderOptions) {
           ? "This browser does not support microphone input."
           : "이 브라우저는 마이크 입력을 지원하지 않습니다.");
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints() });
       streamRef.current = stream;
       startMicMeter(stream);
       streamOffsetMsRef.current = 0;
@@ -665,9 +669,7 @@ export function useLectureRecorder(options: RecorderOptions) {
     let stream: MediaStream | null = null;
     let resumed = false;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints() });
       const response = await fetch("/api/lecture-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },

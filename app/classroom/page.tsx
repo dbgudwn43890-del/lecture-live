@@ -7,7 +7,7 @@ import { FREE_PILOT, FREE_PILOT_CREDITS } from "../lib/free-pilot";
 import { createAdminClient } from "../lib/supabase/admin";
 import { createClient } from "../lib/supabase/server";
 
-export default async function ClassroomPage() {
+export default async function ClassroomPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // The proxy resolves locale from the site-locale cookie and the root layout
   // renders <html lang> from it, so hardcoding "ko" here produced an English
   // lang attribute wrapping an entirely Korean workspace.
@@ -41,9 +41,15 @@ export default async function ClassroomPage() {
     }
   }
 
+  // 새로고침 복원 대상. 클라이언트가 첫 페인트부터 "불러오는 중"을 알 수 있게
+  // 서버에서 내려 보낸다 — 빈 새 수업 화면이 깜빡이던 원인.
+  const params = await searchParams;
+  const restoreSessionId = typeof params.session === "string" ? params.session : undefined;
+
   return (
     <LectureWorkspace
       locale={locale}
+      restoreSessionId={restoreSessionId}
       initial={{
         profile: "error" in data ? null : data.profile,
         classrooms: "error" in data ? [] : data.classrooms,

@@ -29,9 +29,12 @@ export async function proxy(request: NextRequest) {
 
   const chosenLocale = request.cookies.get(LOCALE_COOKIE)?.value;
   const country = request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
+  // IP 국가만 믿으면 VPN·해외 라우팅된 통신사·헤더 없는 환경의 한국어 사용자가
+  // 영어 강의실로 들어간다. 브라우저가 한국어를 말하면 그 말을 먼저 듣는다.
+  const acceptsKorean = (request.headers.get("accept-language") ?? "").toLowerCase().includes("ko");
   const prefersEnglish = chosenLocale
     ? chosenLocale === "en"
-    : Boolean(country && country !== "KR" && country !== "XX");
+    : Boolean(country && country !== "KR" && country !== "XX" && !acceptsKorean);
   const usesEnglishHomepage = path === "/" && prefersEnglish;
   const oauthFallbackNext = getOAuthFallbackNext(
     path,

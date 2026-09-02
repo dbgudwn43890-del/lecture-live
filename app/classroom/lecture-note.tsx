@@ -15,12 +15,14 @@ export default function LectureNotePanel({
   const [phase, setPhase] = useState<Phase>("loading");
   const [note, setNote] = useState<LectureNote | null>(null);
   const [message, setMessage] = useState("");
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   async function load() {
     try {
       const response = await fetch(`/api/lecture-notes?sessionId=${encodeURIComponent(sessionId)}`);
-      const data = await response.json() as { note?: { status: string; content: LectureNote | null } | null; error?: string };
+      const data = await response.json() as { note?: { status: string; content: LectureNote | null } | null; remainingGenerations?: number | null; error?: string };
       if (!response.ok) throw new Error(data.error);
+      if (typeof data.remainingGenerations === "number") setRemaining(data.remainingGenerations);
       if (!data.note) setPhase("none");
       else if (data.note.status === "ready" && data.note.content) { setNote(data.note.content); setPhase("ready"); }
       else if (data.note.status === "generating") setPhase("generating");
@@ -44,6 +46,7 @@ export default function LectureNotePanel({
       if (!response.ok && response.status !== 202) throw new Error(data.error);
       if (data.note?.status === "ready" && data.note.content) { setNote(data.note.content); setPhase("ready"); }
       else setPhase("generating");
+      setRemaining((current) => (current === null ? null : Math.max(0, current - 1)));
     } catch (caught) {
       setMessage(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not create the note." : "노트를 만들지 못했습니다.");
       setPhase("failed");
@@ -65,8 +68,11 @@ export default function LectureNotePanel({
         <header className="note-topbar">
           <strong>{isEnglish ? "Lecture note" : "강의 노트"}</strong>
           <div>
+            {remaining !== null && phase !== "loading" && (
+              <span className="note-quota">{isEnglish ? `${remaining} left this hour` : `이번 시간 ${remaining}회 남음`}</span>
+            )}
             {phase === "ready" && (
-              <button type="button" className="note-regenerate" onClick={() => void generate(true)}>
+              <button type="button" className="note-regenerate" onClick={() => void generate(true)} disabled={remaining === 0}>
                 {isEnglish ? "Regenerate" : "다시 만들기"}
               </button>
             )}

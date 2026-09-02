@@ -2166,11 +2166,12 @@ button:active,
   right: 0;
   z-index: 6;
   width: 208px;
-  max-height: 300px;
   display: grid;
   gap: 2px;
   padding: 6px;
-  overflow-y: auto;
+  /* auto였을 때 옆으로 나가는 "강의실로 이동" 플라이아웃이 여기 잘려서
+     가로 스크롤바만 남았다. 항목 몇 개뿐이라 자체 스크롤이 필요 없다. */
+  overflow: visible;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -2237,12 +2238,10 @@ button:active,
 .session-submenu-caret { color: color-mix(in srgb, var(--muted) 80%, var(--paper)); font-size: 14px; line-height: 1; }
 .session-submenu[open] .session-submenu-caret { transform: rotate(90deg); }
 .session-submenu-panel {
-  position: absolute;
-  top: -6px;
-  /* Flies out to the right, into the workspace: the sidebar hugs the screen's
-     left edge, so a left flyout would run off-screen. */
-  left: calc(100% + 6px);
-  z-index: 7;
+  /* fixed: 사이드바의 overflow 스크롤에 잘리지 않는다. 좌표는 열리는 순간
+     onToggle이 트리거 오른쪽으로 계산해 넣는다. */
+  position: fixed;
+  z-index: 30;
   width: 188px;
   max-height: 280px;
   display: grid;
@@ -2295,8 +2294,10 @@ button:active,
    where it stretches into a purple slab across the workspace and the control it
    was hiding (start the lecture) is nowhere the learner can see. Auto-fitting
    the trailing controls keeps that from happening again when one is added. */
+/* 제목 · 상태 · 컨트롤 묶음. 컨트롤을 한 칸에 묶어 두면 버튼이 몇 개든
+   둘째 줄로 밀려 숨는 일이 없다. */
 .workspace .topbar {
-  grid-template-columns: minmax(180px, 1fr) repeat(3, auto);
+  grid-template-columns: minmax(180px, 1fr) auto auto;
   gap: 16px;
 }
 
@@ -2334,7 +2335,7 @@ button:active,
 .workspace .lecture-title-field input::placeholder { color: color-mix(in srgb, var(--muted) 78%, var(--paper)); }
 .workspace .lecture-title-field input:focus { outline: 0; }
 .workspace .lecture-title-field:focus-within span { color: var(--focus); }
-.workspace .lecture-controls { grid-column: span 2; }
+.workspace .lecture-controls { align-items: center; }
 
 .mobile-pane-switch { display: none; }
 
@@ -2739,22 +2740,29 @@ button:active,
 .admin-flag-cell { color: var(--danger); font-weight: 700; }
 
 /* ── 강의 노트 ─────────────────────────────────────────────── */
-/* 탑바의 다른 필 버튼(녹음 파일)과 같은 몸집. 보라 텍스트만 정체성으로 남긴다. */
+/* 종료된 강의의 대표 행동. 탑바에서 유일하게 색을 가진 버튼으로 세운다. */
 .note-button {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--signal) 40%, var(--line-strong));
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
   border-radius: 999px;
-  background: transparent;
-  color: var(--signal-dark);
+  background: var(--signal);
+  color: var(--on-signal);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 750;
   white-space: nowrap;
-  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--signal) 70%, transparent);
+  transition: background-color 120ms ease, transform 90ms ease-out, box-shadow 120ms ease;
 }
-.note-button:hover { background: color-mix(in srgb, var(--signal) 9%, transparent); border-color: var(--signal); }
+.note-button > span { font-size: 13px; line-height: 1; }
+.note-button:hover {
+  background: var(--signal-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--signal) 80%, transparent);
+}
 
 .note-overlay {
   position: fixed;
@@ -3055,3 +3063,110 @@ button:active,
   .note-cover h1 { font-size: 22px; }
   .note-section { padding: 8px 20px 4px; }
 }
+
+/* ── 복원 베일: 새로고침 후 세션을 다시 여는 동안 ─────────────── */
+.workspace .panes { position: relative; }
+.restore-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13.5px;
+  background: color-mix(in srgb, var(--paper) 78%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ── 세그먼트 토글: 선택이 미끄러져 이동한다 ─────────────────── */
+.segmented {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  min-width: 210px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+}
+.segmented-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--seg-count));
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 14%, transparent);
+  transform: translateX(calc(var(--seg-index) * 100%));
+  transition: transform 220ms cubic-bezier(.3, 1.2, .4, 1);
+}
+.segmented button {
+  position: relative;
+  z-index: 1;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: color 160ms ease;
+}
+.segmented button[aria-checked="true"] { color: var(--ink); font-weight: 750; }
+.segmented.is-disabled { opacity: .55; }
+@media (prefers-reduced-motion: reduce) { .segmented-thumb { transition: none; } }
+
+/* ── 설정 모달 ────────────────────────────────────────────── */
+.settings-panel { width: min(560px, 100%); }
+.settings-body { display: grid; padding: 8px 22px 24px; overflow-y: auto; }
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-row > div { min-width: 0; }
+.settings-row h3 { margin: 0 0 3px; font-size: 13.5px; font-weight: 750; }
+.settings-row p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.settings-select {
+  max-width: 240px;
+  padding: 8px 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 12.5px;
+}
+.settings-body .profile-advanced { margin-top: 16px; }
+
+/* ── 프로필 메뉴: 목록만 남긴 슬림 버전 ───────────────────────── */
+.profile-menu-items { display: grid; gap: 2px; padding: 6px 0; border-top: 1px solid var(--line); }
+.profile-menu-items > button,
+.profile-menu-items > a {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+}
+.profile-menu-items > button:hover,
+.profile-menu-items > a:hover { background: color-mix(in srgb, var(--ink) 7%, var(--surface)); }
+
+.note-quota { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.note-regenerate:disabled { opacity: .45; }

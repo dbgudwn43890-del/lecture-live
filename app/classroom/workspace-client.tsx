@@ -1,12 +1,41 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { DragDropProvider, useDraggable, useDroppable } from "@dnd-kit/react";
 
 // KaTeX·Mermaid를 노트를 열 때만 내려받는다. 평소 강의 화면 번들에서 제외.
 const LectureNotePanel = dynamic(() => import("./lecture-note"), { ssr: false });
+
+/** 슬라이딩 인디케이터가 있는 세그먼트 토글. 라이트/다크, 음성 언어 같은 소수 선택지용. */
+function SegmentedControl<T extends string>({ value, options, onChange, disabled }: {
+  value: T;
+  options: Array<{ id: T; label: string }>;
+  onChange(next: T): void;
+  disabled?: boolean;
+}) {
+  const index = Math.max(0, options.findIndex((option) => option.id === value));
+  return (
+    <div
+      className={`segmented${disabled ? " is-disabled" : ""}`}
+      role="radiogroup"
+      style={{ "--seg-count": options.length, "--seg-index": index } as CSSProperties}
+    >
+      <span className="segmented-thumb" aria-hidden="true" />
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="radio"
+          aria-checked={value === option.id}
+          disabled={disabled}
+          onClick={() => onChange(option.id)}
+        >{option.label}</button>
+      ))}
+    </div>
+  );
+}
 
 import { cleanAnswerText, cleanSources } from "../lib/answer-format";
 import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
@@ -129,7 +158,7 @@ type InitialData = {
   creditStatus: CreditStatus | null;
 };
 
-export default function LectureWorkspace({ locale = "ko", initial }: { locale?: "ko" | "en"; initial?: InitialData }) {
+export default function LectureWorkspace({ locale = "ko", initial, restoreSessionId }: { locale?: "ko" | "en"; initial?: InitialData; restoreSessionId?: string }) {
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
   const statusCopy: Record<Status, string> = isEnglish
@@ -154,6 +183,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   // 기본값 "multi" = 한국어 수업(화면 표기는 그냥 "한국어"). 실시간은 Soniox가
   // 한 문장 속 한·영을 함께 인식하고, 업로드는 Deepgram ko로 내려간다.
   const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>("multi");
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [micDeviceId, setMicDeviceId] = useState("");
   const [personalApiKey, setPersonalApiKey] = useState("");
   const [savedCredentials, setSavedCredentials] = useState<SavedCredential[]>([]);
   const [credentialPending, setCredentialPending] = useState(false);
@@ -183,6 +214,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     locale,
     isEnglish,
     speechLanguage,
+    micDeviceId,
     activeClassroomId,
     activeSessionId,
     lectureTitle,
@@ -231,6 +263,8 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
     window.localStorage.setItem("lecue-speech-language", language);
     const storedTheme = window.localStorage.getItem("lecue-theme");
     if (storedTheme === "dark" || storedTheme === "light") setThemeState(storedTheme);
+    const storedMic = window.localStorage.getItem("lecue-mic-device");
+    if (storedMic) setMicDeviceId(storedMic);
     // 답변 모델 선택도 새로고침을 견딘다. 언어 저장과 같은 방식.
     const provider = window.localStorage.getItem("lecue-ai-provider");
     if (provider && provider !== "lecture-live" && Object.hasOwn(personalModelOptions, provider)) {
@@ -899,6 +933,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
       setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not load the lecture." : "수업 기록을 불러오지 못했습니다.");
     } finally {
       setClassroomPending(false);
+      setRestoring(false);
     }
   }
 
@@ -1228,6 +1263,17 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
   const canStart = (status === "idle" || status === "ended" || status === "error")
     && (creditStatus === null || creditStatus.credits > 0);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // 새로고침 직후, URL의 세션을 다시 여는 동안. 빈 새 수업 화면 대신 베일을 덮는다.
+  const [restoring, setRestoring] = useState(Boolean(restoreSessionId));
+
+  // 설정을 열 때만 장치 목록을 읽는다. 마이크 권한 전에는 라벨이 비어 온다.
+  useEffect(() => {
+    if (!settingsOpen || !navigator.mediaDevices?.enumerateDevices) return;
+    void navigator.mediaDevices.enumerateDevices()
+      .then((devices) => setMicDevices(devices.filter((device) => device.kind === "audioinput")))
+      .catch(() => {});
+  }, [settingsOpen]);
   const activeModelLabel =
     aiProvider === "lecture-live"
       ? isEnglish ? "Default AI" : "기본 AI"
@@ -1280,7 +1326,19 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <button type="button" onClick={(event) => { closeMenu(event); void exportSession(session.id); }}>
               {isEnglish ? "Export as text" : "텍스트로 내보내기"}
             </button>
-            <details className="session-submenu">
+            <details
+              className="session-submenu"
+              onToggle={(event) => {
+                // 사이드바의 세로 스크롤 컨테이너가 옆으로 나온 패널을 잘라먹는다.
+                // fixed로 띄우고 열리는 순간 트리거 옆 좌표를 계산해 앉힌다.
+                const details = event.currentTarget;
+                const panel = details.querySelector<HTMLElement>(".session-submenu-panel");
+                if (!panel || !details.open) return;
+                const rect = details.getBoundingClientRect();
+                panel.style.left = `${rect.right + 6}px`;
+                panel.style.top = `${Math.max(8, Math.min(rect.top - 6, window.innerHeight - panel.offsetHeight - 8))}px`;
+              }}
+            >
               <summary>
                 <span>{isEnglish ? "Move to" : "강의실로 이동"}</span>
                 <span className="session-submenu-caret" aria-hidden="true">›</span>
@@ -1446,71 +1504,101 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               </div>
               <Link className="profile-billing-link" href={`${basePath}/billing`}>{isEnglish ? "View plan and billing" : "요금제 및 결제 관리"}<span aria-hidden="true">→</span></Link>
 
-              {/* A plain anchor, not a Link: the language lives in a cookie the
-                  proxy sets on this request and acts on for the next one, and a
-                  client-side navigation would skip that round trip. */}
-              <a className="profile-language" href={isEnglish ? "?lang=ko" : "?lang=en"}>
-                <span>{isEnglish ? "Language" : "언어"}</span>
-                <strong>{isEnglish ? "한국어로 보기" : "View in English"}</strong>
-              </a>
+              {/* Claude식 슬림 메뉴: 세부 설정은 전용 모달로 옮기고 여기는 목록만. */}
+              <div className="profile-menu-items">
+                <button type="button" onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  setSettingsOpen(true);
+                }}>
+                  {isEnglish ? "Settings" : "설정"}
+                </button>
+                {/* A plain anchor, not a Link: the language lives in a cookie the
+                    proxy sets on this request and acts on for the next one, and a
+                    client-side navigation would skip that round trip. */}
+                <a href={isEnglish ? "?lang=ko" : "?lang=en"}>
+                  {isEnglish ? "한국어로 보기" : "View in English"}
+                </a>
+              </div>
 
-              <section className="profile-model-settings" aria-labelledby="profile-theme-title">
-                <div className="profile-model-heading">
-                  <h3 id="profile-theme-title">{isEnglish ? "Appearance" : "화면 테마"}</h3>
-                  <span>{theme === "system"
-                    ? (isEnglish ? "System" : "시스템 설정")
-                    : theme === "dark" ? (isEnglish ? "Dark" : "다크") : (isEnglish ? "Light" : "라이트")}</span>
+              <form className="profile-signout" action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
+                <button type="submit">{isEnglish ? "Sign out" : "로그아웃"}</button>
+              </form>
+            </div>
+          </details>
+        </div>
+      </aside>
+
+      {settingsOpen && (
+        <div className="note-overlay" role="dialog" aria-modal="true" aria-label={isEnglish ? "Settings" : "설정"}>
+          <div className="note-panel settings-panel">
+            <header className="note-topbar">
+              <strong>{isEnglish ? "Settings" : "설정"}</strong>
+              <button type="button" className="banner-dismiss" onClick={() => setSettingsOpen(false)} aria-label={isEnglish ? "Close" : "닫기"}>✕</button>
+            </header>
+            <div className="settings-body">
+              <section className="settings-row">
+                <div>
+                  <h3>{isEnglish ? "Appearance" : "화면 테마"}</h3>
+                  <p>{isEnglish ? "How Lecue looks on this device." : "이 기기에서 Lecue가 보이는 방식입니다."}</p>
                 </div>
-                <fieldset className="settings-choice">
-                  <legend>{isEnglish ? "Theme" : "테마"}</legend>
-                  <div className="settings-choice-list">
-                    {([
-                      { id: "system", label: isEnglish ? "System" : "시스템 설정" },
-                      { id: "light", label: isEnglish ? "Light" : "라이트" },
-                      { id: "dark", label: isEnglish ? "Dark" : "다크" },
-                    ] as Array<{ id: "system" | "light" | "dark"; label: string }>).map((option) => (
-                      <button
-                        type="button"
-                        key={option.id}
-                        className={theme === option.id ? "active" : undefined}
-                        aria-pressed={theme === option.id}
-                        onClick={() => applyTheme(option.id)}
-                      >{option.label}</button>
-                    ))}
-                  </div>
-                </fieldset>
+                <SegmentedControl
+                  value={theme}
+                  options={[
+                    { id: "system", label: isEnglish ? "System" : "시스템" },
+                    { id: "light", label: isEnglish ? "Light" : "라이트" },
+                    { id: "dark", label: isEnglish ? "Dark" : "다크" },
+                  ]}
+                  onChange={(next) => applyTheme(next)}
+                />
               </section>
 
-              <section className="profile-model-settings" aria-labelledby="profile-speech-title">
-                <div className="profile-model-heading">
-                  <h3 id="profile-speech-title">{isEnglish ? "Speech recognition" : "음성 인식 언어"}</h3>
-                  <span>{speechLanguage === "en" ? "English" : (isEnglish ? "Korean" : "한국어")}</span>
+              <section className="settings-row">
+                <div>
+                  <h3>{isEnglish ? "Lecture language" : "음성 인식 언어"}</h3>
+                  <p>{isEnglish
+                    ? "Korean also recognizes English terms mixed into the lecture."
+                    : "한국어 모드는 수업에 섞인 영어 용어와 문장까지 함께 인식합니다."}</p>
                 </div>
-                <fieldset className="settings-choice">
-                  <legend>{isEnglish ? "Lecture language" : "강의 언어"}</legend>
-                  <div className="settings-choice-list">
-                    {([
-                      { id: "multi", label: isEnglish ? "Korean" : "한국어" },
-                      { id: "en", label: "English" },
-                    ] as Array<{ id: DeepgramLanguage; label: string }>).map((option) => (
-                      <button
-                        type="button"
-                        key={option.id}
-                        className={speechLanguage === option.id ? "active" : undefined}
-                        aria-pressed={speechLanguage === option.id}
-                        disabled={status === "recording" || status === "connecting"}
-                        onClick={() => {
-                          setSpeechLanguage(option.id);
-                          window.localStorage.setItem("lecue-speech-language", option.id);
-                        }}
-                      >{option.label}</button>
-                    ))}
-                  </div>
-                </fieldset>
-                <p>{isEnglish
-                  ? "Korean also recognizes English terms and sentences mixed into the lecture, keeping technical terms in Latin script."
-                  : "한국어 모드는 수업에 섞인 영어 용어와 문장까지 함께 인식하고, 전공용어를 영문 그대로 적습니다."}</p>
+                <SegmentedControl
+                  value={speechLanguage}
+                  disabled={status === "recording" || status === "connecting"}
+                  options={[
+                    { id: "multi" as DeepgramLanguage, label: isEnglish ? "Korean" : "한국어" },
+                    { id: "en" as DeepgramLanguage, label: "English" },
+                  ]}
+                  onChange={(next) => {
+                    setSpeechLanguage(next);
+                    window.localStorage.setItem("lecue-speech-language", next);
+                  }}
+                />
               </section>
+
+              <section className="settings-row">
+                <div>
+                  <h3>{isEnglish ? "Microphone" : "마이크"}</h3>
+                  <p>{isEnglish
+                    ? "Applies from the next recording."
+                    : "다음 녹음부터 적용됩니다."}</p>
+                </div>
+                <select
+                  className="settings-select"
+                  value={micDeviceId}
+                  disabled={status === "recording" || status === "connecting"}
+                  onChange={(event) => {
+                    setMicDeviceId(event.target.value);
+                    if (event.target.value) window.localStorage.setItem("lecue-mic-device", event.target.value);
+                    else window.localStorage.removeItem("lecue-mic-device");
+                  }}
+                >
+                  <option value="">{isEnglish ? "System default" : "시스템 기본"}</option>
+                  {micDevices.map((device, index) => (
+                    <option key={device.deviceId || index} value={device.deviceId}>
+                      {device.label || (isEnglish ? `Microphone ${index + 1}` : `마이크 ${index + 1}`)}
+                    </option>
+                  ))}
+                </select>
+              </section>
+
 
               {/* 한 층 접어 둔다: 개인 API 키 기능이 기본 제공 무료 기능으로
                   오해되지 않게, 열어야만 보이고 비용 주체를 먼저 말한다. */}
@@ -1606,14 +1694,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
                 )}
               </section>
               </details>
-
-              <form className="profile-signout" action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
-                <button type="submit">{isEnglish ? "Sign out" : "로그아웃"}</button>
-              </form>
             </div>
-          </details>
+          </div>
         </div>
-      </aside>
+      )}
 
       <div className="workspace-main">
         <header className="topbar">
@@ -1661,7 +1745,7 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               </button>
             </div>
           ) : (
-            <>
+            <div className="lecture-controls">
               {/* UPL-01. A lecture already recorded on a phone takes the same
                   path as a live one; it just arrives all at once. */}
               <label className="audio-upload-button">
@@ -1681,13 +1765,14 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               </label>
               {status === "ended" && activeSessionId && (
                 <button className="note-button" type="button" onClick={() => setNoteOpen(true)}>
+                  <span aria-hidden="true">✦</span>
                   {isEnglish ? "Lecture note" : "강의 노트"}
                 </button>
               )}
               <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
                 {isEnglish ? "Start lecture" : "강의 시작"}
               </button>
-            </>
+            </div>
           )}
         </header>
 
@@ -1822,6 +1907,12 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
         </div>
 
         <section className="panes">
+          {restoring && (
+            <div className="restore-veil" role="status">
+              <i className="auth-spinner auth-spinner-dark" aria-hidden="true" />
+              <span>{isEnglish ? "Reopening your lecture…" : "보던 수업을 다시 여는 중…"}</span>
+            </div>
+          )}
           <section
             className={`chat-pane${mobilePane === "chat" ? " is-mobile-active" : ""}${materialDragOver ? " material-drop-active" : ""}`}
             aria-labelledby="chat-title"

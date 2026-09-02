@@ -10,6 +10,9 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const SEGMENT_PAGE_SIZE = 1_000;
+/** 시간당 생성 한도. GET이 남은 횟수를 조회해 패널에 보여준다. */
+const GENERATION_LIMIT = 10;
+const GENERATION_WINDOW_MS = 3_600_000;
 const MAX_TRANSCRIPT_CHARACTERS = 300_000;
 const MAX_MATERIAL_CHARACTERS = 80_000;
 /** 다른 탭이 만든 generating 행이 이보다 오래됐으면 죽은 시도로 보고 이어받는다. */
@@ -42,7 +45,22 @@ export async function GET(request: Request) {
     console.error("Lecture note read failed", error.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not load the note." : "노트를 불러오지 못했습니다." }, { status: 500 });
   }
-  return NextResponse.json({ note: data ?? null });
+  return NextResponse.json({ note: data ?? null, remainingGenerations: await peekRemaining(current.userId) });
+}
+
+/** 남은 생성 횟수. 조회 실패는 표시를 생략할 뿐 노트를 막지 않는다. */
+async function peekRemaining(userId: string): Promise<number | null> {
+  const { createAdminClient } = await import("../../lib/supabase/admin");
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data, error } = await admin.rpc("peek_rate_limit", {
+    p_key: `lecture-notes:${userId}`,
+    p_limit: GENERATION_LIMIT,
+    p_window_seconds: GENERATION_WINDOW_MS / 1_000,
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ? Number(row.remaining) : null;
 }
 
 export async function POST(request: Request) {
@@ -50,7 +68,7 @@ export async function POST(request: Request) {
   if ("response" in current) return current.response;
   const { isEnglish, supabase, userId } = current;
 
-  const rateLimit = await checkSharedRateLimit(`lecture-notes:${userId}`, 10, 3_600_000);
+  const rateLimit = await checkSharedRateLimit(`lecture-notes:${userId}`, GENERATION_LIMIT, GENERATION_WINDOW_MS);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: isEnglish ? "Too many note requests. Try again later." : "노트 생성 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
