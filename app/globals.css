@@ -48,14 +48,16 @@
    인라인 스크립트가 저장된 선택(lecue-theme) 또는 OS 설정으로 첫 페인트 전에
    속성을 찍는다. 토글은 프로필 메뉴에 있다. */
 :root[data-theme="dark"] {
-    --paper: #131118;
+    /* 배경은 중립에 가깝게 — 보라끼는 액센트(--signal)가 낸다. 배경까지
+       보라면 화면 전체가 물빠진 자주색으로 읽힌다. */
+    --paper: #101014;
     /* 배경과 한 단계 확실히 벌린다. 다크에서 표면 구분은 그림자가 아니라
        밝기 차가 한다 (Material dark elevation). */
-    --surface: #201b2b;
-    --ink: #ece9f2;
-    --muted: #a49cb2;
-    --line: rgba(236, 233, 242, .12);
-    --line-strong: rgba(236, 233, 242, .26);
+    --surface: #1c1b22;
+    --ink: #eeecf3;
+    --muted: #a5a1b0;
+    --line: rgba(240, 238, 246, .1);
+    --line-strong: rgba(240, 238, 246, .22);
     /* Lightened enough to read as text on near-black, still the brand hue.
        Anything filled with it takes --on-signal for its label. */
     --signal: #a58ae8;
@@ -64,10 +66,10 @@
     --status: #6cc79a;
     --blue: #a58ae8;
     --focus: #a58ae8;
-    --soft-blue: #2a2140;
+    --soft-blue: #26243a;
     --tint: rgba(165, 138, 232, .14);
-    --invert-bg: #2e2740;
-    --edge: #4b4260;
+    --invert-bg: #2b2938;
+    --edge: #45415a;
     --on-signal: #1a1226;
     --danger: #ffb1a3;
     --danger-tint: #3a1c17;
@@ -94,6 +96,9 @@
 [data-theme="dark"] .chat-pane,
 [data-theme="dark"] .transcript-pane,
 [data-theme="dark"] .classroom-unit { box-shadow: 4px 4px 0 rgba(0, 0, 0, .5); }
+
+/* 라이트의 --paper 띠는 다크에서 시커먼 골이 된다. 패널과 반 단계만 벌린다. */
+[data-theme="dark"] .material-toolbar { background: color-mix(in srgb, var(--paper) 45%, var(--surface)); }
 
 * { box-sizing: border-box; }
 
