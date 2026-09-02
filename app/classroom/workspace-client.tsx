@@ -1945,10 +1945,10 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
               maxLength={1_000}
               // 답변을 기다리는 동안에도 다음 질문은 미리 쓸 수 있다. 전송만 막는다.
               disabled={!hasTranscript || !creditsAllowAsk}
-              rows={2}
+              rows={1}
             />
             <button type="submit" disabled={!canAsk || !question.trim()} aria-label={isEnglish ? "Send question" : "질문 보내기"}>
-              {isEnglish ? "Send" : "보내기"}
+              ↑
             </button>
           </form>
           </section>

@@ -502,33 +502,40 @@ a, button, summary, input, textarea, select {
 
 .empty-start-button { margin-top: 10px; }
 
-.message { margin: 0 0 24px; }
-.message-user { margin-left: 15%; }
+/* 요즘 채팅 문법: 어시스턴트는 버블 없이 문서처럼, 사용자만 오른쪽의
+   작은 말풍선. 상자 안의 상자가 사라져 같은 폭에서 훨씬 가벼워 보인다. */
+.message { margin: 0 0 26px; }
 
 .message-label {
   display: block;
-  margin-bottom: 7px;
+  margin-bottom: 6px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
+  letter-spacing: .02em;
 }
 
 .message p {
   margin: 0;
-  padding: 15px 16px;
-  background: color-mix(in srgb, var(--ink) 10%, var(--surface));
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.75;
   white-space: pre-wrap;
 }
 
+.message-user {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
 .message-user p {
-  background: var(--invert-bg);
-  color: white;
-  border-color: var(--invert-bg);
-  border-radius: var(--radius);
+  max-width: 82%;
+  width: fit-content;
+  padding: 10px 15px;
+  background: color-mix(in srgb, var(--signal) 11%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--signal) 22%, var(--line));
+  border-radius: 18px 18px 4px 18px;
+  font-size: 13.5px;
 }
 
 .message .pending { color: var(--muted); }
@@ -552,7 +559,7 @@ a, button, summary, input, textarea, select {
 }
 
 .sources span { padding: 5px 0; color: var(--muted); }
-.sources a { padding: 5px 8px; color: var(--focus); background: var(--soft-blue); text-decoration: none; }
+.sources a { padding: 5px 10px; color: var(--focus); background: var(--soft-blue); border-radius: 999px; text-decoration: none; }
 /* deslop-ignore-next-line 09 -- 밑줄은 링크의 상호작용 상태를 표시한다. */
 .sources a:hover { text-decoration: underline; }
 
@@ -577,13 +584,29 @@ a, button, summary, input, textarea, select {
   border-radius: var(--radius);
 }
 
+/* 컴포저는 메시지 위에 떠 있는 유리 알약. 스크롤이 뒤로 비쳐 지나간다. */
 .question-form {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 5;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 14px 16px 16px;
-  border-top: 1px dashed var(--line-strong);
-  background: var(--surface);
+  align-items: end;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--ink) 35%, transparent);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.question-form:focus-within {
+  border-color: color-mix(in srgb, var(--signal) 55%, transparent);
+  box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--signal) 45%, transparent);
 }
 
 .pane-heading-actions {
@@ -607,25 +630,33 @@ a, button, summary, input, textarea, select {
 .pane-heading .catchup-button:disabled { opacity: .5; }
 
 .question-form textarea {
-  min-height: 58px;
+  min-height: 44px;
   max-height: 140px;
-  resize: vertical;
-  padding: 11px 12px;
+  resize: none;
+  padding: 11px 0;
   color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  line-height: 1.45;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  line-height: 1.5;
+  font-size: 14px;
 }
 
 .question-form button {
-  width: 70px;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 3px;
   border: 0;
-  border-radius: var(--radius);
-  background: var(--focus);
+  border-radius: 50%;
+  background: var(--signal);
   color: var(--on-signal);
-  font-weight: 750;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  transition: background-color 120ms ease, transform 90ms ease-out, opacity 120ms ease;
 }
+.question-form button:hover:not(:disabled) { background: var(--signal-dark); transform: translateY(-1px); }
+.question-form button:disabled { opacity: .35; }
 
 .transcript { padding: 24px 28px 48px; }
 .empty-transcript { padding-left: clamp(20px, 8vw, 120px); }
@@ -1534,9 +1565,6 @@ a, button, summary, input, textarea, select {
 .stop-button,
 .chat-pane,
 .transcript-pane,
-.message p,
-.question-form textarea,
-.question-form button,
 .transcript-copy,
 .classroom-create,
 .classroom-create input,
@@ -1577,7 +1605,6 @@ a, button, summary, input, textarea, select {
 }
 
 .lecture-title-field input,
-.question-form textarea,
 .classroom-create input,
 .classroom-rename input {
   border-width: 2px;
@@ -1610,10 +1637,8 @@ a, button, summary, input, textarea, select {
   letter-spacing: .08em;
 }
 
-.message p { border: 2px solid var(--line-strong); }
-.message-user p { border-color: var(--invert-bg); }
 .sources a,
-.lecture-sources span {
+.lecture-sources .material-source {
   border: 1px solid var(--focus);
 }
 
@@ -2045,16 +2070,8 @@ button:active,
 .workspace .pane-heading { min-height: 68px; padding: 16px 20px 14px; border-color: var(--line); }
 .workspace .pane-heading h1,
 .workspace .pane-heading h2 { font-size: clamp(18px, 1.65vw, 22px); font-weight: 760; letter-spacing: -.035em; }
-.workspace .messages { padding: 20px; }
-.workspace .message p { border-width: 1px; border-radius: var(--radius) 12px 12px 4px; }
-.workspace .message-user p { border-radius: var(--radius) 12px 4px 12px; }
-.workspace .question-form { border-color: var(--line); background: var(--surface); }
-.workspace .question-form textarea,
-.workspace .question-form button { border-radius: var(--radius); }
-.workspace .question-form textarea { border-width: 1px; border-color: var(--line-strong); }
-/* Only the submit button is filled; .catchup-button is a dashed ghost and this
-   rule used to paint over it, leaving its label unreadable on a solid block. */
-.workspace .question-form button[type="submit"] { background: var(--focus); }
+/* 아래 130px은 유리 컴포저가 떠 있는 자리. 마지막 답변이 그 밑에 깔리지 않는다. */
+.workspace .messages { padding: 20px 20px 130px; }
 .workspace .transcript { padding: 20px 24px 42px; }
 .workspace .footnote { color: color-mix(in srgb, var(--muted) 78%, var(--paper)); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); border-top: 1px solid var(--line-strong); }
 
@@ -2357,30 +2374,6 @@ button:active,
 .workspace .sidebar-sessions button.active { font-weight: 600; }
 .workspace .sidebar-brand { font-weight: 700; letter-spacing: -.04em; }
 
-/* The composer read as two slabs: a dashed rule above it and a 70x58 filled
-   button beside the field. The rule is a hairline and the button now sits on
-   the field's last line, the size of the text it sends. */
-.workspace .question-form {
-  align-items: end;
-  gap: 8px;
-  padding: 12px 16px 14px;
-  border-top: 1px solid var(--line);
-}
-
-.workspace .question-form textarea {
-  min-height: 46px;
-  padding: 12px;
-  border-color: var(--line-strong);
-  font-size: 13.5px;
-}
-
-.workspace .question-form button {
-  width: auto;
-  min-height: 36px;
-  padding: 0 16px;
-  font-size: 13px;
-  font-weight: 600;
-}
 
 /* Adding a classroom is a rare, secondary act; it was wearing the same filled
    teal as the button that starts a lecture. */
