@@ -77,43 +77,91 @@ export default function LectureNotePanel({
         {phase === "loading" && <p className="note-status">{isEnglish ? "Loading…" : "불러오는 중…"}</p>}
         {phase === "none" && (
           <div className="note-empty">
+            <span className="note-mark" aria-hidden="true">✎</span>
+            <h2>{isEnglish ? "Turn this lecture into a note" : "이 강의를 한 권의 노트로"}</h2>
             <p>{isEnglish
-              ? "Build a structured review note from this lecture's transcript, your questions, and the materials."
-              : "이 수업의 스크립트, 내 질문, 강의 자료를 바탕으로 구조화된 복습 노트를 만듭니다."}</p>
-            <button type="button" className="start-button" onClick={() => void generate(false)}>
+              ? "A structured review note built from everything this lecture left behind — with formulas, diagrams, and the material pages that matter."
+              : "이 수업이 남긴 모든 기록으로 구조화된 복습 노트를 만듭니다. 수식과 개념 도식, 중요한 자료 페이지까지 함께 정리됩니다."}</p>
+            <ul className="note-ingredients">
+              <li>{isEnglish ? "Live transcript" : "실시간 스크립트"}</li>
+              <li>{isEnglish ? "My questions" : "내가 한 질문"}</li>
+              <li>{isEnglish ? "Lecture materials" : "강의 자료"}</li>
+            </ul>
+            <button type="button" className="note-create-button" onClick={() => void generate(false)}>
               {isEnglish ? "Create note" : "노트 만들기"}
             </button>
           </div>
         )}
-        {phase === "generating" && (
-          <p className="note-status">
-            <i className="auth-spinner auth-spinner-dark" aria-hidden="true" />
-            {isEnglish ? "Writing the note… this can take a minute or two." : "노트를 작성하는 중입니다… 1~2분 정도 걸릴 수 있어요."}
-          </p>
-        )}
+        {phase === "generating" && <GeneratingState isEnglish={isEnglish} />}
         {(phase === "failed" || phase === "error") && (
           <div className="note-empty">
+            <span className="note-mark" aria-hidden="true">✎</span>
             <p>{message || (isEnglish ? "Could not create the note." : "노트를 만들지 못했습니다.")}</p>
-            <button type="button" className="start-button" onClick={() => void generate(true)}>
+            <button type="button" className="note-create-button" onClick={() => void generate(true)}>
               {isEnglish ? "Try again" : "다시 시도"}
             </button>
           </div>
         )}
 
-        {phase === "ready" && note && (
-          <article className="note-body">
-            <h1>{note.title}</h1>
-            <p className="note-summary">{note.summary}</p>
-            {note.sections.map((section, sectionIndex) => (
-              <section key={sectionIndex}>
-                <h2>{section.heading}</h2>
-                {section.blocks.map((block, blockIndex) => <Block key={blockIndex} block={block} />)}
-              </section>
-            ))}
-          </article>
-        )}
+        {phase === "ready" && note && <NoteArticle note={note} isEnglish={isEnglish} />}
       </div>
     </div>
+  );
+}
+
+/** 생성은 1~2분 걸린다. 침묵하는 스피너 대신 지금 어느 단계인지 보여준다. */
+function GeneratingState({ isEnglish }: { isEnglish: boolean }) {
+  const stages = isEnglish
+    ? ["Re-reading the transcript", "Grouping the key concepts", "Setting formulas and diagrams", "Finishing the note"]
+    : ["스크립트를 다시 읽는 중", "핵심 개념을 묶는 중", "수식과 도식을 정리하는 중", "노트를 마무리하는 중"];
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    // ponytail: 실제 진행률 신호가 없다. 경과 시간으로 단계만 짐작해 보여준다.
+    const boundaries = [15_000, 40_000, 75_000];
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      setStage(boundaries.filter((boundary) => elapsed >= boundary).length);
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="note-generating" role="status">
+      <div className="note-generating-art" aria-hidden="true"><span /><span /><span /></div>
+      <strong>{stages[stage]}</strong>
+      <div className="note-progress" aria-hidden="true"><i /></div>
+      <ol className="note-stages" aria-hidden="true">
+        {stages.map((label, index) => (
+          <li key={label} className={index < stage ? "done" : index === stage ? "current" : undefined}>{label}</li>
+        ))}
+      </ol>
+      <p>{isEnglish ? "This can take a minute or two. You can close this — the note keeps writing." : "1~2분 정도 걸립니다. 창을 닫아도 노트는 계속 만들어져요."}</p>
+    </div>
+  );
+}
+
+/** 완성된 노트 본문. 패널과 분리해 두면 미리보기·인쇄 화면에서도 그대로 쓴다. */
+export function NoteArticle({ note, isEnglish }: { note: LectureNote; isEnglish: boolean }) {
+  return (
+    <article className="note-body">
+      <header className="note-cover">
+        <span className="note-cover-label">{isEnglish ? "Lecture note" : "강의 노트"}</span>
+        <h1>{note.title}</h1>
+        <p className="note-summary">{note.summary}</p>
+      </header>
+      {note.sections.map((section, sectionIndex) => (
+        <section className="note-section" key={sectionIndex}>
+          <h2>
+            <span aria-hidden="true">{String(sectionIndex + 1).padStart(2, "0")}</span>
+            {section.heading}
+          </h2>
+          {section.blocks.map((block, blockIndex) => <Block key={blockIndex} block={block} />)}
+        </section>
+      ))}
+      <footer className="note-end" aria-hidden="true">◆</footer>
+    </article>
   );
 }
 
