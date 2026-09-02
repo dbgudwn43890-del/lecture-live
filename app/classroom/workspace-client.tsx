@@ -46,9 +46,17 @@ type Message = {
   assistantLabel?: string;
 };
 
-/** Closes the <details> menu that a clicked menu item sits inside. */
+/**
+ * Closes the whole <details> menu a clicked item sits inside — every open
+ * ancestor, so a click in the "Move to" flyout also closes the menu it flew
+ * out of, not just the submenu.
+ */
 function closeMenu(event: { currentTarget: HTMLElement }) {
-  event.currentTarget.closest("details")?.removeAttribute("open");
+  let node: HTMLElement | null = event.currentTarget.closest("details");
+  while (node) {
+    node.removeAttribute("open");
+    node = node.parentElement?.closest("details") ?? null;
+  }
 }
 
 function DraggableSession({ id, title, disabled, active, isEnglish, children }: {
@@ -1257,15 +1265,22 @@ export default function LectureWorkspace({ locale = "ko", initial }: { locale?: 
             <button type="button" onClick={(event) => { closeMenu(event); void exportSession(session.id); }}>
               {isEnglish ? "Export as text" : "텍스트로 내보내기"}
             </button>
-            <p>{isEnglish ? "Move to" : "강의실로 이동"}</p>
-            {(session.classroom_id ? [{ id: "", title: isEnglish ? "Unassigned" : "미분류 수업" }] : [])
-              .concat(classrooms.filter((classroom) => classroom.id !== session.classroom_id).map((classroom) => ({ id: classroom.id, title: classroom.title })))
-              .map((classroom) => (
-                <button key={classroom.id || "unassigned"} type="button" onClick={(event) => {
-                  closeMenu(event);
-                  void moveSession(session.id, classroom.id || null);
-                }}>{classroom.title}</button>
-              ))}
+            <details className="session-submenu">
+              <summary>
+                <span>{isEnglish ? "Move to" : "강의실로 이동"}</span>
+                <span className="session-submenu-caret" aria-hidden="true">›</span>
+              </summary>
+              <div className="session-submenu-panel">
+                {(session.classroom_id ? [{ id: "", title: isEnglish ? "Unassigned" : "미분류 수업" }] : [])
+                  .concat(classrooms.filter((classroom) => classroom.id !== session.classroom_id).map((classroom) => ({ id: classroom.id, title: classroom.title })))
+                  .map((classroom) => (
+                    <button key={classroom.id || "unassigned"} type="button" onClick={(event) => {
+                      closeMenu(event);
+                      void moveSession(session.id, classroom.id || null);
+                    }}>{classroom.title}</button>
+                  ))}
+              </div>
+            </details>
             <button
               type="button"
               className="session-menu-delete"

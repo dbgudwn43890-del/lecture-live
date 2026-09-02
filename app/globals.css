@@ -2133,6 +2133,62 @@ button:active,
   border-top: 1px solid var(--line);
 }
 
+/* "Move to" flies out to the side rather than stacking every classroom into
+   the parent menu, which grew unbounded once someone had more than a few. */
+.session-submenu { position: relative; }
+.session-submenu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 7px 7px;
+  font-size: 11.5px;
+  list-style: none;
+  cursor: pointer;
+}
+.session-submenu > summary::-webkit-details-marker { display: none; }
+.session-submenu > summary:hover,
+.session-submenu[open] > summary { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+.session-submenu-caret { color: color-mix(in srgb, var(--muted) 80%, var(--paper)); font-size: 14px; line-height: 1; }
+.session-submenu[open] .session-submenu-caret { transform: rotate(90deg); }
+.session-submenu-panel {
+  position: absolute;
+  top: -6px;
+  /* Flies out to the right, into the workspace: the sidebar hugs the screen's
+     left edge, so a left flyout would run off-screen. */
+  left: calc(100% + 5px);
+  z-index: 7;
+  width: 176px;
+  max-height: 280px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: var(--pop-shadow);
+}
+.sidebar-sessions .session-submenu-panel button {
+  width: 100%;
+  padding: 7px 8px;
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font-size: 11.5px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-sessions .session-submenu-panel button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+
 .sidebar-session-rename {
   width: 100%;
   min-width: 0;
