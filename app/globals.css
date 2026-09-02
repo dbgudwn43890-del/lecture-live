@@ -2136,24 +2136,33 @@ button:active,
 /* "Move to" flies out to the side rather than stacking every classroom into
    the parent menu, which grew unbounded once someone had more than a few. */
 .session-submenu { position: relative; }
-.session-submenu > summary {
+/* Specificity must beat `.sidebar-sessions .session-menu summary` (the 22px
+   ⋮ trigger), which also matches this nested summary and squeezed it to one
+   character per line. */
+.sidebar-sessions .session-submenu > summary {
+  width: 100%;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  width: 100%;
   margin-top: 6px;
+  margin-right: 0;
   padding: 7px 8px;
   color: color-mix(in srgb, var(--ink) 78%, var(--muted));
   border-top: 1px solid var(--line);
   border-radius: 0 0 7px 7px;
   font-size: 11.5px;
+  line-height: 1;
+  text-align: left;
+  opacity: 1;
   list-style: none;
   cursor: pointer;
 }
 .session-submenu > summary::-webkit-details-marker { display: none; }
-.session-submenu > summary:hover,
-.session-submenu[open] > summary { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+.sidebar-sessions .session-submenu > summary:hover,
+.sidebar-sessions .session-submenu[open] > summary { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+.sidebar-sessions .session-submenu > summary > span:first-child { flex: 1 1 auto; }
 .session-submenu-caret { color: color-mix(in srgb, var(--muted) 80%, var(--paper)); font-size: 14px; line-height: 1; }
 .session-submenu[open] .session-submenu-caret { transform: rotate(90deg); }
 .session-submenu-panel {
