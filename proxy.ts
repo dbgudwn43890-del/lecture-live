@@ -9,7 +9,10 @@ function isUnder(path: string, prefix: string) {
   return path === prefix || path.startsWith(`${prefix}/`);
 }
 
-const LOCALE_COOKIE = "site-locale";
+// v2: 이름을 바꿔 예전 쿠키를 무효화한다. 예전 "site-locale"에는 IP 오추측이
+// en으로 굳어 있어, 한국어 브라우저가 계속 영어 강의실로 열렸다. 이제 쿠키는
+// 언어 토글(?lang=)로 직접 고른 선택만 담는다.
+const LOCALE_COOKIE = "site-locale-choice";
 const LOCALE_COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" } as const;
 
 export async function proxy(request: NextRequest) {
@@ -29,8 +32,8 @@ export async function proxy(request: NextRequest) {
 
   const chosenLocale = request.cookies.get(LOCALE_COOKIE)?.value;
   const country = request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
-  // IP 국가만 믿으면 VPN·해외 라우팅된 통신사·헤더 없는 환경의 한국어 사용자가
-  // 영어 강의실로 들어간다. 브라우저가 한국어를 말하면 그 말을 먼저 듣는다.
+  // 직접 고른 선택 > 브라우저 언어 > IP 국가. IP만 믿으면 VPN·해외 라우팅된
+  // 통신사·헤더 없는 환경의 한국어 사용자가 영어 강의실로 들어간다.
   const acceptsKorean = (request.headers.get("accept-language") ?? "").toLowerCase().includes("ko");
   const prefersEnglish = chosenLocale
     ? chosenLocale === "en"
@@ -40,7 +43,7 @@ export async function proxy(request: NextRequest) {
     path,
     country,
     request.nextUrl.searchParams.has("code"),
-    chosenLocale ? chosenLocale === "en" : undefined,
+    prefersEnglish,
   );
 
   // Supabase falls back to the Site URL when an OAuth redirect URL is not allow-listed.
@@ -52,15 +55,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
-  // Whichever language this visitor gets, remember it. Without this the choice
-  // was re-derived from the IP header on every request, so a Korean visitor
-  // whose next request was geolocated elsewhere — a VPN, a mobile carrier
-  // routed abroad, a missing header — landed in the English classroom after
-  // reading the Korean landing page.
-  const rememberLocale = <T extends NextResponse>(target: T) => {
-    if (!chosenLocale) target.cookies.set(LOCALE_COOKIE, prefersEnglish ? "en" : "ko", LOCALE_COOKIE_OPTIONS);
-    return target;
-  };
+  // 추측은 저장하지 않는다. 예전에는 첫 요청의 IP 추측을 쿠키에 굳혔는데,
+  // 그 추측이 틀리면(en) 한국어 브라우저가 영원히 영어로 열렸다. 브라우저
+  // Accept-Language 기반 재계산은 요청마다 안정적이라 저장할 이유가 없다.
 
   // Both directions: into /en when English is preferred, back out of it when
   // Korean is. Only the first was enforced, so the language switch could set
@@ -69,7 +66,7 @@ export async function proxy(request: NextRequest) {
   if (localeTarget) {
     const localeUrl = request.nextUrl.clone();
     localeUrl.pathname = localeTarget;
-    return rememberLocale(NextResponse.redirect(localeUrl));
+    return NextResponse.redirect(localeUrl);
   }
 
   const requestHeaders = new Headers(request.headers);
@@ -117,10 +114,10 @@ export async function proxy(request: NextRequest) {
     loginUrl.pathname = path.startsWith("/en/") ? "/en/login" : "/login";
     loginUrl.search = "";
     loginUrl.searchParams.set("next", `${path}${request.nextUrl.search}`);
-    return rememberLocale(NextResponse.redirect(loginUrl));
+    return NextResponse.redirect(loginUrl);
   }
 
-  return rememberLocale(response);
+  return response;
 }
 
 export const config = {
