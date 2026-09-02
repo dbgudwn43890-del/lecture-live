@@ -1581,12 +1581,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 }}>
                   {isEnglish ? "Settings" : "설정"}
                 </button>
-                {/* A plain anchor, not a Link: the language lives in a cookie the
-                    proxy sets on this request and acts on for the next one, and a
-                    client-side navigation would skip that round trip. */}
-                <a href={isEnglish ? "?lang=ko" : "?lang=en"}>
-                  {isEnglish ? "한국어로 보기" : "View in English"}
-                </a>
               </div>
 
               <form className="profile-signout" action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
@@ -1624,6 +1618,23 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                     { id: "dark", label: isEnglish ? "Dark" : "다크" },
                   ]}
                   onChange={(next) => applyTheme(next)}
+                />
+              </section>
+
+              <section className="settings-row">
+                <div>
+                  <h3>{isEnglish ? "Display language" : "표시 언어"}</h3>
+                  <p>{isEnglish ? "The language of menus and screens." : "메뉴와 화면에 쓰는 언어입니다."}</p>
+                </div>
+                <SegmentedControl
+                  value={isEnglish ? "en" : "ko"}
+                  options={[
+                    { id: "ko", label: "한국어" },
+                    { id: "en", label: "English" },
+                  ]}
+                  // 전체 새로고침이어야 한다: 언어는 프록시가 ?lang=을 받아 쿠키로
+                  // 굳히는 방식이라 클라이언트 내비게이션으로는 반영되지 않는다.
+                  onChange={(next) => { if (next !== (isEnglish ? "en" : "ko")) window.location.assign(`?lang=${next}`); }}
                 />
               </section>
 
