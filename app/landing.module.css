@@ -278,10 +278,10 @@
   gap: 56px;
   padding: 88px max(24px, calc((100vw - 1280px) / 2));
   color: white;
-  background: linear-gradient(120deg, #5f42a4 0%, #7859c0 48%, #b24ecb 100%);
+  background: linear-gradient(120deg, #a04b2c 0%, #c15f3c 48%, #d29b3d 100%);
 }
 .finalCta p { max-width: 720px; margin: 0; font-size: clamp(34px, 3.8vw, 52px); font-weight: 650; line-height: 1.12; letter-spacing: -.04em; }
-.finalCta a { min-width: 220px; min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 26px; color: #5f42a4; background: white; border-radius: 999px; font-size: 15px; font-weight: 600; }
+.finalCta a { min-width: 220px; min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 26px; color: #a04b2c; background: white; border-radius: 999px; font-size: 15px; font-weight: 600; }
 .footer { min-height: 190px; display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 24px 48px; padding: 48px max(24px, calc((100vw - 1280px) / 2)); color: rgba(255, 255, 255, .6); background: var(--invert-bg); font-size: 12.5px; }
 .footerTagline { margin: 10px 0 0 !important; color: rgba(255, 255, 255, .82); font-size: 13.5px; font-weight: 500; letter-spacing: -.01em; }
 .footer strong { color: white; font-size: 17px; font-weight: 600; letter-spacing: -.03em; }
@@ -356,6 +356,6 @@
 }
 @media (hover: hover) {
   .primaryCta:hover, .planGrid article > a:hover, .planGrid article > button:hover { background: var(--signal-dark); transform: translateY(-1px); }
-  .planGrid .featuredPlan > a:hover, .planGrid .featuredPlan > button:hover, .finalCta a:hover { color: #5f42a4 !important; background: rgba(255, 255, 255, .88); transform: translateY(-1px); }
+  .planGrid .featuredPlan > a:hover, .planGrid .featuredPlan > button:hover, .finalCta a:hover { color: #a04b2c !important; background: rgba(255, 255, 255, .88); transform: translateY(-1px); }
   .roomsCopy a:hover { background: rgba(255, 255, 255, .88); }
 }

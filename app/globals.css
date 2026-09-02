@@ -4,33 +4,35 @@
    highlights, and --status stays green because it means "grounded", not
    "brand". */
 :root {
-  --paper: #f7f6f8;
+  /* 웜 팔레트 (2026-09-03): 크림 종이 위의 따뜻한 잉크, 액센트는 테라코타.
+     보라 브랜드에서 전환 — 참고: Claude.ai 계열의 웜 프로페셔널 톤. */
+  --paper: #faf9f5;
   --surface: #ffffff;
-  --ink: #1c1825;
-  --muted: #6b6577;
-  --line: rgba(28, 24, 37, .09);
-  --line-strong: rgba(28, 24, 37, .18);
-  --signal: #7859c0;
-  --signal-dark: #5f42a4;
-  --accent: #b24ecb;
+  --ink: #262420;
+  --muted: #7d766c;
+  --line: rgba(38, 36, 32, .09);
+  --line-strong: rgba(38, 36, 32, .18);
+  --signal: #c15f3c;
+  --signal-dark: #a04b2c;
+  --accent: #d29b3d;
   --status: #3d8a68;
-  --blue: #7859c0;
-  --focus: #7859c0;
-  --soft-blue: #efeaf9;
-  --tint: rgba(120, 89, 192, .08);
+  --blue: #c15f3c;
+  --focus: #c15f3c;
+  --soft-blue: #f4ede2;
+  --tint: rgba(193, 95, 60, .08);
   /* Surfaces that are deliberately inverted (topbar, footer, the user's chat
      bubble, filled ink buttons). They stay dark in both themes, so the white
      and pale-grey text sitting on them needs no per-theme handling. */
-  --invert-bg: #1c1825;
+  --invert-bg: #262420;
   /* The brutalist hard borders and offset shadows. Ink in light; a mid tone in
      dark, where a near-white 3px offset would shout. */
-  --edge: #1c1825;
+  --edge: #262420;
   /* Label colour for anything filled with --signal / --focus. */
   --on-signal: #ffffff;
   --danger: #7e2014;
   --danger-tint: #ffe1dc;
   --danger-line: #e7aaa0;
-  --notice-ink: #2c1b48;
+  --notice-ink: #4a3218;
   /* Soft, not sharp: two radii and light-diffusing shadows, since the brand
      reads premium rather than brutalist. The --brutal-* names are kept because
      a dozen app stylesheets already reference them. */
@@ -48,33 +50,32 @@
    인라인 스크립트가 저장된 선택(lecue-theme) 또는 OS 설정으로 첫 페인트 전에
    속성을 찍는다. 토글은 프로필 메뉴에 있다. */
 :root[data-theme="dark"] {
-    /* 배경은 중립에 가깝게 — 보라끼는 액센트(--signal)가 낸다. 배경까지
-       보라면 화면 전체가 물빠진 자주색으로 읽힌다. */
-    --paper: #101014;
+    /* 웜 다크: 검정에 온기를 반 스푼. 액센트는 라이트보다 밝힌 앰버. */
+    --paper: #131110;
     /* 배경과 한 단계 확실히 벌린다. 다크에서 표면 구분은 그림자가 아니라
        밝기 차가 한다 (Material dark elevation). */
-    --surface: #1c1b22;
-    --ink: #eeecf3;
-    --muted: #a5a1b0;
-    --line: rgba(240, 238, 246, .1);
-    --line-strong: rgba(240, 238, 246, .22);
+    --surface: #1e1b18;
+    --ink: #f0ece5;
+    --muted: #a89f93;
+    --line: rgba(240, 236, 229, .1);
+    --line-strong: rgba(240, 236, 229, .22);
     /* Lightened enough to read as text on near-black, still the brand hue.
        Anything filled with it takes --on-signal for its label. */
-    --signal: #a58ae8;
-    --signal-dark: #c2acf2;
-    --accent: #d07fe4;
+    --signal: #e08b60;
+    --signal-dark: #eda57f;
+    --accent: #e0b064;
     --status: #6cc79a;
-    --blue: #a58ae8;
-    --focus: #a58ae8;
-    --soft-blue: #26243a;
-    --tint: rgba(165, 138, 232, .14);
-    --invert-bg: #2b2938;
-    --edge: #45415a;
-    --on-signal: #1a1226;
+    --blue: #e08b60;
+    --focus: #e08b60;
+    --soft-blue: #2c2620;
+    --tint: rgba(224, 139, 96, .14);
+    --invert-bg: #2e2a25;
+    --edge: #55493d;
+    --on-signal: #241207;
     --danger: #ffb1a3;
     --danger-tint: #3a1c17;
     --danger-line: #6b2f26;
-    --notice-ink: #e6dcff;
+    --notice-ink: #f3e3cd;
     --pop-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 14px 34px -16px rgba(0, 0, 0, .8);
     --brutal-shadow: 0 10px 28px -16px rgba(0, 0, 0, .85);
     color-scheme: dark;
@@ -593,9 +594,9 @@ a, button, summary, input, textarea, select {
 /* 컴포저는 메시지 위에 떠 있는 유리 알약. 스크롤이 뒤로 비쳐 지나간다. */
 .question-form {
   position: absolute;
-  bottom: 14px;
-  left: 14px;
-  right: 14px;
+  bottom: 16px;
+  left: 20px;
+  right: 20px;
   z-index: 5;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2104,15 +2105,18 @@ button:active,
 .profile-signout button { width: 100%; min-height: 34px; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); font-size: 10px; font-weight: 700; text-align: left; }
 .profile-signout button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
 
-.workspace .panes { gap: 12px; padding: 14px 18px 16px; background: var(--paper); }
+/* 카드-인-카드 대신 풀블리드: 메인 전체가 한 장의 표면이고 두 페인은
+   헤어라인 하나로만 나뉜다. 구조는 사이드바(종이색)와의 대비가 만든다. */
+.workspace .panes { gap: 0; padding: 0; background: var(--surface); }
 
 .workspace .chat-pane,
 .workspace .transcript-pane {
   background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
 }
+.workspace .chat-pane { border-right: 1px solid var(--line); }
 
 .workspace .pane-heading { min-height: 68px; padding: 16px 20px 14px; border-color: var(--line); }
 .workspace .pane-heading h1,
@@ -2120,7 +2124,7 @@ button:active,
 /* 아래 130px은 유리 컴포저가 떠 있는 자리. 마지막 답변이 그 밑에 깔리지 않는다. */
 .workspace .messages { padding: 20px 20px 130px; }
 .workspace .transcript { padding: 20px 24px 42px; }
-.workspace .footnote { color: color-mix(in srgb, var(--muted) 78%, var(--paper)); background: color-mix(in srgb, var(--ink) 4%, var(--paper)); border-top: 1px solid var(--line-strong); }
+.workspace .footnote { color: color-mix(in srgb, var(--muted) 78%, var(--paper)); background: var(--surface); border-top: 1px solid var(--line); }
 
 .sidebar-session { display: flex; align-items: center; gap: 4px; padding-left: 4px; border-radius: var(--radius); }
 /* 행 전체가 한 덩어리로 하이라이트된다 — 제목 버튼만 칠하던 예전 방식은
@@ -2535,7 +2539,8 @@ button:active,
   }
   .mobile-pane-switch button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--focus); }
   .mobile-pane-switch span { color: color-mix(in srgb, var(--muted) 78%, var(--paper)); font-size: 10px; font-variant-numeric: tabular-nums; }
-  .workspace .panes { grid-template-columns: 1fr; padding: 12px; }
+  .workspace .panes { grid-template-columns: 1fr; padding: 0; }
+  .workspace .chat-pane { border-right: 0; border-bottom: 1px solid var(--line); }
   .workspace .chat-pane:not(.is-mobile-active),
   .workspace .transcript-pane:not(.is-mobile-active) { display: none; }
   .workspace .chat-pane.is-mobile-active { display: grid; }
@@ -3259,13 +3264,13 @@ button:active,
   :root, :root[data-theme="dark"] {
     --paper: #ffffff;
     --surface: #ffffff;
-    --ink: #1c1825;
-    --muted: #6b6577;
-    --line: rgba(28, 24, 37, .12);
-    --line-strong: rgba(28, 24, 37, .22);
-    --signal: #7859c0;
-    --signal-dark: #5f42a4;
-    --soft-blue: #efeaf9;
+    --ink: #262420;
+    --muted: #7d766c;
+    --line: rgba(38, 36, 32, .12);
+    --line-strong: rgba(38, 36, 32, .22);
+    --signal: #c15f3c;
+    --signal-dark: #a04b2c;
+    --soft-blue: #f4ede2;
     --on-signal: #ffffff;
     color-scheme: light;
   }
@@ -3292,4 +3297,27 @@ button:active,
   .note-cover { background: none; border-bottom: 2px solid var(--signal); }
   .note-callout, .note-qa, .note-formula, .note-diagram, .note-material { break-inside: avoid; }
   .note-section h2 { break-after: avoid; }
+}
+
+/* 빈 채팅의 예시 질문. 누르면 입력창에 채워진다. */
+.empty-chat-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+.empty-chat-examples button {
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.empty-chat-examples button:hover {
+  color: var(--signal-dark);
+  border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
+  background: color-mix(in srgb, var(--signal) 6%, var(--surface));
 }

@@ -2021,8 +2021,16 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               <div className="empty-chat">
                 <p>{isEnglish ? "Ask as soon as the lecture starts." : "강의가 시작되면 바로 물어보세요."}</p>
                 <span>{isEnglish
-                  ? "You can ask ‘What did CIB mean just now?’ and get an answer grounded in the lecture flow."
-                  : "“방금 말한 CIB가 뭐야?”처럼 질문해도 강의 흐름을 기준으로 답합니다."}</span>
+                  ? "Answers are grounded in the lecture flow up to the moment you ask."
+                  : "질문한 시점까지의 강의 흐름을 근거로 답합니다."}</span>
+                <div className="empty-chat-examples">
+                  {(isEnglish
+                    ? ["What did CIB mean just now?", "Explain that formula again, simply", "Summarize the last 10 minutes"]
+                    : ["방금 말한 CIB가 뭐야?", "아까 그 수식 쉽게 다시 설명해줘", "최근 10분 요약해줘"]
+                  ).map((example) => (
+                    <button key={example} type="button" onClick={() => setQuestion(example)}>{example}</button>
+                  ))}
+                </div>
               </div>
             ) : (
               messages.map((message) => (
