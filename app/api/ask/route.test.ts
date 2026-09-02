@@ -21,6 +21,8 @@ function queryBuilder(table: string) {
     select() { return builder; },
     eq(column: string, value: unknown) { filters[column] = value; return builder; },
     order() { return builder; },
+    // fetchRecentQuestions가 쓰는 종단. 문답 이력 없음 = 빈 대화로 취급된다.
+    limit() { return Promise.resolve({ data: [], error: null }); },
     range(from: number, to: number) {
       rangeCalls.push({ table, from, to });
       if (table !== "transcript_segments") return Promise.resolve({ data: [], error: null });
