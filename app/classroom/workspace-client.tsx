@@ -1844,8 +1844,15 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                   {isEnglish ? "Lecture note" : "강의 노트"}
                 </button>
               )}
+              {/* 빈 화면 한가운데 시작 버튼이 떠 있는 동안엔 상단 중복을 데스크톱에서만
+                  숨긴다(CSS). 모바일 채팅 탭에선 가운데 버튼이 안 보여 상단이 유일한 시작점. */}
               {status !== "ended" && (
-                <button className="start-button" type="button" onClick={startLecture} disabled={!canStart}>
+                <button
+                  className={`start-button${status === "idle" && canStart && segments.length === 0 && !interim ? " is-duplicate-of-center" : ""}`}
+                  type="button"
+                  onClick={startLecture}
+                  disabled={!canStart}
+                >
                   {isEnglish ? "Start lecture" : "강의 시작"}
                 </button>
               )}

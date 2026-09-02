@@ -2439,6 +2439,12 @@ button:active,
 .workspace .sidebar-create-classroom input { background: var(--surface); border-color: var(--line-strong); }
 .workspace .sidebar-section-heading { font-weight: 600; }
 
+/* 빈 화면 한가운데 시작 버튼이 보이는 동안 상단 중복은 데스크톱에서 숨긴다.
+   모바일(≤800px)에선 채팅 탭이 스크립트 페인을 가려 상단 버튼이 유일한 시작점. */
+@media (min-width: 801px) {
+  .topbar .start-button.is-duplicate-of-center { display: none; }
+}
+
 @media (max-width: 980px) {
   .workspace { grid-template-columns: 224px minmax(0, 1fr); }
   .workspace .panes { grid-template-columns: minmax(300px, 45fr) minmax(0, 55fr); }
