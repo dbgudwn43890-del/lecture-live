@@ -2176,7 +2176,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                     : ["아까 그 수식 쉽게 다시 설명해줘", "최근 10분 요약해줘"]
                   ).map((example) => (
                     // 스크립트가 없으면 보내지도 못하므로 눌리지 않게 잠근다.
-                    <button key={example} type="button" disabled={!hasTranscript} onClick={() => setQuestion(example)}>{example}</button>
+                    // 입력창 채우기가 아니라 즉시 질문 — 칩은 바로가기다.
+                    <button key={example} type="button" disabled={!canAsk} onClick={() => void submitQuestion(example)}>{example}</button>
                   ))}
                 </div>
               </div>
