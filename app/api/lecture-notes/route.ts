@@ -46,7 +46,13 @@ export async function GET(request: Request) {
     console.error("Lecture note read failed", error.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not load the note." : "노트를 불러오지 못했습니다." }, { status: 500 });
   }
-  return NextResponse.json({ note: data ?? null, remainingGenerations: await peekRemaining(current.userId) });
+  // 서버가 생성 중에 죽으면 행이 generating으로 굳는다. 5분 넘은 생성 중은
+  // 실패로 보고해 클라이언트가 무한 스피너 대신 다시 시도 버튼을 띄우게 한다.
+  const note = data && data.status === "generating"
+    && Date.now() - new Date(data.updated_at).getTime() > STALE_GENERATING_MS
+    ? { ...data, status: "failed" }
+    : data;
+  return NextResponse.json({ note: note ?? null, remainingGenerations: await peekRemaining(current.userId) });
 }
 
 /** 남은 생성 횟수. 조회 실패는 표시를 생략할 뿐 노트를 막지 않는다. */
@@ -69,13 +75,6 @@ export async function POST(request: Request) {
   if ("response" in current) return current.response;
   const { isEnglish, supabase, userId } = current;
 
-  const rateLimit = await checkSharedRateLimit(`lecture-notes:${userId}`, GENERATION_LIMIT, GENERATION_WINDOW_MS);
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: isEnglish ? "Too many note requests. Try again later." : "노트 생성 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
-      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
-    );
-  }
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: isEnglish ? "Notes are not configured yet." : "노트 생성이 아직 설정되지 않았습니다." }, { status: 503 });
   }
@@ -107,6 +106,16 @@ export async function POST(request: Request) {
   }
   if (existing?.status === "generating" && Date.now() - new Date(existing.updated_at).getTime() < STALE_GENERATING_MS) {
     return NextResponse.json({ note: { status: "generating", content: null, updated_at: existing.updated_at } }, { status: 202 });
+  }
+
+  // 쿼터는 실제로 생성에 들어갈 때만 소모한다. 위의 숏서킷(이미 완성·생성 중)
+  // 앞에서 소모하면 노트를 다시 여는 것만으로 하루 10회가 줄었다.
+  const rateLimit = await checkSharedRateLimit(`lecture-notes:${userId}`, GENERATION_LIMIT, GENERATION_WINDOW_MS);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: isEnglish ? "Too many note requests. Try again later." : "노트 생성 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    );
   }
 
   // 자리를 먼저 잡는다. 유일 인덱스(session_id) 덕에 두 탭이 동시에 눌러도 행은 하나다.
