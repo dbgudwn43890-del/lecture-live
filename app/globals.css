@@ -648,9 +648,9 @@ a, button, summary, input, textarea, select {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 8px;
-  padding: 8px 8px 8px 16px;
+  padding: 6px 6px 6px 16px;
   border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
-  border-radius: 24px;
+  border-radius: 22px;
   /* 유리 느낌은 유지하되 거의 불투명하게: 뒤로 비치는 답변 글자가
      placeholder와 겹쳐 읽히던 문제(72% 시절)를 막는다. */
   background: color-mix(in srgb, var(--surface) 94%, transparent);
@@ -667,7 +667,7 @@ a, button, summary, input, textarea, select {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 104px;
+  height: 88px;
   z-index: 4;
   background: linear-gradient(to top, var(--surface) 38%, transparent);
   pointer-events: none;
@@ -698,10 +698,10 @@ a, button, summary, input, textarea, select {
 .pane-heading .catchup-button:disabled { opacity: .5; }
 
 .question-form textarea {
-  min-height: 44px;
+  min-height: 32px;
   max-height: 140px;
   resize: none;
-  padding: 11px 0;
+  padding: 5.5px 0;
   color: var(--ink);
   background: transparent;
   border: 0;
@@ -713,9 +713,8 @@ a, button, summary, input, textarea, select {
 .question-form button {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  margin-bottom: 3px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 50%;
   background: var(--signal);
@@ -2184,7 +2183,7 @@ button:active,
 .workspace .pane-heading h1,
 .workspace .pane-heading h2 { font-size: clamp(18px, 1.65vw, 22px); font-weight: 760; letter-spacing: -.035em; }
 /* 아래 130px은 유리 컴포저가 떠 있는 자리. 마지막 답변이 그 밑에 깔리지 않는다. */
-.workspace .messages { padding: 20px 20px 130px; }
+.workspace .messages { padding: 20px 20px 110px; }
 .workspace .transcript { padding: 20px 24px 42px; }
 .workspace .footnote { color: color-mix(in srgb, var(--muted) 78%, var(--paper)); background: var(--surface); border-top: 1px solid var(--line); }
 
