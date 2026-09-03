@@ -1,14 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { getSafeAuthNext } from "../lib/auth-redirect";
-import { CONSENT_COPY } from "../lib/consent";
 import { createClient } from "../lib/supabase/client";
-
-type Mode = "signin" | "signup";
-type PendingAction = "google" | Mode | null;
 
 function GoogleMark() {
   return (
@@ -21,70 +17,46 @@ function GoogleMark() {
   );
 }
 
+/**
+ * Google 전용 로그인. 이메일·비밀번호 가입은 인증 메일 없이 아무 주소나
+ * 통과시켜(ddd@ddd.com 실등록) 무료 크레딧 남용 통로였다. 동의(ACC-02/03)는
+ * 강의실 첫 진입 게이트가 받는다.
+ */
 export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
   const classroomPath = `${basePath}/classroom`;
   const [nextPath, setNextPath] = useState(classroomPath);
-  const [mode, setMode] = useState<Mode>("signin");
-  // ACC-02/ACC-03. Asked once, here, instead of in front of the microphone: a
-  // learner reading this at the moment a lecture starts will tick anything.
-  const [consentAge, setConsentAge] = useState(false);
-  const [consentRecording, setConsentRecording] = useState(false);
-  const [consentAssessment, setConsentAssessment] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
-  const [confirmationEmail, setConfirmationEmail] = useState("");
-  const pending = pendingAction !== null;
-  const pendingMessage = pendingAction === "google"
-    ? isEnglish ? "Opening Google securely…" : "Google 로그인 화면을 여는 중입니다…"
-    : pendingAction === "signin"
-      ? isEnglish ? "Signing you in…" : "로그인 정보를 확인하는 중입니다…"
-      : pendingAction === "signup"
-        ? isEnglish ? "Creating your account…" : "계정을 만드는 중입니다…"
-        : "";
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     setNextPath(getSafeAuthNext(searchParams.get("next"), classroomPath));
-    if (searchParams.get("mode") === "signup") setMode("signup");
     if (searchParams.has("error")) {
       setIsError(true);
       setMessage(isEnglish
         ? "We could not complete sign-in. Please try again."
         : "로그인을 완료하지 못했습니다. 다시 시도해 주세요.");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEnglish]);
 
   useEffect(() => {
     // Cancelling at Google and pressing Back restores this page from bfcache
-    // with pendingAction still set, which leaves every control disabled under
-    // "opening Google sign-in…" until a manual reload.
+    // with pending still set, which leaves the button disabled until a reload.
     function handlePageShow(event: PageTransitionEvent) {
-      if (event.persisted) setPendingAction(null);
+      if (event.persisted) setPending(false);
     }
     window.addEventListener("pageshow", handlePageShow);
     return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 
-  function changeMode(nextMode: Mode) {
-    setMode(nextMode);
-    setPassword("");
-    setPasswordConfirmation("");
-    setConfirmationEmail("");
-    setMessage("");
-    setIsError(false);
-  }
-
   async function authenticateWithGoogle() {
-    setPendingAction("google");
+    setPending(true);
     setMessage("");
     setIsError(false);
-
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
@@ -93,111 +65,11 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       });
       if (error) throw error;
     } catch {
-      setPendingAction(null);
+      setPending(false);
       setIsError(true);
       setMessage(isEnglish
         ? "Google sign-in is not available. Check the Google provider in Supabase."
         : "Google 로그인을 사용할 수 없습니다. Supabase의 Google 공급자 설정을 확인해 주세요.");
-    }
-  }
-
-  async function authenticate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const submittedEmail = String(formData.get("email") ?? "").trim();
-    const submittedPassword = String(formData.get("password") ?? "");
-    const submittedConfirmation = String(formData.get("password-confirmation") ?? "");
-
-    setEmail(submittedEmail);
-    setPassword(submittedPassword);
-    setPasswordConfirmation(submittedConfirmation);
-
-    if (!submittedEmail || !submittedPassword) {
-      setIsError(true);
-      setMessage(isEnglish ? "Enter your email and password." : "이메일과 비밀번호를 입력해 주세요.");
-      return;
-    }
-    if (!submittedEmail.includes("@")) {
-      setIsError(true);
-      setMessage(isEnglish ? "Enter a valid email address." : "올바른 이메일 주소를 입력해 주세요.");
-      return;
-    }
-    if (mode === "signup" && submittedPassword.length < 8) {
-      setIsError(true);
-      setMessage(isEnglish ? "Use a password with at least 8 characters." : "비밀번호는 8자 이상 입력해 주세요.");
-      return;
-    }
-    if (mode === "signup" && submittedPassword !== submittedConfirmation) {
-      setIsError(true);
-      setMessage(isEnglish ? "The passwords do not match." : "비밀번호가 서로 다릅니다.");
-      return;
-    }
-    if (mode === "signup" && (!consentAge || !consentRecording || !consentAssessment)) {
-      setIsError(true);
-      setMessage(isEnglish ? "Check all agreements to create an account." : "모든 동의 항목을 확인해야 계정을 만들 수 있습니다.");
-      return;
-    }
-
-    setPendingAction(mode);
-    setMessage("");
-    setIsError(false);
-    let redirecting = false;
-
-    try {
-      const supabase = createClient();
-      const credentials = { email: submittedEmail, password: submittedPassword };
-      const { data, error } = mode === "signup"
-        ? await supabase.auth.signUp({
-            ...credentials,
-            // consent=1 carries the ticked boxes across the email round trip;
-            // the callback writes the rows once there is a session to own them.
-            options: { emailRedirectTo: `${window.location.origin}/auth/callback?consent=1&next=${encodeURIComponent(nextPath)}` },
-          })
-        : await supabase.auth.signInWithPassword(credentials);
-
-      if (error) {
-        const errorMessage = error.message.toLowerCase();
-        const rateLimited = errorMessage.includes("rate limit");
-        const emailUnconfirmed = errorMessage.includes("email not confirmed");
-        setIsError(true);
-        setMessage(emailUnconfirmed
-          ? isEnglish
-            ? "Your email is not confirmed yet. Open the confirmation link we sent when you signed up."
-            : "이메일 확인이 아직 끝나지 않았습니다. 가입할 때 받은 확인 메일의 링크를 먼저 눌러 주세요."
-          : rateLimited
-            ? isEnglish ? "Too many emails were requested. Wait a few minutes and try again." : "인증 메일 요청이 너무 많습니다. 몇 분 뒤 다시 시도해 주세요."
-            : mode === "signup"
-              ? isEnglish ? "We could not create the account. Check your email and password." : "회원가입을 처리하지 못했습니다. 이메일과 비밀번호를 확인해 주세요."
-              : isEnglish ? "The email or password is incorrect." : "이메일 또는 비밀번호가 올바르지 않습니다.");
-        return;
-      }
-
-      if (data.session) {
-        // Email confirmation is off for this project, so there is a session
-        // right away and no callback to carry the consent for us.
-        if (mode === "signup") {
-          await fetch("/api/consents", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-            body: JSON.stringify({ types: ["age_14", "recording", "assessment"] }),
-          }).catch(() => {
-            // The classroom asks again on its next load, so a failed write
-            // costs one dialog rather than an unrecorded consent.
-          });
-        }
-        redirecting = true;
-        window.location.assign(nextPath);
-        return;
-      }
-
-      setConfirmationEmail(submittedEmail);
-    } catch {
-      setIsError(true);
-      setMessage(isEnglish
-        ? "We could not reach the authentication server. Check your connection and try again."
-        : "인증 서버에 연결하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
-    } finally {
-      if (!redirecting) setPendingAction(null);
     }
   }
 
@@ -214,168 +86,50 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
 
       <section className="login-stage" aria-labelledby="login-title">
         <div className="login-panel" aria-busy={pending}>
-            {confirmationEmail ? (
-              <div className="email-confirmation" role="status" aria-live="polite">
-                <span>{isEnglish ? "Almost there" : "거의 다 됐어요"}</span>
-                <h2>{isEnglish ? "Check your email" : "이메일을 확인해 주세요"}</h2>
-                <p>
-                  {isEnglish ? "We sent a confirmation link to " : "확인 링크를 "}
-                  <strong>{confirmationEmail}</strong>
-                  {isEnglish ? "." : " 주소로 보냈습니다."}
-                </p>
-                <p>{isEnglish
-                  ? "Open the link to confirm your address, sign in, and enter your classroom. You cannot sign in with this account until confirmation is complete."
-                  : "메일의 링크를 누르면 이메일 확인과 로그인이 완료되고 강의실로 이동합니다. 확인 전에는 같은 계정으로 로그인할 수 없습니다."}</p>
-                <p className="email-confirmation-note">{isEnglish
-                  ? "If you do not see it, check your spam folder."
-                  : "메일이 보이지 않으면 스팸함도 확인해 주세요."}</p>
-                <button type="button" onClick={() => changeMode("signin")}>
-                  {isEnglish ? "Back to sign in" : "로그인 화면으로 돌아가기"}
-                </button>
-              </div>
-            ) : (
-              <>
-              <div className="auth-heading">
-                <span className="auth-kicker">{mode === "signin"
-                  ? isEnglish ? "Live lecture assistant" : "현장 강의를 위한 실시간 조교"
-                  : isEnglish ? "7-day free trial" : "7일 무료 체험 · 180크레딧"}</span>
-                <h1 id="login-title">{mode === "signin"
-                  ? isEnglish ? "Sign in to Lecue" : "Lecue에 로그인"
-                  : isEnglish ? "Create your Lecue account" : "Lecue 계정 만들기"}</h1>
-                <p>{mode === "signin"
-                  ? isEnglish ? "Return to your classrooms and previous lectures." : "내 강의실과 지난 수업을 이어서 확인하세요."
-                  : isEnglish ? "Google is the quickest way to get started." : "Google 계정으로 가장 빠르게 시작할 수 있습니다."}</p>
-              </div>
+          <div className="auth-heading">
+            <span className="auth-kicker">{isEnglish ? "Live lecture assistant" : "현장 강의를 위한 실시간 조교"}</span>
+            <h1 id="login-title">{isEnglish ? "Sign in to Lecue" : "Lecue에 로그인"}</h1>
+            <p>{isEnglish
+              ? "One Google account for sign-up and sign-in."
+              : "가입과 로그인 모두 Google 계정 하나면 됩니다."}</p>
+          </div>
 
-              <button
-                type="button"
-                className="google-auth-button"
-                onClick={authenticateWithGoogle}
-                disabled={pending}
-              >
-                <GoogleMark />
-                <span>{pendingAction === "google"
-                  ? isEnglish ? "Opening Google…" : "Google로 이동 중…"
-                  : isEnglish ? "Continue with Google" : "Google로 계속하기"}</span>
-                <span className="auth-button-end" aria-hidden="true">
-                  {pendingAction === "google" && <i className="auth-spinner auth-spinner-dark" />}
-                </span>
-              </button>
+          <button
+            type="button"
+            className="google-auth-button"
+            onClick={authenticateWithGoogle}
+            disabled={pending}
+          >
+            <GoogleMark />
+            <span>{pending
+              ? isEnglish ? "Opening Google…" : "Google로 이동 중…"
+              : isEnglish ? "Continue with Google" : "Google로 계속하기"}</span>
+            <span className="auth-button-end" aria-hidden="true">
+              {pending && <i className="auth-spinner auth-spinner-dark" />}
+            </span>
+          </button>
 
-              <div className="auth-divider"><span>{isEnglish ? "or email" : "또는 이메일"}</span></div>
+          <p
+            id="auth-message"
+            className={isError ? "login-message login-message-error" : "login-message"}
+            role={isError ? "alert" : "status"}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {message || (pending
+              ? isEnglish ? "Opening Google securely…" : "Google 로그인 화면을 여는 중입니다…"
+              : "")}
+          </p>
 
-              <form className="login-form" onSubmit={authenticate} noValidate>
-                <label htmlFor="email">{isEnglish ? "Email" : "이메일"}</label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="name@example.com"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  required
-                  disabled={pending}
-                />
-
-                <label htmlFor="password">{isEnglish ? "Password" : "비밀번호"}</label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  minLength={mode === "signup" ? 8 : undefined}
-                  required
-                  disabled={pending}
-                />
-
-                {mode === "signup" && (
-                  <>
-                    <label htmlFor="password-confirmation">{isEnglish ? "Confirm password" : "비밀번호 확인"}</label>
-                    <input
-                      id="password-confirmation"
-                      name="password-confirmation"
-                      type="password"
-                      autoComplete="new-password"
-                      value={passwordConfirmation}
-                      onChange={(event) => setPasswordConfirmation(event.target.value)}
-                      minLength={8}
-                      required
-                      disabled={pending}
-                    />
-                  </>
-                )}
-
-                {mode === "signup" && (
-                  <div className="signup-consent">
-                    <label>
-                      <input type="checkbox" checked={consentAge} onChange={(event) => setConsentAge(event.target.checked)} disabled={pending} />
-                      {CONSENT_COPY.age_14[isEnglish ? "en" : "ko"]}
-                    </label>
-                    <label>
-                      <input type="checkbox" checked={consentRecording} onChange={(event) => setConsentRecording(event.target.checked)} disabled={pending} />
-                      {CONSENT_COPY.recording[isEnglish ? "en" : "ko"]}
-                    </label>
-                    <label>
-                      <input type="checkbox" checked={consentAssessment} onChange={(event) => setConsentAssessment(event.target.checked)} disabled={pending} />
-                      {CONSENT_COPY.assessment[isEnglish ? "en" : "ko"]}
-                    </label>
-                  </div>
-                )}
-
-                <button className="email-auth-button" type="submit" disabled={pending}>
-                  <span>{pendingAction === mode
-                    ? mode === "signin"
-                      ? isEnglish ? "Signing in…" : "로그인 중…"
-                      : isEnglish ? "Creating account…" : "계정 만드는 중…"
-                    : mode === "signin"
-                      ? isEnglish ? "Sign in with email" : "이메일로 로그인"
-                      : isEnglish ? "Create account with email" : "이메일로 계정 만들기"}</span>
-                  {pendingAction === mode && <i className="auth-spinner" aria-hidden="true" />}
-                </button>
-                <p
-                  id="auth-message"
-                  className={isError ? "login-message login-message-error" : "login-message"}
-                  role={isError ? "alert" : "status"}
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
-                  {message || pendingMessage || (mode === "signin"
-                    ? isEnglish ? "Enter the email and password you used to sign up." : "가입한 이메일과 비밀번호를 입력하세요."
-                    : isEnglish ? "Use at least 8 characters. Email verification is required once." : "8자 이상 입력하세요. 이메일 확인은 처음 한 번만 필요합니다.")}
-                </p>
-              </form>
-              <p className="auth-consent">
-                {isEnglish ? "By continuing, you acknowledge the " : "계속하면 "}
-                <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
-                {isEnglish ? " and " : "과 "}
-                <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
-                {isEnglish ? "." : "을 확인하고 동의한 것으로 봅니다."}
-              </p>
-              <p className="auth-switch">
-                {mode === "signin"
-                  ? isEnglish ? "New to Lecue?" : "아직 계정이 없나요?"
-                  : isEnglish ? "Already have an account?" : "이미 계정이 있나요?"}
-                <button type="button" disabled={pending} onClick={() => changeMode(mode === "signin" ? "signup" : "signin")}>
-                  {mode === "signin"
-                    ? isEnglish ? "Create account" : "회원가입"
-                    : isEnglish ? "Sign in" : "로그인"}
-                </button>
-              </p>
-              </>
-            )}
+          <p className="auth-consent">
+            {isEnglish ? "By continuing, you acknowledge the " : "계속하면 "}
+            <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
+            {isEnglish ? " and " : "과 "}
+            <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
+            {isEnglish ? "." : "을 확인하고 동의한 것으로 봅니다."}
+          </p>
         </div>
       </section>
-
-      <footer className="login-footnote">
-        <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
-        <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
-        <span>{isEnglish ? "Confirm recording permission before use" : "현장 녹음 권한을 확인한 뒤 사용하세요"}</span>
-      </footer>
     </main>
   );
 }
