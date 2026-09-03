@@ -724,8 +724,15 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   async function deleteSession(sessionId: string) {
     const session = sessionsById.get(sessionId);
     if (!session) return;
-    setClassroomPending(true);
     setError("");
+    // 낙관적 삭제: 목록에서 먼저 지우고 서버 cascade는 뒤에서 돈다.
+    // 긴 강의는 문장 수천 행을 지우느라 서버가 느려서, 기다리면 UI가 몇 초 얼었다.
+    setClassrooms((current) => current.map((classroom) => ({
+      ...classroom,
+      sessions: classroom.sessions.filter((item) => item.id !== sessionId),
+    })));
+    setUnassignedSessions((current) => current.filter((item) => item.id !== sessionId));
+    if (sessionId === activeSessionIdRef.current) prepareNewLecture();
     try {
       const response = await fetch(`/api/lecture-sessions?sessionId=${encodeURIComponent(sessionId)}`, {
         method: "DELETE",
@@ -733,14 +740,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error);
-      if (sessionId === activeSessionIdRef.current) prepareNewLecture();
-      await loadClassrooms();
     } catch (caught) {
       setError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not delete the lecture." : "수업을 삭제하지 못했습니다.");
-    } finally {
-      setClassroomPending(false);
+      await loadClassrooms(); // 실패: 서버 상태로 복원
     }
   }
 
