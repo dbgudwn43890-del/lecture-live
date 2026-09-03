@@ -12,7 +12,8 @@ export const maxDuration = 300;
 const SEGMENT_PAGE_SIZE = 1_000;
 /** 시간당 생성 한도. GET이 남은 횟수를 조회해 패널에 보여준다. */
 const GENERATION_LIMIT = 10;
-const GENERATION_WINDOW_MS = 3_600_000;
+// 하루 10개. 시간당이 아니라 일 단위 — 수업 몰린 날도 10개면 충분하다.
+const GENERATION_WINDOW_MS = 86_400_000;
 const MAX_TRANSCRIPT_CHARACTERS = 300_000;
 const MAX_MATERIAL_CHARACTERS = 80_000;
 /** 다른 탭이 만든 generating 행이 이보다 오래됐으면 죽은 시도로 보고 이어받는다. */

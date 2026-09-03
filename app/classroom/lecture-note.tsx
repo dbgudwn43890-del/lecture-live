@@ -92,7 +92,7 @@ export default function LectureNotePanel({
           <strong>{isEnglish ? "Lecture note" : "강의 노트"}</strong>
           <div>
             {remaining !== null && phase !== "loading" && (
-              <span className="note-quota">{isEnglish ? `${remaining} left this hour` : `이번 시간 ${remaining}회 남음`}</span>
+              <span className="note-quota">{isEnglish ? `${remaining} left today` : `오늘 ${remaining}회 남음`}</span>
             )}
             {phase === "ready" && (
               <button type="button" className="note-regenerate" onClick={() => window.print()}>
