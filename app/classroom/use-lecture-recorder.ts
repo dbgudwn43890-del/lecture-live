@@ -127,6 +127,25 @@ export function useLectureRecorder(options: RecorderOptions) {
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
+  // 트랙 ended 콜백은 등록 시점의 클로저를 계속 들고 있어 status가 낡는다.
+  // 항상 최신 상태·함수를 ref로 읽는다.
+  const statusRef = useRef(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
+  const pauseRef = useRef<() => Promise<void>>(async () => {});
+
+  /** 덮개 닫힘·마이크 뽑힘: 죽은 스트림으로 '기록 중'인 척하는 좀비를 막는다. */
+  function watchStreamTracks(stream: MediaStream) {
+    const deadMicMessage = isEnglish
+      ? "The microphone was disconnected, so the lecture is paused. Check the mic and press Resume."
+      : "마이크 연결이 끊겨 일시정지했습니다. 마이크를 확인한 뒤 '이어하기'를 눌러 주세요.";
+    stream.getTracks().forEach((track) => {
+      track.onended = () => {
+        if (streamRef.current !== stream || finishingRef.current || statusRef.current !== "recording") return;
+        void pauseRef.current().then(() => options.setError(deadMicMessage));
+      };
+    });
+  }
+
   /** 종료 PATCH 한 번. 성공하면 로컬 미러를 지운다. */
   async function submitFinishSave(sessionId: string, durationMs: number, segmentList: Segment[]): Promise<boolean> {
     try {
@@ -352,6 +371,13 @@ export function useLectureRecorder(options: RecorderOptions) {
   function scheduleReconnect() {
     const stream = streamRef.current;
     if (!stream || finishingRef.current || startedAtRef.current === 0) return;
+    // 소켓이 아니라 마이크가 죽었다면 재연결은 무음만 듣는다. 일시정지로 전환.
+    if (stream.getAudioTracks().some((track) => track.readyState === "ended")) {
+      void pauseRef.current().then(() => options.setError(isEnglish
+        ? "The microphone was disconnected, so the lecture is paused. Check the mic and press Resume."
+        : "마이크 연결이 끊겨 일시정지했습니다. 마이크를 확인한 뒤 '이어하기'를 눌러 주세요."));
+      return;
+    }
     const attempt = reconnectAttemptRef.current;
     reconnectAttemptRef.current = attempt + 1;
     options.setError(attempt < RECONNECT_DELAYS_MS.length - 1
@@ -622,8 +648,17 @@ export function useLectureRecorder(options: RecorderOptions) {
           ? "This browser does not support microphone input."
           : "이 브라우저는 마이크 입력을 지원하지 않습니다.");
       }
+      // iOS/iPadOS Safari에는 webm 녹음이 없어 MediaRecorder 생성이 영어 원문
+      // 예외로 터졌다. 마이크를 요청하기 전에 막고, 있는 대안(파일 업로드)을 안내한다.
+      if (typeof MediaRecorder === "undefined"
+        || (!MediaRecorder.isTypeSupported("audio/webm;codecs=opus") && !MediaRecorder.isTypeSupported("audio/webm"))) {
+        throw new Error(isEnglish
+          ? "Live recording is not supported in this browser (Safari on iPhone/iPad). Use Chrome on a laptop, or record with a voice memo app and add the file with the Upload recording button."
+          : "이 브라우저(아이폰·아이패드 Safari)에서는 실시간 녹음이 지원되지 않아요. 노트북 Chrome을 쓰거나, 음성 메모 앱으로 녹음한 파일을 '녹음 파일' 버튼으로 올려 주세요.");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints() });
       streamRef.current = stream;
+      watchStreamTracks(stream);
       startMicMeter(stream);
       streamOffsetMsRef.current = 0;
       pendingAudioRef.current = [];
@@ -718,6 +753,9 @@ export function useLectureRecorder(options: RecorderOptions) {
     }
   }
 
+  // 매 렌더마다 최신 클로저로 갱신 — 트랙 ended 콜백이 낡은 status를 읽지 않게.
+  pauseRef.current = pauseLecture;
+
   async function resumeLecture() {
     if (status !== "paused" || finishingRef.current) return;
     finishingRef.current = true;
@@ -740,6 +778,7 @@ export function useLectureRecorder(options: RecorderOptions) {
       streamOffsetMsRef.current = recordedMs;
       startedAtRef.current = Date.now();
       streamRef.current = stream;
+      watchStreamTracks(stream);
       startMicMeter(stream);
       pendingAudioRef.current = [];
       socketOpenedRef.current = false;
