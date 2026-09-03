@@ -329,7 +329,10 @@ export function useLectureRecorder(options: RecorderOptions) {
       analyser.getByteTimeDomainData(data);
       let peak = 0;
       for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
-      meterRef.current?.style.setProperty("--level", String(Math.min(1, peak / 56)));
+      const level = String(Math.min(1, peak / 56));
+      meterRef.current?.style.setProperty("--level", level);
+      // 스크립트 페인의 오브도 같은 값을 읽는다. ref 배선 없이 루트 변수 하나로.
+      document.documentElement.style.setProperty("--mic-level", level);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -338,6 +341,7 @@ export function useLectureRecorder(options: RecorderOptions) {
   function stopMicMeter() {
     void audioContextRef.current?.close().catch(() => {});
     audioContextRef.current = null;
+    document.documentElement.style.removeProperty("--mic-level");
   }
 
   function startMediaRecorder(stream: MediaStream) {

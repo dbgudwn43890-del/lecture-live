@@ -807,6 +807,7 @@ a, button, summary, input, textarea, select {
 }
 
 .chat-pane { position: relative; }
+.transcript-pane { position: relative; }
 .material-drop-overlay {
   position: absolute;
   inset: 8px;
@@ -2758,38 +2759,78 @@ button:active,
 }
 .sidebar-search::placeholder { color: var(--muted); }
 
-/* 듣고 있음 오브: 값은 JS가 --level(0~1)로만 흘려 넣는다.
-   말소리에 따라 빛나고 커지고, 조용할 때도 링이 퍼져 '살아있음'을 알린다. */
+/* 이퀄라이저 바: 값은 JS가 --level(0~1)로만 흘려 넣는다. 바마다 무게가
+   달라 같은 소리에도 서로 다른 높이로 살아 움직인다. */
 .mic-meter {
-  position: relative;
-  width: 12px;
-  height: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 16px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--status) 40%, #fff), var(--status) 72%);
-  box-shadow: 0 0 calc(3px + var(--level, 0) * 22px) calc(1px + var(--level, 0) * 5px)
-    color-mix(in srgb, var(--status) 55%, transparent);
-  transform: scale(calc(.82 + var(--level, 0) * .5));
 }
-.mic-meter::before,
-.mic-meter::after {
+.mic-meter i {
+  width: 3px;
+  min-height: 3px;
+  border-radius: 2px;
+  background: var(--status);
+  height: calc(3px + var(--level, 0) * 13px * var(--w, 1));
+  animation: bar-sway 1.3s ease-in-out infinite;
+}
+.mic-meter i:nth-child(1) { --w: .55; animation-delay: 0s; }
+.mic-meter i:nth-child(2) { --w: .9; animation-delay: .18s; }
+.mic-meter i:nth-child(3) { --w: 1; animation-delay: .32s; }
+.mic-meter i:nth-child(4) { --w: .8; animation-delay: .12s; }
+.mic-meter i:nth-child(5) { --w: .6; animation-delay: .26s; }
+@keyframes bar-sway { 50% { transform: scaleY(.72); } }
+/* 녹음 중엔 바가 상태를 말한다. 옆의 정적인 점은 중복이라 숨긴다. */
+.session-state:has(.mic-meter) .state-dot { display: none; }
+
+/* 듣고 있음 오브: 받아적는 페인 구석에서 유체처럼 일렁인다.
+   말소리(--mic-level)에 따라 커지고 채도와 글로우가 오른다. */
+.listen-orb {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  z-index: 4;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  transform: scale(calc(.92 + var(--mic-level, 0) * .22));
+  box-shadow: 0 0 calc(10px + var(--mic-level, 0) * 34px)
+    color-mix(in srgb, var(--status) 30%, transparent);
+  filter: saturate(calc(.85 + var(--mic-level, 0) * .7));
+}
+.listen-orb::before,
+.listen-orb::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -35%;
   border-radius: 50%;
-  border: 1.5px solid color-mix(in srgb, var(--status) 65%, transparent);
-  animation: mic-ripple 2.6s ease-out infinite;
+  background: conic-gradient(from 0deg,
+    #eaf4ec, color-mix(in srgb, var(--status) 75%, #fff), var(--soft-blue),
+    color-mix(in srgb, var(--signal) 80%, #fff), #eaf4ec);
+  filter: blur(9px);
+  animation: orb-swirl 7s linear infinite;
 }
-.mic-meter::after { animation-delay: 1.3s; }
-@keyframes mic-ripple {
-  from { opacity: .75; transform: scale(1); }
-  to { opacity: 0; transform: scale(3.1); }
+.listen-orb::after {
+  inset: -55%;
+  background: conic-gradient(from 180deg,
+    transparent 0%, color-mix(in srgb, var(--accent) 45%, transparent) 28%,
+    transparent 55%, color-mix(in srgb, var(--status) 55%, transparent) 80%, transparent);
+  filter: blur(13px);
+  animation: orb-swirl 11s linear infinite reverse;
+}
+@keyframes orb-swirl { to { transform: rotate(360deg); } }
+[data-theme="dark"] .listen-orb::before {
+  background: conic-gradient(from 0deg,
+    #223328, color-mix(in srgb, var(--status) 60%, #10241a), #2c3a2f,
+    color-mix(in srgb, var(--signal) 55%, #10241a), #223328);
 }
 @media (prefers-reduced-motion: reduce) {
-  .mic-meter::before, .mic-meter::after { animation: none; }
+  .mic-meter i, .listen-orb::before, .listen-orb::after { animation: none; }
 }
-/* 녹음 중엔 오브가 상태를 말한다. 옆의 정적인 점은 중복이라 숨긴다. */
-.session-state:has(.mic-meter) .state-dot { display: none; }
 
 .confirm-modal .consent-gate span { justify-content: flex-end; gap: 10px; }
 .confirm-modal .confirm-cancel {

@@ -1811,7 +1811,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
 
           <div className="session-state" aria-live="polite">
             <span className={`state-dot state-${status}`} />
-            {status === "recording" && <span className="mic-meter" ref={meterRef} aria-hidden="true" />}
+            {status === "recording" && (
+              <span className="mic-meter" ref={meterRef} aria-hidden="true">
+                <i /><i /><i /><i /><i />
+              </span>
+            )}
             <span>{statusCopy[status]}</span>
             <time>{formatTime(elapsedMs)}</time>
           </div>
@@ -2259,6 +2263,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             {interim || transcriptParagraphs.at(-1)?.text || ""}
           </p>
 
+          {/* 듣고 있음 오브: 받아적는 페인 구석에서 소리에 맞춰 일렁인다. */}
+          {status === "recording" && <span className="listen-orb" aria-hidden="true" />}
           <div
             className="transcript"
             ref={transcriptScrollRef}
