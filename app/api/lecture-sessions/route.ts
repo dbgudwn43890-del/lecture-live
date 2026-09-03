@@ -600,12 +600,26 @@ export async function PATCH(request: Request) {
   // full lecture-minute for a lecture that recorded nothing. The transcript is
   // counted in the database rather than taken from durationMs, so a client
   // under-reporting a real 90-minute lecture still reconciles.
-  const { count: storedSegments } = await current.supabase
-    .from("transcript_segments")
-    .select("id", { count: "exact", head: true })
-    .eq("session_id", body.sessionId);
+  const [{ count: storedSegments }, { data: lastSegment }] = await Promise.all([
+    current.supabase
+      .from("transcript_segments")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", body.sessionId),
+    current.supabase
+      .from("transcript_segments")
+      .select("end_ms")
+      .eq("session_id", body.sessionId)
+      .order("end_ms", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   const recordedSomething = segments.length > 0 || (storedSegments ?? 0) > 0;
-  const durationSeconds = recordedSomething ? Math.min(10_800, Math.max(0, Math.ceil(elapsedMs / 1_000))) : 0;
+  // 레코더가 소리 없이 죽은 채 '기록 중'으로 흘러간 시간을 그대로 과금하지
+  // 않는다: 마지막으로 실제 받아쓴 순간(+1분 여유)까지만 과금·기록한다.
+  const clientTailEndMs = segments.reduce((max, segment) => Math.max(max, segment.endMs), 0);
+  const activityCapMs = Math.max(Number(lastSegment?.end_ms ?? 0), clientTailEndMs) + 60_000;
+  const billableMs = Math.min(elapsedMs, activityCapMs);
+  const durationSeconds = recordedSomething ? Math.min(10_800, Math.max(0, Math.ceil(billableMs / 1_000))) : 0;
   if (durationSeconds > 0) {
     const { error: creditError } = await current.supabase.rpc("consume_lecture_credits", {
       p_session_id: body.sessionId,
@@ -627,7 +641,7 @@ export async function PATCH(request: Request) {
     status: "completed",
     ended_at: new Date().toISOString(),
     duration_seconds: durationSeconds,
-    recorded_ms: recordedSomething ? elapsedMs : 0,
+    recorded_ms: recordedSomething ? billableMs : 0,
     recording_started_at: null,
   }).eq("id", body.sessionId).eq("user_id", current.userId).in("status", ["recording", "paused"]).select("id").maybeSingle();
   if (updateError) {

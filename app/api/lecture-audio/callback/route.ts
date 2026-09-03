@@ -99,24 +99,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const { error: segmentError } = await supabase.from("transcript_segments").upsert(
-    segments.map((segment) => ({
-      session_id: session.id,
-      classroom_id: session.classroom_id,
-      user_id: session.user_id,
-      client_id: segment.id,
-      start_ms: segment.startMs,
-      end_ms: segment.endMs,
-      text: segment.text,
-    })),
-    { onConflict: "session_id,client_id" },
-  );
-  if (segmentError) {
-    console.error("Upload transcript save failed", segmentError.code);
-    await markFailed("save");
-    return NextResponse.json({ ok: true });
-  }
-
   // Length comes from Deepgram, never from the browser: the client's estimate
   // gates acceptance, this decides the bill. Falling back to the last segment
   // keeps a response without metadata from billing zero.
@@ -135,6 +117,8 @@ export async function POST(request: Request) {
   // is null on this service-key connection — the cookie-bound RPC raised
   // AUTH_REQUIRED here and every upload went out unbilled. The service variant
   // is idempotent per minute, so a retried callback cannot double-charge.
+  // 과금이 저장보다 먼저다: 과금이 계속 실패하면 스크립트도 저장하지 않아
+  // '전달됐는데 미과금' 상태가 남지 않는다.
   const { data: charge, error: creditError } = await supabase.rpc("consume_lecture_credits_service", {
     p_user_id: session.user_id,
     p_session_id: session.id,
@@ -147,8 +131,8 @@ export async function POST(request: Request) {
     if (String(creditError.message ?? "").includes("LECTURE_NOT_RECORDING")) {
       console.error("Upload charge skipped, session already closed", upload.id);
     } else {
-      // Nothing here is written yet beyond the transcript, and the charge is
-      // idempotent — let Deepgram retry rather than lose the money silently.
+      // Nothing is written yet and the charge is idempotent — let Deepgram
+      // retry rather than deliver the product unbilled.
       console.error("Upload credit charge failed", creditError.code);
       return NextResponse.json({ error: "Charge failed." }, { status: 500 });
     }
@@ -164,6 +148,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     console.error("Upload credit charge partial, truncating", upload.id, charge[0].charged_through);
+    // 예전 코드가 전체를 먼저 저장했을 수 있으니(재시도 콜백) 초과분을 지운다.
     const { error: trimError } = await supabase
       .from("transcript_segments")
       .delete()
@@ -176,6 +161,24 @@ export async function POST(request: Request) {
     paidSegments = segments.filter((segment) => segment.startMs < paidMs);
     durationMs = Math.min(durationMs, paidMs);
     durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
+  }
+
+  const { error: segmentError } = await supabase.from("transcript_segments").upsert(
+    paidSegments.map((segment) => ({
+      session_id: session.id,
+      classroom_id: session.classroom_id,
+      user_id: session.user_id,
+      client_id: segment.id,
+      start_ms: segment.startMs,
+      end_ms: segment.endMs,
+      text: segment.text,
+    })),
+    { onConflict: "session_id,client_id" },
+  );
+  if (segmentError) {
+    console.error("Upload transcript save failed", segmentError.code);
+    await markFailed("save");
+    return NextResponse.json({ ok: true });
   }
 
   const { error: completeError } = await supabase
