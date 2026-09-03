@@ -183,6 +183,20 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [endRecap, setEndRecap] = useState("");
+  const recapToastRef = useRef<HTMLDivElement | null>(null);
+  // 토스트는 5초 뒤, 또는 토스트 밖 아무 곳이나 누르면 사라진다.
+  useEffect(() => {
+    if (!endRecap) return;
+    const timer = window.setTimeout(() => setEndRecap(""), 5_000);
+    function handlePointerDown(event: PointerEvent) {
+      if (!recapToastRef.current?.contains(event.target as Node)) setEndRecap("");
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [endRecap]);
   const [mobilePane, setMobilePane] = useState<"chat" | "transcript">("chat");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   // null until the first check answers; the gate never flashes on a returning
@@ -1992,7 +2006,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         </>}</div>
         {/* 종료 격려: 전폭 배너가 아니라 화면 하단 가운데 작은 토스트로. */}
         {endRecap && (
-          <div className="recap-toast" role="status">
+          <div className="recap-toast" role="status" ref={recapToastRef}>
             <span>{endRecap}</span>
             <button type="button" className="recap-cta" onClick={() => { setEndRecap(""); setNoteOpen(true); }}>
               {isEnglish ? "Create note" : "노트 만들기"}
