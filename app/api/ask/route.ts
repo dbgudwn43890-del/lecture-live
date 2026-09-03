@@ -864,11 +864,12 @@ export async function POST(request: Request) {
     // 이전 문답이 없으면 "아까 네 답변"류 질문이 매번 백지에서 시작한다.
     lectureSessionId && !catchup ? fetchRecentQuestions(supabase, lectureSessionId) : Promise.resolve(""),
   ]);
-  const segments = lectureSessionId ? mergeSegments(storedSegments, unconfirmedSegments) : unconfirmedSegments;
+  const mergedSegments = lectureSessionId ? mergeSegments(storedSegments, unconfirmedSegments) : unconfirmedSegments;
   const contextMs = Date.now() - contextStartedAt;
-  if (segments.length > 5_000) {
-    return NextResponse.json({ error: isEnglish ? "The transcript is too long." : "스크립트가 너무 깁니다." }, { status: 413 });
-  }
+  // DB 읽기가 이미 5,000에서 잘리므로, 미확정 꼬리가 얹히면 최대 길이 강의는
+  // 여기서 영원히 413이었다. 거부 대신 가장 오래된 부분을 버리고 답한다 —
+  // 질문은 거의 항상 최근 내용을 향한다.
+  const segments = mergedSegments.length > SEGMENT_CAP ? mergedSegments.slice(-SEGMENT_CAP) : mergedSegments;
 
   // 복구 요청은 마지막 90초만 본다. 세 시간짜리 스크립트를 다시 넣어 봐야 답이
   // 좋아지지 않고, 그 시간과 토큰이 그대로 학습자의 대기 시간이 된다.

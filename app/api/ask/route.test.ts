@@ -175,20 +175,28 @@ test("does not re-send a segment the client has already confirmed as duplicate t
   assert.equal(lines.length, 1, "the duplicate client id must collapse to a single transcript line");
 });
 
-test("rejects with 413 once the merged transcript exceeds the 5000 segment cap", async () => {
+test("a transcript over the 5000 segment cap drops its oldest lines instead of refusing", async () => {
   // The DB read alone is capped at 5000 (the infinite-loop guard), so the cap
   // is only exceedable once the unconfirmed tail adds a segment on top of it.
+  // 예전엔 여기서 413 — 최대 길이 강의는 질문이 영원히 막혔다.
   seedTranscript(SESSION_ID, 5_000);
+  openAiEvents = [
+    { type: "response.output_text.delta", delta: "ok" },
+    { type: "response.completed", response: { output: [], usage: null } },
+  ];
 
   const response = await ask({
-    question: "Too long?",
-    questionAtMs: 1_000,
+    question: "Still answerable?",
+    questionAtMs: 5_002_000,
     segments: [{ id: "unconfirmed-over-cap", startMs: 5_001_000, endMs: 5_001_500, text: "one too many" }],
     lectureSessionId: SESSION_ID,
   });
+  await readNdjson(response);
 
-  assert.equal(response.status, 413);
-  assert.equal(openAiCreateCalls.length, 0, "the provider must never be called once validation fails");
+  assert.equal(response.status, 200);
+  const input = openAiCreateCalls[0].input as string;
+  assert.ok(input.includes("one too many"), "the newest tail stays");
+  assert.ok(!input.includes("segment 0\n") && !input.includes("segment 0 "), "the oldest line is dropped to fit the cap");
 });
 
 test("streams deltas then a cleaned done line, and saves the cleaned answer", async () => {
