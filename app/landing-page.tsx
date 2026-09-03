@@ -206,7 +206,10 @@ export default function LandingPage({
         <div className={styles.headerActions}>
           {/* ?lang= tells the proxy to remember the choice; without it the IP
               guess re-renders "/" in English and the toggle appears to do nothing. */}
-          <Link className={styles.languageLink} href={locale === "en" ? "/?lang=ko" : "/en?lang=en"}>{copy.language}</Link>
+          {/* Link가 아니라 일반 앵커: 언어는 프록시가 ?lang=을 받아 쿠키로
+              굳히는 서버 왕복이 필요하다. 클라이언트 내비게이션(프리페치 캐시)은
+              그 왕복을 건너뛰어 첫 클릭이 무시됐다. */}
+          <a className={styles.languageLink} href={locale === "en" ? "/?lang=ko" : "/en?lang=en"}>{copy.language}</a>
           {isAuthenticated ? (
             <>
               <ProfileMenu
