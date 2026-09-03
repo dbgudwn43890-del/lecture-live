@@ -182,6 +182,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   }, [isEnglish]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [endRecap, setEndRecap] = useState("");
   const [mobilePane, setMobilePane] = useState<"chat" | "transcript">("chat");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   // null until the first check answers; the gate never flashes on a returning
@@ -272,15 +273,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     previousStatusRef.current = status;
     if (status === "ended" && (previous === "recording" || previous === "paused" || previous === "connecting")) {
       const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
-      const asked = messages.filter((message) => message.role === "user").length;
-      const recap = isEnglish
-        ? `${minutes} min, ${sentenceCount} sentences${asked > 0 ? `, ${asked} questions` : ""}.`
-        : `${minutes}분 동안 문장 ${sentenceCount}개${asked > 0 ? `, 질문 ${asked}개` : ""}를 남겼어요.`;
-      setNotice(isEnglish
-        ? `Nice work! ${recap} Generate a lecture note to lock in what you learned today.`
-        : `수고했어요! ${recap} 강의 노트를 만들면 오늘 배운 내용이 깔끔하게 정리돼요.`);
+      setEndRecap(isEnglish
+        ? `Nice work! ${minutes} min, ${sentenceCount} sentences. A lecture note locks it in.`
+        : `수고했어요! ${minutes}분 동안 문장 ${sentenceCount}개를 남겼어요. 노트로 정리해 두면 복습이 쉬워져요.`);
     }
-  }, [status, isEnglish, elapsedMs, sentenceCount, messages]);
+  }, [status, isEnglish, elapsedMs, sentenceCount]);
   const consentDialogRef = useRef<HTMLDialogElement | null>(null);
   const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
 
@@ -1116,6 +1113,9 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   }
 
   const hasTranscript = segments.length > 0 || interim.length > 0;
+  const onboardingSteps = isEnglish
+    ? ["Sit near the speaker and check your mic", "Press Start lecture — speech piles up live", "Ask anything the moment you get lost"]
+    : ["강사 가까이에 앉아 마이크를 확인하세요", "강의 시작을 누르면 말이 실시간으로 쌓여요", "놓친 순간 바로 채팅에 물어보세요"];
   // 진행 중인 강의는 크레딧이 다 떨어져도 질문까지는 막지 않는다.
   const creditsAllowAsk = creditStatus === null || creditStatus.credits > 0 || status === "recording" || status === "paused";
   const outOfCredits = creditStatus !== null && creditStatus.credits <= 0;
@@ -1986,6 +1986,16 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           <span>{notice}</span>
           <button type="button" className="banner-dismiss" onClick={() => setNotice("")} aria-label={isEnglish ? "Dismiss" : "닫기"}>✕</button>
         </>}</div>
+        {/* 종료 격려는 말로 끝나지 않는다: 바로 노트를 만들 수 있는 버튼을 붙인다. */}
+        {endRecap && (
+          <div className="notice-banner" role="status">
+            <span>{endRecap}</span>
+            <button type="button" className="banner-action" onClick={() => { setEndRecap(""); setNoteOpen(true); }}>
+              {isEnglish ? "Create note" : "노트 만들기"}
+            </button>
+            <button type="button" className="banner-dismiss" onClick={() => setEndRecap("")} aria-label={isEnglish ? "Dismiss" : "닫기"}>✕</button>
+          </div>
+        )}
         {/* 크레딧 0은 버튼만 죽는 게 아니라 이유와 다음 행동이 보여야 한다. */}
         {outOfCredits && status !== "recording" && status !== "paused" && (
           <div className="notice-banner">
@@ -2066,13 +2076,28 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           >
             {messages.length === 0 ? (
               <div className="empty-chat">
+                {/* 한 페인만 보이는 좁은 화면(폰·패드 세로)에선 기본 탭이 채팅이라,
+                    스크립트 페인의 인사·첫 사용 안내가 안 보인다. 여기에도 띄운다. */}
+                {status === "idle" && (
+                  <div className="narrow-welcome">
+                    {greeting && <strong className="empty-greeting">{greeting}</strong>}
+                    {sessionsById.size === 0 && (
+                      <ol className="onboarding-steps">
+                        {onboardingSteps.map((step, index) => (
+                          <li key={step}><em>{index + 1}</em>{step}</li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                )}
                 <p>{isEnglish ? "Ask as soon as the lecture starts." : "강의가 시작되면 바로 물어보세요."}</p>
                 <div className="empty-chat-examples">
                   {(isEnglish
                     ? ["Explain that formula again, simply", "Summarize the last 10 minutes"]
                     : ["아까 그 수식 쉽게 다시 설명해줘", "최근 10분 요약해줘"]
                   ).map((example) => (
-                    <button key={example} type="button" onClick={() => setQuestion(example)}>{example}</button>
+                    // 스크립트가 없으면 보내지도 못하므로 눌리지 않게 잠근다.
+                    <button key={example} type="button" disabled={!hasTranscript} onClick={() => setQuestion(example)}>{example}</button>
                   ))}
                 </div>
               </div>
@@ -2250,10 +2275,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                     {greeting && <strong className="empty-greeting">{greeting}</strong>}
                     {sessionsById.size === 0 ? (
                       <ol className="onboarding-steps">
-                        {(isEnglish
-                          ? ["Sit near the speaker and check your mic", "Press Start lecture — speech piles up here live", "Ask anything the moment you get lost"]
-                          : ["강사 가까이에 앉아 마이크를 확인하세요", "강의 시작을 누르면 말이 실시간으로 쌓여요", "놓친 순간 바로 왼쪽 채팅에 물어보세요"]
-                        ).map((step, index) => (
+                        {onboardingSteps.map((step, index) => (
                           <li key={step}><em>{index + 1}</em>{step}</li>
                         ))}
                       </ol>

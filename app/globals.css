@@ -414,6 +414,13 @@ a, button, summary, input, textarea, select {
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
+  /* 버튼으로 써도 링크와 똑같이 보이게: 전역 버튼 기본값 차단. */
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  font-size: inherit;
+  cursor: pointer;
 }
 
 .panes {
@@ -3322,10 +3329,25 @@ button:active,
   text-align: center;
   transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
 }
-.empty-chat-examples button:hover {
+.empty-chat-examples button:hover:not(:disabled) {
   color: var(--signal-dark);
   border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
   background: color-mix(in srgb, var(--signal) 6%, var(--surface));
+}
+/* 스크립트가 들어오기 전엔 보낼 수 없다. 눌리는 척하지 않는다. */
+.empty-chat-examples button:disabled { opacity: .45; cursor: default; }
+
+/* 한 페인만 보이는 좁은 화면에서 채팅 탭에 띄우는 인사·첫 사용 안내.
+   두 페인이 다 보이는 폭에선 스크립트 쪽 것과 중복이라 숨긴다. */
+.narrow-welcome { display: none; }
+@media (max-width: 800px) {
+  .narrow-welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 26px;
+  }
 }
 
 /* 시작 전 빈 화면의 시간대 인사. 안내문보다 한 단 크게, 잉크색으로. */
