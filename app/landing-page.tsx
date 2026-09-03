@@ -78,14 +78,10 @@ const content = {
     pricingFootnote: "취소선 가격은 프로모션 종료 후 적용할 예정인 가격입니다. 종료 일정과 최종 결제 금액은 결제 전에 안내합니다.",
     faqTitle: "자주 묻는 질문",
     faqs: [
+      ["강의를 녹음해도 되나요?", "강의자와 기관의 녹음 정책을 먼저 확인하고, 녹음이 허용된 환경에서만 사용해야 합니다."],
       ["온라인 강의용 서비스인가요?", "아니요. 교실, 학원, 세미나처럼 같은 공간에서 듣는 현장 강의를 우선해 만들고 있습니다."],
-      ["질문하는 동안 강의 기록이 멈추나요?", "멈추지 않습니다. 답변을 만드는 동안에도 마이크 음성과 스크립트는 계속 이어집니다."],
-      ["모든 질문에 웹 검색을 사용하나요?", "아닙니다. 강의 내용만으로 충분한지 모델이 판단하고, 최신 정보나 외부 확인이 필요할 때만 검색합니다."],
-      ["무료 체험에도 모든 기능을 쓸 수 있나요?", "네. 7일 동안 180크레딧으로 강의 기록, 질문, 강의실 맥락과 필요한 웹 검색을 모두 이용할 수 있습니다."],
-      ["지난 수업도 답변에 반영되나요?", "같은 강의실에 저장한 이전 수업 중 질문과 관련된 부분만 찾아 보조 맥락으로 사용합니다. 다른 강의실의 내용은 섞지 않습니다."],
       ["제 OpenAI·Claude·Gemini 키를 쓸 수 있나요?", "네. 현재 탭에서 한 번만 쓰거나 계정에 암호화해 저장할 수 있습니다. 해당 공급자의 모델 비용은 본인 계정에 별도로 청구됩니다."],
       ["Google 로그인 정보는 어디에 사용하나요?", "Google에서 받은 이름, 이메일 주소와 프로필 사진은 Lecue 계정을 만들고 로그인 상태를 유지하는 데만 사용합니다. Gmail, Google Drive, 캘린더 등의 다른 Google 데이터에는 접근하지 않습니다."],
-      ["강의를 녹음해도 되나요?", "강의자와 기관의 녹음 정책을 먼저 확인하고, 녹음이 허용된 환경에서만 사용해야 합니다."],
     ],
     finalTitle: ["다음 설명은,", "놓치지 않게."],
     finalCta: "첫 강의실 열기",
@@ -165,14 +161,10 @@ const content = {
     pricingFootnote: "Struck-through prices are planned post-promotion prices. The end date and final charge are shown before checkout.",
     faqTitle: "Common questions",
     faqs: [
+      ["May I record any lecture?", "Check the lecturer's, institution's, and local recording rules first. Use Lecue only where recording is permitted."],
       ["Is this for online courses?", "No. Lecue is designed first for classrooms, seminars, workshops, and other lectures you attend in person."],
-      ["Does recording stop while I ask?", "No. The microphone and transcript continue while an answer is being prepared."],
-      ["Does every answer use web search?", "No. The model decides whether the lecture is enough and searches only when current information or outside verification is needed."],
-      ["What can I use during the free trial?", "Use 180 credits during seven days for transcription, questions, classroom context, and needed web search."],
-      ["Can answers use earlier lectures?", "Yes. Lecue retrieves only relevant excerpts from earlier lectures in the same classroom as supporting context. It never mixes in another classroom."],
       ["Can I use my own OpenAI, Claude, or Gemini key?", "Yes. Use it once in the current tab or save it encrypted to your account. That provider bills its own model charges separately."],
       ["How does Lecue use my Google sign-in data?", "Lecue uses your Google name, email address, and profile photo only to create your account and keep you signed in. It does not access Gmail, Google Drive, Calendar, or other Google data."],
-      ["May I record any lecture?", "Check the lecturer's, institution's, and local recording rules first. Use Lecue only where recording is permitted."],
     ],
     finalTitle: ["Stay with the next explanation", "from start to finish."],
     finalCta: "Open my first classroom",
@@ -195,10 +187,7 @@ export default function LandingPage({
   const copy = content[locale];
   const base = locale === "en" ? "/en" : "";
   const classroomPath = `${base}/classroom`;
-  const pilotFaq: readonly [string, string] = locale === "en"
-    ? ["Is Lecue free right now?", `Yes. Every feature is free while we collect feedback, and you receive ${FREE_PILOT_CREDITS} credits when you sign up. If you run out, email support@lecue.app.`]
-    : ["지금은 무료인가요?", `네. 피드백을 받는 기간 동안 모든 기능을 무료로 쓸 수 있고, 가입하면 ${FREE_PILOT_CREDITS}크레딧을 드립니다. 크레딧이 부족하면 support@lecue.app으로 알려주세요.`];
-  const faqs = FREE_PILOT ? copy.faqs.map((item, index) => (index === 3 ? pilotFaq : item)) : copy.faqs;
+  const faqs = copy.faqs;
   const heroNote = FREE_PILOT
     ? (locale === "en" ? `Free during the feedback period · ${FREE_PILOT_CREDITS} credits at signup` : `피드백 기간 무료 공개 · 가입하면 ${FREE_PILOT_CREDITS}크레딧`)
     : copy.heroNote;
