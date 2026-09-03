@@ -121,9 +121,62 @@ export function useLectureRecorder(options: RecorderOptions) {
   const sonioxModeRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  // 종료 저장이 실패한 강의. 연결이 돌아오면 자동으로 다시 보낸다.
+  const pendingFinishRef = useRef<{ sessionId: string; durationMs: number } | null>(null);
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+
+  /** 종료 PATCH 한 번. 성공하면 로컬 미러를 지운다. */
+  async function submitFinishSave(sessionId: string, durationMs: number, segmentList: Segment[]): Promise<boolean> {
+    try {
+      const response = await fetch("/api/lecture-sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ sessionId, durationMs, segments: segmentList }),
+      });
+      if (!response.ok) throw new Error();
+      pendingFinishRef.current = null;
+      try { window.localStorage.removeItem(`lecue-unsaved-finish-${sessionId}`); } catch { /* 미러는 최선노력 */ }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // 오프라인 종료 복구: online 이벤트와 30초 간격으로 미저장 종료를 재시도하고,
+  // 마운트 시엔 지난 방문에서 남은 로컬 미러(새로고침으로 날아갈 뻔한 꼬리)를 밀어 넣는다.
+  useEffect(() => {
+    const retry = () => {
+      const pending = pendingFinishRef.current;
+      if (!pending) return;
+      void submitFinishSave(pending.sessionId, pending.durationMs, segmentsRef.current).then((saved) => {
+        if (!saved) return;
+        options.setError("");
+        options.setNotice(isEnglish ? "The lecture is now fully saved." : "강의 저장을 마쳤습니다.");
+        void options.loadClassrooms();
+        void options.loadCredits();
+      });
+    };
+    try {
+      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+        const key = window.localStorage.key(i);
+        if (!key?.startsWith("lecue-unsaved-finish-")) continue;
+        const sessionId = key.slice("lecue-unsaved-finish-".length);
+        const stored = JSON.parse(window.localStorage.getItem(key) ?? "") as { durationMs: number; segments: Segment[] };
+        void submitFinishSave(sessionId, stored.durationMs, stored.segments).then((saved) => {
+          if (saved) void options.loadClassrooms();
+        });
+      }
+    } catch { /* 깨진 미러는 버린다 */ }
+    window.addEventListener("online", retry);
+    const timer = window.setInterval(retry, 30_000);
+    return () => {
+      window.removeEventListener("online", retry);
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -740,18 +793,8 @@ export function useLectureRecorder(options: RecorderOptions) {
     stopMicMeter();
     const sessionId = activeSessionIdRef.current;
     if (sessionId) {
-      try {
-        const response = await fetch("/api/lecture-sessions", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({
-            sessionId,
-            durationMs,
-            segments: segmentsRef.current,
-          }),
-        });
-        const data = await response.json() as { error?: string };
-        if (!response.ok) throw new Error(data.error);
+      const saved = await submitFinishSave(sessionId, durationMs, segmentsRef.current);
+      if (saved) {
         await options.loadClassrooms(activeClassroomId);
         await options.loadCredits();
         if (reachedLimit) {
@@ -759,8 +802,16 @@ export function useLectureRecorder(options: RecorderOptions) {
           // red alert banner it used to be rendered in.
           options.setNotice(isEnglish ? "This lecture reached the 3-hour session limit and was saved." : "수업 1회 최대 3시간에 도달해 자동으로 저장·종료했습니다.");
         }
-      } catch (caught) {
-        options.setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "The lecture ended, but saving did not finish." : "강의는 종료됐지만 저장을 마치지 못했습니다.");
+      } else {
+        // 유일하게 작업물이 영구 소실되던 경로였다: 미러 + 자동 재시도.
+        pendingFinishRef.current = { sessionId, durationMs };
+        try {
+          window.localStorage.setItem(`lecue-unsaved-finish-${sessionId}`,
+            JSON.stringify({ durationMs, segments: segmentsRef.current }));
+        } catch { /* 저장소가 꽉 차면 자동 재시도에만 의존한다 */ }
+        options.setError(isEnglish
+          ? "The lecture ended, but saving did not finish. It will retry automatically when the connection returns — keep this tab open."
+          : "강의는 종료됐지만 저장을 마치지 못했습니다. 연결이 돌아오면 자동으로 다시 저장합니다 — 탭을 닫지 말고 두세요.");
       }
     }
     // socket.onclose lands after these round-trips on a fast connection, so
