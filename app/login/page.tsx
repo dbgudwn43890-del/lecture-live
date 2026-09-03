@@ -87,11 +87,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
       <section className="login-stage" aria-labelledby="login-title">
         <div className="login-panel" aria-busy={pending}>
           <div className="auth-heading">
-            <span className="auth-kicker">{isEnglish ? "Live lecture assistant" : "현장 강의를 위한 실시간 조교"}</span>
             <h1 id="login-title">{isEnglish ? "Sign in to Lecue" : "Lecue에 로그인"}</h1>
-            <p>{isEnglish
-              ? "One Google account for sign-up and sign-in."
-              : "가입과 로그인 모두 Google 계정 하나면 됩니다."}</p>
           </div>
 
           <button
@@ -108,14 +104,6 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
               {pending && <i className="auth-spinner auth-spinner-dark" />}
             </span>
           </button>
-
-          {/* 폼이 빠진 자리를 계정이 받는 것으로 채운다. 과금을 암시하는
-              문구(무료·크레딧)는 어디에도 쓰지 않는다. */}
-          <ul className="login-perks">
-            <li>{isEnglish ? "Live transcription that follows the lecture" : "강의를 따라가는 실시간 받아쓰기"}</li>
-            <li>{isEnglish ? "Ask the moment you get lost — answered from this lecture" : "놓친 순간 바로 질문 — 이 수업의 내용으로 답합니다"}</li>
-            <li>{isEnglish ? "A structured review note after every lecture" : "수업이 끝나면 정리된 복습 노트"}</li>
-          </ul>
 
           <p
             id="auth-message"
