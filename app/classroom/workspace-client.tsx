@@ -65,6 +65,7 @@ type AudioUpload = {
   status: "uploading" | "queued" | "processing" | "completed" | "failed" | "deleted";
   filename: string;
   error_code?: string | null;
+  created_at?: string;
 };
 type UserProfile = { displayName: string; email: string };
 type AiProvider = "lecture-live" | PersonalProvider;
@@ -368,6 +369,32 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
 
   // Uploading or transcribing: the control is occupied either way.
   const audioBusy = audioUpload?.status === "uploading" || audioUpload?.status === "processing" || audioUpload?.status === "queued";
+
+  // "떠나도 된다"고 안내한 업로드의 뒷일: 탭을 닫았다 돌아와도 진행 중이면
+  // 폴링을 다시 붙이고, 최근 실패는 여기서라도 알려준다.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch("/api/lecture-audio", { headers: { "X-Site-Locale": locale } });
+        if (!response.ok) return;
+        const data = await response.json() as { uploads?: AudioUpload[] };
+        const rows = data.uploads ?? [];
+        const inFlight = rows.find((row) => row.status === "processing" || row.status === "queued");
+        if (inFlight) {
+          setAudioUpload(inFlight);
+          return;
+        }
+        const recentFailed = rows.find((row) => row.status === "failed"
+          && row.created_at && Date.now() - new Date(row.created_at).getTime() < 86_400_000);
+        if (recentFailed) {
+          setError(isEnglish
+            ? `The recording "${recentFailed.filename}" could not be transcribed. Try uploading it again.`
+            : `녹음 파일 "${recentFailed.filename}"을 옮기지 못했습니다. 다시 올려 주세요.`);
+        }
+      } catch { /* 다음 방문에 다시 확인한다 */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // UPL-03. Deepgram answers on its own callback, so the only way this tab
   // learns the transcript landed is to ask. Polling stops the moment the job
@@ -1093,18 +1120,21 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
 
   /** ACC-02/ACC-03. Asks the server, which owns the wording version. */
   async function refreshConsent() {
-    try {
-      const response = await fetch("/api/consents", { headers: { "X-Site-Locale": locale } });
-      if (!response.ok) return false;
-      const data = await response.json() as { satisfied?: boolean };
-      const satisfied = data.satisfied === true;
-      setConsentSatisfied(satisfied);
-      return satisfied;
-    } catch {
-      // Offline or a failed check does not get to wave a learner through: the
-      // gate stays and asking again is cheap.
-      return false;
+    // 일시적 네트워크 실패로 이미 동의한 사용자에게 동의창을 다시 들이밀지
+    // 않도록 한 번 재시도한다. 두 번 다 실패하면 게이트 유지(fail-closed).
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch("/api/consents", { headers: { "X-Site-Locale": locale } });
+        if (!response.ok) throw new Error();
+        const data = await response.json() as { satisfied?: boolean };
+        const satisfied = data.satisfied === true;
+        setConsentSatisfied(satisfied);
+        return satisfied;
+      } catch {
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
     }
+    return false;
   }
 
   async function acceptConsentGate() {
@@ -1204,6 +1234,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     ]);
     if (fromComposer) setQuestion("");
 
+    // 스트리밍이 중간에 끊겨도 이미 받은 답변은 지우지 않는다.
+    let streamedText = "";
     try {
       const response = await fetch("/api/ask", {
         method: "POST",
@@ -1242,7 +1274,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let streamedText = "";
       let streamError: string | null = null;
       let finalDone: { answer: string; sources?: Source[]; lectureSources?: LectureSource[]; materialSources?: MaterialSource[] } | null = null;
 
@@ -1295,14 +1326,18 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         ),
       );
     } catch (caught) {
+      const reason = caught instanceof Error && caught.message
+        ? caught.message
+        : isEnglish ? "Could not create an answer." : "답변을 만들지 못했습니다.";
       setMessages((current) =>
         current.map((message) =>
           message.id === assistantId
             ? {
                 ...message,
-                text: caught instanceof Error
-                  ? caught.message
-                  : isEnglish ? "Could not create an answer." : "답변을 만들지 못했습니다.",
+                // 부분 답변이 있으면 남기고 아래에 중단 사유를 덧붙인다.
+                text: streamedText
+                  ? `${streamedText}\n\n⚠ ${isEnglish ? "The answer was cut off: " : "답변이 중간에 끊겼습니다: "}${reason}`
+                  : reason,
                 pending: false,
               }
             : message,
