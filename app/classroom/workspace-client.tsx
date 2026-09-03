@@ -1004,11 +1004,33 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       setMobilePane((data.questions?.length ?? 0) > 0 ? "chat" : "transcript");
       setMobileSidebarOpen(false);
       setNoteOpen(false);
+      // 업로드로 만들어진 강의는 실시간 접기(2분 주기)를 거치지 않아 요약이
+      // 없고, 질문마다 원문 전체가 나간다. 열 때 뒤에서 마저 접는다.
+      // 서버가 할 일이 없으면 written:0으로 바로 끝난다.
+      if (nextStatus === "ended") void foldSummaries(data.session.id);
     } catch (caught) {
       setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not load the lecture." : "수업 기록을 불러오지 못했습니다.");
     } finally {
       setClassroomPending(false);
       setRestoring(false);
+    }
+  }
+
+  /** 3시간 강의는 창 18개 = 서버 호출당 3개씩 최대 6번. 다 접히면 멈춘다. */
+  async function foldSummaries(sessionId: string) {
+    for (let round = 0; round < 8; round += 1) {
+      try {
+        const response = await fetch("/api/lecture-summaries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ sessionId }),
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { written?: number };
+        if (!data.written) return;
+      } catch {
+        return; // 다음에 열 때 다시 시도된다.
+      }
     }
   }
 
