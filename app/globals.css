@@ -1,25 +1,24 @@
 /* One palette for the whole product — landing page and app both read these.
-   The brand is a calm purple on near-white paper: --signal carries every
-   interactive accent, --accent is its warmer partner for gradients and
-   highlights, and --status stays green because it means "grounded", not
-   "brand". */
+   --signal carries every interactive accent, --accent is its warmer partner
+   for gradients and highlights, and --status stays a brighter green because it
+   means "grounded", not "brand". */
 :root {
-  /* 웜 팔레트 (2026-09-03): 크림 종이 위의 따뜻한 잉크, 액센트는 테라코타.
-     보라 브랜드에서 전환 — 참고: Claude.ai 계열의 웜 프로페셔널 톤. */
+  /* 딥 그린 팔레트 (2026-09-03): 크림 종이 + 짙은 녹색 + 골드.
+     테라코타는 Claude 브랜드와 겹쳐 폐기. 빈티지 아카데미아 톤. */
   --paper: #faf9f5;
   --surface: #ffffff;
   --ink: #262420;
   --muted: #7d766c;
   --line: rgba(38, 36, 32, .09);
   --line-strong: rgba(38, 36, 32, .18);
-  --signal: #c15f3c;
-  --signal-dark: #a04b2c;
+  --signal: #3e6b4f;
+  --signal-dark: #2f5540;
   --accent: #d29b3d;
   --status: #3d8a68;
-  --blue: #c15f3c;
-  --focus: #c15f3c;
+  --blue: #3e6b4f;
+  --focus: #3e6b4f;
   --soft-blue: #f4ede2;
-  --tint: rgba(193, 95, 60, .08);
+  --tint: rgba(62, 107, 79, .08);
   /* Surfaces that are deliberately inverted (topbar, footer, the user's chat
      bubble, filled ink buttons). They stay dark in both themes, so the white
      and pale-grey text sitting on them needs no per-theme handling. */
@@ -44,13 +43,13 @@
   color-scheme: light;
 }
 
-/* Dark is the same product, not a second one: the same calm purple, moved onto
+/* Dark is the same product, not a second one: the same green brand, moved onto
    near-black paper. Only the tokens change — every rule below reads them. */
 /* 다크 팔레트는 미디어쿼리가 아니라 data-theme 속성이 정한다. layout.tsx의
    인라인 스크립트가 저장된 선택(lecue-theme) 또는 OS 설정으로 첫 페인트 전에
    속성을 찍는다. 토글은 프로필 메뉴에 있다. */
 :root[data-theme="dark"] {
-    /* 웜 다크: 검정에 온기를 반 스푼. 액센트는 라이트보다 밝힌 앰버. */
+    /* 웜 다크: 검정에 온기를 반 스푼. 액센트는 라이트보다 밝힌 세이지. */
     --paper: #131110;
     /* 배경과 한 단계 확실히 벌린다. 다크에서 표면 구분은 그림자가 아니라
        밝기 차가 한다 (Material dark elevation). */
@@ -61,17 +60,17 @@
     --line-strong: rgba(240, 236, 229, .22);
     /* Lightened enough to read as text on near-black, still the brand hue.
        Anything filled with it takes --on-signal for its label. */
-    --signal: #e08b60;
-    --signal-dark: #eda57f;
+    --signal: #86b598;
+    --signal-dark: #a2c9b1;
     --accent: #e0b064;
     --status: #6cc79a;
-    --blue: #e08b60;
-    --focus: #e08b60;
-    --soft-blue: #2c2620;
-    --tint: rgba(224, 139, 96, .14);
+    --blue: #86b598;
+    --focus: #86b598;
+    --soft-blue: #232a24;
+    --tint: rgba(134, 181, 152, .14);
     --invert-bg: #2e2a25;
     --edge: #55493d;
-    --on-signal: #241207;
+    --on-signal: #10241a;
     --danger: #ffb1a3;
     --danger-tint: #3a1c17;
     --danger-line: #6b2f26;
@@ -3281,8 +3280,8 @@ button:active,
     --muted: #7d766c;
     --line: rgba(38, 36, 32, .12);
     --line-strong: rgba(38, 36, 32, .22);
-    --signal: #c15f3c;
-    --signal-dark: #a04b2c;
+    --signal: #3e6b4f;
+    --signal-dark: #2f5540;
     --soft-blue: #f4ede2;
     --on-signal: #ffffff;
     color-scheme: light;
