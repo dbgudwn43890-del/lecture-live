@@ -440,6 +440,29 @@ test("a lecture whose transcript is already in the database still reconciles its
   assert.ok(stored >= 5_430 && stored < 5_440, `duration_seconds ${stored} should track the elapsed 90m30s`);
 });
 
+test("a silently dead recorder is billed to its last transcript minute, not the wall clock", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = {
+    // 90분 동안 '기록 중'이었지만 스크립트는 10분에서 끊겼다.
+    data: { id: sessionId, classroom_id: null, started_at: new Date(Date.now() - 90 * 60_000).toISOString(), status: "recording" },
+    error: null,
+  };
+  outcomes["transcript_segments.select"] = { data: { end_ms: 600_000 }, error: null, count: 120 };
+  outcomes["lecture_sessions.update"] = { data: null, error: null };
+
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
+    method: "PATCH",
+    body: JSON.stringify({ sessionId, durationMs: 0, segments: [] }),
+  }));
+
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  const charge = calls.find((call) => call.table === "rpc:consume_lecture_credits");
+  assert.ok(charge, "the recorded 10 minutes still get billed");
+  // 10분 + 1분 여유 = 11번째 분(index 10)까지. 90분 벽시계가 아니다.
+  assert.equal((charge.payload as { p_minute_index: number }).p_minute_index, 10);
+});
+
 test("segment save charges the lecture before writing, and refuses to write when credits run out", async () => {
   const sessionId = randomUUID();
   outcomes["lecture_sessions.select"] = { data: { classroom_id: null }, error: null };

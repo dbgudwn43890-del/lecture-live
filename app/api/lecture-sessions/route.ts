@@ -616,9 +616,10 @@ export async function PATCH(request: Request) {
   const recordedSomething = segments.length > 0 || (storedSegments ?? 0) > 0;
   // 레코더가 소리 없이 죽은 채 '기록 중'으로 흘러간 시간을 그대로 과금하지
   // 않는다: 마지막으로 실제 받아쓴 순간(+1분 여유)까지만 과금·기록한다.
+  // 활동 시각을 알 수 없으면(조회 실패) 캡 없이 기존대로 경과 시간 과금.
   const clientTailEndMs = segments.reduce((max, segment) => Math.max(max, segment.endMs), 0);
-  const activityCapMs = Math.max(Number(lastSegment?.end_ms ?? 0), clientTailEndMs) + 60_000;
-  const billableMs = Math.min(elapsedMs, activityCapMs);
+  const knownActivityMs = Math.max(Number(lastSegment?.end_ms ?? 0), clientTailEndMs);
+  const billableMs = knownActivityMs > 0 ? Math.min(elapsedMs, knownActivityMs + 60_000) : elapsedMs;
   const durationSeconds = recordedSomething ? Math.min(10_800, Math.max(0, Math.ceil(billableMs / 1_000))) : 0;
   if (durationSeconds > 0) {
     const { error: creditError } = await current.supabase.rpc("consume_lecture_credits", {
