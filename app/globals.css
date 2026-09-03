@@ -396,6 +396,46 @@ a, button, summary, input, textarea, select {
   justify-content: space-between;
   gap: 12px;
 }
+/* 강의 종료 격려 토스트: 전폭 배너 대신 하단 가운데 떠 있는 작은 카드. */
+.recap-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 12px 14px 12px 20px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  box-shadow: var(--pop-shadow);
+  font-size: 13px;
+  line-height: 1.5;
+  animation: recap-toast-in 320ms cubic-bezier(.3, 1.2, .4, 1) both;
+}
+.recap-toast .recap-cta {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--signal);
+  color: var(--on-signal);
+  box-shadow: none;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+.recap-toast .recap-cta:hover { background: var(--signal-dark); }
+@keyframes recap-toast-in {
+  from { opacity: 0; transform: translate(-50%, 14px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 .banner-dismiss {
   flex: 0 0 auto;
   padding: 2px 6px;
@@ -611,11 +651,26 @@ a, button, summary, input, textarea, select {
   padding: 8px 8px 8px 16px;
   border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
   border-radius: 24px;
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  /* 유리 느낌은 유지하되 거의 불투명하게: 뒤로 비치는 답변 글자가
+     placeholder와 겹쳐 읽히던 문제(72% 시절)를 막는다. */
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   backdrop-filter: blur(14px) saturate(1.4);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
   box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--ink) 35%, transparent);
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+/* ChatGPT식 마무리: 입력창 뒤 바닥을 배경색으로 서서히 지워서
+   스크롤 내용이 입력창 '위에서' 끝나 보이게 한다. */
+.chat-pane::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 104px;
+  z-index: 4;
+  background: linear-gradient(to top, var(--surface) 38%, transparent);
+  pointer-events: none;
 }
 .question-form:focus-within {
   border-color: color-mix(in srgb, var(--signal) 55%, transparent);

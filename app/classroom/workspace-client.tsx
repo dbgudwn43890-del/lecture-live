@@ -1986,11 +1986,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           <span>{notice}</span>
           <button type="button" className="banner-dismiss" onClick={() => setNotice("")} aria-label={isEnglish ? "Dismiss" : "닫기"}>✕</button>
         </>}</div>
-        {/* 종료 격려는 말로 끝나지 않는다: 바로 노트를 만들 수 있는 버튼을 붙인다. */}
+        {/* 종료 격려: 전폭 배너가 아니라 화면 하단 가운데 작은 토스트로. */}
         {endRecap && (
-          <div className="notice-banner" role="status">
+          <div className="recap-toast" role="status">
             <span>{endRecap}</span>
-            <button type="button" className="banner-action" onClick={() => { setEndRecap(""); setNoteOpen(true); }}>
+            <button type="button" className="recap-cta" onClick={() => { setEndRecap(""); setNoteOpen(true); }}>
               {isEnglish ? "Create note" : "노트 만들기"}
             </button>
             <button type="button" className="banner-dismiss" onClick={() => setEndRecap("")} aria-label={isEnglish ? "Dismiss" : "닫기"}>✕</button>
