@@ -80,6 +80,11 @@
 .profileLink { font-size: 12.5px; font-weight: 500; color: var(--muted); }
 .profileLink:hover { color: var(--signal); }
 .profileSignout button { width: 100%; padding: 9px 0; color: var(--muted); background: transparent; border: 1px solid var(--line-strong); border-radius: 10px; font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; }
+.profileThemeRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.profileThemeRow small { color: var(--muted); font-size: 10px; }
+.profileThemeRow > div { display: flex; gap: 2px; padding: 3px; background: var(--paper); border: 1px solid var(--line); border-radius: 999px; }
+.profileThemeRow button { padding: 4px 10px; color: var(--muted); background: transparent; border: 0; border-radius: 999px; box-shadow: none; font-family: inherit; font-size: 11px; font-weight: 550; line-height: 1; cursor: pointer; }
+.profileThemeRow .themeActive { color: var(--ink); background: var(--surface); box-shadow: 0 1px 3px rgba(28, 24, 37, .14); }
 
 /* Hero ---------------------------------------------------------------- */
 .hero {

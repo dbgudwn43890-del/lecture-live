@@ -27,6 +27,23 @@ export default function ProfileMenu({
   credits: number | null;
 }) {
   const [open, setOpen] = useState(false);
+  // 워크스페이스 설정과 같은 규칙: lecue-theme 저장, html의 data-theme 적용.
+  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
+  useEffect(() => {
+    const stored = window.localStorage.getItem("lecue-theme");
+    if (stored === "dark" || stored === "light") setTheme(stored);
+  }, []);
+  function applyTheme(next: "system" | "light" | "dark") {
+    setTheme(next);
+    if (next === "system") {
+      window.localStorage.removeItem("lecue-theme");
+      document.documentElement.dataset.theme =
+        window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } else {
+      window.localStorage.setItem("lecue-theme", next);
+      document.documentElement.dataset.theme = next;
+    }
+  }
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -88,6 +105,17 @@ export default function ProfileMenu({
           <Link className={styles.profileLink} href={`${basePath}/billing`} onClick={() => setOpen(false)}>
             {isEnglish ? "Billing & plan" : "요금제 및 결제 관리"}
           </Link>
+
+          <div className={styles.profileThemeRow}>
+            <small>{isEnglish ? "Theme" : "테마"}</small>
+            <div role="group" aria-label={isEnglish ? "Theme" : "테마"}>
+              {([["system", isEnglish ? "System" : "시스템"], ["light", isEnglish ? "Light" : "라이트"], ["dark", isEnglish ? "Dark" : "다크"]] as const).map(([id, label]) => (
+                <button key={id} type="button" className={theme === id ? styles.themeActive : undefined} onClick={() => applyTheme(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <form className={styles.profileSignout} action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
             <button type="submit">{isEnglish ? "Sign out" : "로그아웃"}</button>
