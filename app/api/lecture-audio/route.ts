@@ -180,9 +180,14 @@ export async function POST(request: Request) {
   // credit used to admit any file, and parallel submits multiplied the free
   // Deepgram spend before the first callback landed. The charge itself still
   // happens on the callback, against Deepgram's measured length.
-  const requiredCredits = Math.max(1, Math.min(180, Math.ceil(
+  // 신고 길이만 믿으면 '1분'이라 우기는 1GB 파일이 크레딧 1개로 입장해
+  // Deepgram 전체 변환 비용을 태운다. 파일 크기에서 최소 길이를 추정해
+  // (무압축 WAV ≈ 분당 10.6MB — 가장 보수적인 하한) 신고치와 큰 쪽을 쓴다.
+  const claimedMinutes = Math.ceil(
     (Number.isFinite(claimedDurationMs) && claimedDurationMs > 0 ? claimedDurationMs : 0) / 60_000,
-  )));
+  );
+  const sizeFloorMinutes = Math.ceil(file.size / (10.6 * 1024 * 1024));
+  const requiredCredits = Math.max(1, Math.min(180, Math.max(claimedMinutes, sizeFloorMinutes)));
   const { data: creditStatus } = await supabase.rpc("get_credit_status");
   const credits = Number((Array.isArray(creditStatus) ? creditStatus[0] : creditStatus)?.credits ?? 0);
   if (credits < requiredCredits) {

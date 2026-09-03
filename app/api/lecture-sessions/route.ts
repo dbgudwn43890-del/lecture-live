@@ -448,7 +448,14 @@ export async function POST(request: Request) {
         credits: Number(credit?.remaining_credits ?? 0),
       }, { status: 402 });
     }
-    const { error } = await current.supabase.from("transcript_segments").upsert({
+    // 20260903010000부터 세그먼트 쓰기는 서비스 키만 가능하다(직접 PostgREST
+    // 쓰기가 과금 미터를 우회했다). 소유권은 위의 RLS-bound select가 확인했다.
+    const segmentAdmin = createAdminClient();
+    if (!segmentAdmin) {
+      console.error("Segment save has no admin client");
+      return NextResponse.json({ error: current.isEnglish ? "Could not save the transcript." : "스크립트를 저장하지 못했습니다." }, { status: 503 });
+    }
+    const { error } = await segmentAdmin.from("transcript_segments").upsert({
       session_id: body.sessionId,
       classroom_id: session.classroom_id,
       user_id: current.userId,
@@ -577,15 +584,19 @@ export async function PATCH(request: Request) {
   if (session.status !== "recording" && session.status !== "paused") return NextResponse.json({ completed: true, indexed: false });
 
   if (segments.length) {
-    const { error } = await current.supabase.from("transcript_segments").upsert(segments.map((segment) => ({
-      session_id: body.sessionId,
-      classroom_id: session.classroom_id,
-      user_id: current.userId,
-      client_id: segment.id,
-      start_ms: Math.round(segment.startMs),
-      end_ms: Math.round(segment.endMs),
-      text: segment.text.trim(),
-    })), { onConflict: "session_id,client_id" });
+    // 세그먼트 쓰기는 서비스 키만(20260903010000). 소유권은 위 select가 확인했다.
+    const finalAdmin = createAdminClient();
+    const { error } = finalAdmin
+      ? await finalAdmin.from("transcript_segments").upsert(segments.map((segment) => ({
+        session_id: body.sessionId,
+        classroom_id: session.classroom_id,
+        user_id: current.userId,
+        client_id: segment.id,
+        start_ms: Math.round(segment.startMs),
+        end_ms: Math.round(segment.endMs),
+        text: segment.text.trim(),
+      })), { onConflict: "session_id,client_id" })
+      : { error: { code: "NO_ADMIN_CLIENT" } };
     if (error) console.error("Final transcript save failed", error.code);
   }
 
