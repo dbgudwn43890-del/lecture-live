@@ -1044,6 +1044,36 @@ a, button, summary, input, textarea, select {
 .google-mark { width: 20px; height: 20px; }
 .auth-button-end { display: grid; place-items: center; width: 22px; height: 22px; }
 
+/* Google 버튼 하나만 남은 패널: 빈 자리를 계정이 받는 것 세 줄로 채운다. */
+.login-perks {
+  margin: 22px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.login-perks li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.login-perks li::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  transform: translateY(-1px);
+}
+/* 메시지가 없을 땐 자리도 차지하지 않는다. */
+.login-message:empty { display: none; }
+
 .auth-divider {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import styles from "./landing.module.css";
-import { FREE_PILOT, FREE_PILOT_CREDITS } from "./lib/free-pilot";
+import { FREE_PILOT } from "./lib/free-pilot";
 import { getPlanLabel } from "./lib/plan-label";
 import type { BillingPlan } from "./lib/use-paddle-checkout";
 import { PricingCheckoutButton, PricingCheckoutMessage, PricingCheckoutProvider } from "./pricing-checkout";
@@ -188,10 +188,11 @@ export default function LandingPage({
   const base = locale === "en" ? "/en" : "";
   const classroomPath = `${base}/classroom`;
   const faqs = copy.faqs;
+  // 파일럿 중에는 과금을 암시하는 문구(무료·크레딧·체험)를 어디에도 쓰지 않는다.
   const heroNote = FREE_PILOT
-    ? (locale === "en" ? `Free during the feedback period · ${FREE_PILOT_CREDITS} credits at signup` : `피드백 기간 무료 공개 · 가입하면 ${FREE_PILOT_CREDITS}크레딧`)
+    ? (locale === "en" ? "A laptop and a lecture are all you need." : "노트북 하나면 지금 수업부터 시작할 수 있습니다.")
     : copy.heroNote;
-  const heroCta = FREE_PILOT ? (locale === "en" ? "Start free" : "무료로 시작하기") : copy.heroCta;
+  const heroCta = FREE_PILOT ? (locale === "en" ? "Get started" : "시작하기") : copy.heroCta;
   const anonCtaHref = FREE_PILOT ? `${base}/login?mode=signup` : `${base}/billing?plan=monthly`;
 
   return (
