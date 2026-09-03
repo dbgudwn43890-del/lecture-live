@@ -2758,22 +2758,38 @@ button:active,
 }
 .sidebar-search::placeholder { color: var(--muted); }
 
-/* 입력 피크를 그대로 따라가는 막대. 값은 JS가 --level(0~1)로만 흘려 넣는다. */
+/* 듣고 있음 오브: 값은 JS가 --level(0~1)로만 흘려 넣는다.
+   말소리에 따라 빛나고 커지고, 조용할 때도 링이 퍼져 '살아있음'을 알린다. */
 .mic-meter {
-  width: 36px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--tint);
-  overflow: hidden;
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--status) 40%, #fff), var(--status) 72%);
+  box-shadow: 0 0 calc(3px + var(--level, 0) * 22px) calc(1px + var(--level, 0) * 5px)
+    color-mix(in srgb, var(--status) 55%, transparent);
+  transform: scale(calc(.82 + var(--level, 0) * .5));
 }
+.mic-meter::before,
 .mic-meter::after {
   content: "";
-  display: block;
-  height: 100%;
-  transform-origin: left;
-  transform: scaleX(var(--level, 0));
-  background: var(--status);
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--status) 65%, transparent);
+  animation: mic-ripple 2.6s ease-out infinite;
 }
+.mic-meter::after { animation-delay: 1.3s; }
+@keyframes mic-ripple {
+  from { opacity: .75; transform: scale(1); }
+  to { opacity: 0; transform: scale(3.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mic-meter::before, .mic-meter::after { animation: none; }
+}
+/* 녹음 중엔 오브가 상태를 말한다. 옆의 정적인 점은 중복이라 숨긴다. */
+.session-state:has(.mic-meter) .state-dot { display: none; }
 
 .confirm-modal .consent-gate span { justify-content: flex-end; gap: 10px; }
 .confirm-modal .confirm-cancel {
