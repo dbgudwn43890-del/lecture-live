@@ -22,16 +22,44 @@ export type NoteBlock = {
 };
 
 export type NoteSection = { heading: string; blocks: NoteBlock[] };
-export type LectureNote = { title: string; summary: string; sections: NoteSection[] };
+/**
+ * 노트 생성에 무임승차하는 개념 카드. 화면엔 그리지 않고 질문 컨텍스트로 쓴다:
+ * 과목에 쌓인 정의를 수백 토큰으로 주입해 원문 의존과 환각을 줄인다.
+ */
+export type NoteConcept = {
+  /** 표준 표기(오인식 정정 후). 예: "만기수익률" */
+  name: string;
+  /** 강의에서 실제로 말한 정의 1~2문장 */
+  definition: string;
+  /** 정의가 나온 시각 "hh:mm" (스크립트 타임스탬프). 모르면 빈 문자열 */
+  evidenceClock: string;
+  /** 이 목록 안의 관련 개념 name들 */
+  related: string[];
+};
+export type LectureNote = { title: string; summary: string; sections: NoteSection[]; concepts?: NoteConcept[] };
 
 /** OpenAI structured output용. strict 모드라 모든 필드가 required다. */
 export const NOTE_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "summary", "sections"],
+  required: ["title", "summary", "sections", "concepts"],
   properties: {
     title: { type: "string" },
     summary: { type: "string" },
+    concepts: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "definition", "evidenceClock", "related"],
+        properties: {
+          name: { type: "string" },
+          definition: { type: "string" },
+          evidenceClock: { type: "string" },
+          related: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
     sections: {
       type: "array",
       items: {
@@ -86,6 +114,9 @@ export function notePrompt(isEnglish: boolean) {
     isEnglish
       ? "Material pages: when a material page holds an important figure, table, or formula the lecture discussed, add a material block — exact filename in `label`, page number in `page`, one line in `text` on why it matters. The page is shown as an image, so only pick pages with real visual content."
       : "자료 페이지: 강의에서 다룬 중요한 그림·표·수식이 실린 자료 페이지가 있으면 material 블록을 넣는다 — `label`에 정확한 파일명, `page`에 페이지 번호, `text`에 왜 중요한지 한 줄. 그 페이지가 이미지로 표시되므로 실제 시각 자료가 있는 페이지만 고른다.",
+    isEnglish
+      ? "Concepts: in `concepts`, list the 5-15 key terms this lecture defined or explained. `name` is the canonical spelling (after fixing mishearings), `definition` is 1-2 sentences of what the lecturer actually said, `evidenceClock` is the transcript timestamp hh:mm where it was defined (empty if unclear), `related` names other concepts from this same list. Only terms the lecture genuinely covered."
+      : "개념: `concepts`에 이 강의가 정의하거나 설명한 핵심 용어 5~15개를 담는다. `name`은 표준 표기(오인식 정정 후), `definition`은 강의자가 실제로 말한 내용 1~2문장, `evidenceClock`은 정의가 나온 스크립트 타임스탬프 hh:mm(불명확하면 빈 문자열), `related`는 이 목록 안의 관련 개념 name들. 강의가 실제로 다룬 용어만 담는다.",
     isEnglish
       ? "When a lecture material page is the source, mention it in the text like (p.12). Unused fields must be empty strings, empty arrays, or 0. Write in English."
       : "강의 자료가 근거일 때는 본문에 (p.12)처럼 페이지를 적는다. 쓰지 않는 필드는 빈 문자열·빈 배열·0으로 둔다. 한국어로 쓴다.",

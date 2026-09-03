@@ -14,6 +14,7 @@ let transcriptRows: Array<{ session_id: string; client_id: string; start_ms: num
 let insertedQuestions: Array<Record<string, unknown>> = [];
 let rangeCalls: Array<{ table: string; from: number; to: number }> = [];
 let canAsk = true;
+let conceptRows: Array<{ name: string; definition: string; evidence_ms: number | null; related: string[] }> = [];
 
 function queryBuilder(table: string) {
   const filters: Record<string, unknown> = {};
@@ -21,8 +22,10 @@ function queryBuilder(table: string) {
     select() { return builder; },
     eq(column: string, value: unknown) { filters[column] = value; return builder; },
     order() { return builder; },
-    // fetchRecentQuestions가 쓰는 종단. 문답 이력 없음 = 빈 대화로 취급된다.
-    limit() { return Promise.resolve({ data: [], error: null }); },
+    // fetchRecentQuestions·fetchConceptCards가 쓰는 종단.
+    limit() {
+      return Promise.resolve({ data: table === "lecture_concepts" ? conceptRows : [], error: null });
+    },
     range(from: number, to: number) {
       rangeCalls.push({ table, from, to });
       if (table !== "transcript_segments") return Promise.resolve({ data: [], error: null });
@@ -100,6 +103,7 @@ test.beforeEach(() => {
   insertedQuestions = [];
   rangeCalls = [];
   canAsk = true;
+  conceptRows = [];
   openAiEvents = [];
   openAiShouldThrow = false;
   openAiCreateCalls.length = 0;
@@ -267,6 +271,35 @@ test("emits an error line and skips the lecture_questions save when the provider
   assert.equal(lines.length, 1);
   assert.ok(typeof lines[0].error === "string" && lines[0].error.length > 0);
   assert.equal(insertedQuestions.length, 0);
+});
+
+test("concept cards from past notes are matched to the question and injected with 1-hop expansion", async () => {
+  seedTranscript(SESSION_ID, 3);
+  conceptRows = [
+    { name: "듀레이션", definition: "채권 현금흐름의 가중평균 회수 기간.", evidence_ms: 1_260_000, related: ["만기수익률"] },
+    { name: "만기수익률", definition: "채권을 만기까지 보유할 때의 연 수익률.", evidence_ms: null, related: [] },
+    { name: "완전 무관 개념", definition: "질문과 아무 상관 없는 정의.", evidence_ms: null, related: [] },
+  ];
+  openAiEvents = [
+    { type: "response.output_text.delta", delta: "ok" },
+    { type: "response.completed", response: { output: [], usage: null } },
+  ];
+
+  const response = await ask({
+    question: "듀레이션이 정확히 뭐야?",
+    questionAtMs: 5_000,
+    segments: [],
+    lectureSessionId: SESSION_ID,
+    classroomId: "33333333-3333-4333-8333-333333333333",
+  });
+  await readNdjson(response);
+
+  const input = openAiCreateCalls[0].input as string;
+  assert.ok(input.includes("이미 정리된 개념"), "the concept block header must be present");
+  assert.ok(input.includes("듀레이션: 채권 현금흐름의"), "the matched card is injected");
+  assert.ok(input.includes("(00:21)"), "the evidence clock rides along");
+  assert.ok(input.includes("만기수익률:"), "the 1-hop related card comes too");
+  assert.ok(!input.includes("완전 무관 개념"), "unrelated cards stay out");
 });
 
 test("catchup mode narrows the transcript to the last 90 seconds and turns the web search off", async () => {

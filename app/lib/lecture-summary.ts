@@ -79,7 +79,8 @@ function clock(ms: number): string {
  * 중 한둘을 고르는 일에는 이걸로 충분하고 API 호출이 늘지 않는다. 인용이 자꾸
  * 엉뚱한 구간에서 나오면 그때 임베딩으로 올린다.
  */
-export function pickWindows(question: string, summaries: Summary[], limit = EXPANDED_WINDOWS): number[] {
+/** 질문에서 검색 조각을 만든다. 개념 카드 매칭(ask)도 같은 조각을 쓴다. */
+export function buildProbes(question: string): Set<string> {
   const probes = new Set<string>();
   for (const token of question.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
     if (token.length < 2) continue;
@@ -89,6 +90,11 @@ export function pickWindows(question: string, summaries: Summary[], limit = EXPA
     // 형태소 분석기 없이 그 간극을 메운다. 2자는 우연히 겹치는 일이 너무 잦다.
     for (let index = 0; index + 3 <= token.length; index += 1) probes.add(token.slice(index, index + 3));
   }
+  return probes;
+}
+
+export function pickWindows(question: string, summaries: Summary[], limit = EXPANDED_WINDOWS): number[] {
+  const probes = buildProbes(question);
   if (!probes.size) return [];
 
   const scored = summaries

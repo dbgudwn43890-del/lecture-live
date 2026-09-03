@@ -177,7 +177,45 @@ export async function POST(request: Request) {
     console.error("Lecture note save failed", saveError.code);
     return NextResponse.json({ error: isEnglish ? "Could not save the note." : "노트를 저장하지 못했습니다." }, { status: 500 });
   }
+  await saveConcepts(supabase, userId, session.classroom_id, sessionId, note);
   return NextResponse.json({ note: { status: "ready", content: note, updated_at: updatedAt } }, { status: 201 });
+}
+
+/**
+ * 노트가 뽑은 개념 카드를 질문 컨텍스트용으로 굳힌다. 재생성이면 그 세션의
+ * 이전 카드를 대체한다. 실패해도 노트는 이미 저장됐다 — 다음 재생성이 채운다.
+ */
+async function saveConcepts(supabase: Supabase, userId: string, classroomId: string | null, sessionId: string, note: LectureNote) {
+  const concepts = (note.concepts ?? [])
+    .filter((concept) => concept.name.trim() && concept.definition.trim())
+    .slice(0, 20);
+  try {
+    await supabase.from("lecture_concepts").delete().eq("session_id", sessionId);
+    if (!concepts.length) return;
+    const seen = new Set<string>();
+    const rows = concepts.filter((concept) => {
+      const key = concept.name.trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).map((concept) => {
+      // "hh:mm" → ms. 형식이 어긋나면 근거 시각 없이 저장한다.
+      const clock = /^(\d{1,2}):(\d{2})$/.exec(concept.evidenceClock.trim());
+      return {
+        user_id: userId,
+        classroom_id: classroomId,
+        session_id: sessionId,
+        name: concept.name.trim().slice(0, 120),
+        definition: concept.definition.trim().slice(0, 1000),
+        evidence_ms: clock ? (Number(clock[1]) * 60 + Number(clock[2])) * 60_000 : null,
+        related: concept.related.map((name) => name.trim()).filter(Boolean).slice(0, 8),
+      };
+    });
+    const { error } = await supabase.from("lecture_concepts").insert(rows);
+    if (error) console.error("Concept save failed", error.code);
+  } catch (caught) {
+    console.error("Concept save failed", caught instanceof Error ? caught.message : caught);
+  }
 }
 
 /** PostgREST가 1000행에서 자른다. 분 단위 타임스탬프를 붙여 흐름을 보존한다. */

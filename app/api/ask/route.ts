@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { cleanAnswerText, cleanSources } from "../../lib/answer-format";
-import { buildLectureContext, type Summary } from "../../lib/lecture-summary";
+import { buildLectureContext, buildProbes, type Summary } from "../../lib/lecture-summary";
 import {
   isAllowedPersonalModel,
   isPersonalProvider,
@@ -70,6 +70,7 @@ const koreanInstructions = [
   "예를 들어 '주식·채권을 발행하고 중개한다'고만 설명하지 말고, 증권과 주식·채권이 각각 어떤 권리인지, 발행은 기업이 새 증권을 팔아 자금을 모으는 과정이고 중개는 투자자의 주문을 시장에 전달해 거래가 체결되게 하는 과정인지도 풀어야 한다.",
   "강의에 없는 보편적 배경지식은 보충할 수 있지만 강의에서 직접 말한 내용처럼 표현하지 않는다.",
   "같은 강의실의 이전 수업 내용이 제공되면 현재 수업을 이해하는 보조 맥락으로만 사용한다. 현재 수업에서 말한 내용과 혼동하지 않는다.",
+  "'이 과목에서 이미 정리된 개념'이 제공되면 정의·용어 질문의 1차 근거로 신뢰한다. 다만 오늘 강의가 그 정의를 수정·확장하면 오늘 강의 쪽을 따른다.",
   "강의 자료 발췌가 제공되면 강사가 화면에 띄운 수식·표·그림의 내용으로 보고 활용한다. 음성 스크립트에 빠진 기호나 값은 자료 쪽을 우선한다. 자료에 없는 쪽 번호나 내용을 지어내지 않는다.",
   "'이거', '저 식', '방금 그 표'처럼 가리키는 대상이 생략된 질문은 '지금 화면에 떠 있을 가능성이 높은 강의 자료'를 먼저 본다. 그 자료로 설명이 되면 그것을 대상으로 삼고, 맞지 않으면 강의 흐름으로 다시 판단한다.",
   "강의 내용으로 충분하면 검색하지 않는다. 최신 정보나 검증이 필요하면 웹 검색을 사용한다.",
@@ -92,6 +93,7 @@ const englishInstructions = [
   "Unless the learner's level is clear, assume they are new to the concept. For conceptual questions, give a plain-language definition and a concrete example. Explain the unfamiliar terms inside a definition so the learner does not have to ask what each term means.",
   "Do not replace one technical term with another. For abstract verbs such as 'issues', 'handles', or 'acts on behalf of', explain who does what and how money, rights, or information move.",
   "You may add general background knowledge that was not stated in the lecture, but do not present it as something the lecturer said.",
+  "When 'Concepts this course has already defined' is provided, trust those definitions as the primary ground for definition questions — unless today's lecture revises or extends them, in which case today's lecture wins.",
   "When excerpts from earlier lectures in the same classroom are provided, use them only as supporting context and do not present them as statements from the current lecture.",
   "When excerpts from lecture materials are provided, treat them as the formulas, tables, and figures shown on screen. Prefer them over the audio transcript for symbols and values the transcript dropped, and never invent a page number or content that is not there.",
   "For questions whose target is left out — 'why is this', 'that formula', 'the table just now' — look first at the material the lecture is most likely on screen right now. Use it as the referent when it fits, and fall back to the lecture flow when it does not.",
@@ -194,6 +196,58 @@ async function fetchStoredSegments(
  * 필요 없다.
  */
 /** 이어지는 대화의 맥락. 이 수업의 최근 문답 6개를 시간순으로 돌려준다. */
+/**
+ * 개념 카드: 지난 강의 노트가 굳힌 과목 정의. 질문과 3자 조각으로 매칭해
+ * 상위 4장 + 그 카드들이 가리키는 관련 개념(1홉)까지 최대 8장을 고른다.
+ * 수백 토큰으로 정의 근거를 공급해 원문 의존과 환각을 줄인다.
+ */
+async function fetchConceptCards(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  classroomId: string,
+  question: string,
+): Promise<string> {
+  const probes = buildProbes(question);
+  if (!probes.size) return "";
+  const { data, error } = await supabase
+    .from("lecture_concepts")
+    .select("name,definition,evidence_ms,related")
+    .eq("classroom_id", classroomId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error || !data?.length) return "";
+
+  const scored = data.map((card) => {
+    const haystack = `${card.name} ${card.definition}`.toLowerCase();
+    let score = 0;
+    for (const probe of probes) if (haystack.includes(probe)) score += probe.length;
+    // 이름이 직접 맞으면 정의 본문 우연 일치보다 훨씬 강한 신호다.
+    if (probes.has(card.name.toLowerCase())) score += 20;
+    return { card, score };
+  }).filter((row) => row.score >= 3).sort((a, b) => b.score - a.score);
+  if (!scored.length) return "";
+
+  const picked = scored.slice(0, 4).map((row) => row.card);
+  // 1홉 확장: 뽑힌 카드가 가리키는 관련 개념. 같은 이름의 최신 카드 하나만.
+  const names = new Set(picked.map((card) => card.name));
+  for (const card of picked.slice()) {
+    for (const relatedName of card.related ?? []) {
+      if (names.has(relatedName) || picked.length >= 8) continue;
+      const relatedCard = data.find((row) => row.name === relatedName);
+      if (relatedCard) {
+        names.add(relatedName);
+        picked.push(relatedCard);
+      }
+    }
+  }
+
+  return picked.map((card) => {
+    const clock = typeof card.evidence_ms === "number"
+      ? ` (${String(Math.floor(card.evidence_ms / 3_600_000)).padStart(2, "0")}:${String(Math.floor(card.evidence_ms / 60_000) % 60).padStart(2, "0")})`
+      : "";
+    return `- ${card.name}: ${card.definition}${clock}`;
+  }).join("\n");
+}
+
 async function fetchRecentQuestions(
   supabase: Awaited<ReturnType<typeof createClient>>,
   sessionId: string,
@@ -853,7 +907,7 @@ export async function POST(request: Request) {
   // the wait instead of adding it (PRD 36.3.4).
   // Without a session id there is nothing to read back, so fall back to
   // whatever the request carried (the pre-existing behavior).
-  const [storedSegments, storedSummaries, earlier, recentQuestions] = await Promise.all([
+  const [storedSegments, storedSummaries, earlier, recentQuestions, conceptCards] = await Promise.all([
     lectureSessionId ? fetchStoredSegments(supabase, lectureSessionId) : Promise.resolve<Segment[]>([]),
     // 복구 요청은 최근 90초만 보므로 요약이 할 일이 없다. 그 외에는 이 읽기가
     // 원문 대신 프롬프트에 들어갈 것을 결정한다.
@@ -863,6 +917,8 @@ export async function POST(request: Request) {
       : Promise.resolve({ ...EMPTY_CLASSROOM_CONTEXT, admin: null }),
     // 이전 문답이 없으면 "아까 네 답변"류 질문이 매번 백지에서 시작한다.
     lectureSessionId && !catchup ? fetchRecentQuestions(supabase, lectureSessionId) : Promise.resolve(""),
+    // 개념 카드: 지난 강의 노트가 확정한 정의를 수백 토큰으로 주입한다.
+    classroomId && !catchup ? fetchConceptCards(supabase, classroomId, question) : Promise.resolve(""),
   ]);
   const mergedSegments = lectureSessionId ? mergeSegments(storedSegments, unconfirmedSegments) : unconfirmedSegments;
   const contextMs = Date.now() - contextStartedAt;
@@ -892,6 +948,11 @@ export async function POST(request: Request) {
       ? `\n\nQ&A so far in this lecture (the running conversation):\n${recentQuestions}`
       : `\n\n이 수업에서 지금까지의 문답(이어지는 대화):\n${recentQuestions}`
     : "";
+  const conceptBlock = conceptCards
+    ? locale === "en"
+      ? `\n\nConcepts this course has already defined (from past lecture notes — trust these definitions):\n${conceptCards}`
+      : `\n\n이 과목에서 이미 정리된 개념(지난 강의 노트 기준 — 이 정의를 신뢰할 것):\n${conceptCards}`
+    : "";
   const earlierBlock = earlier.text
     ? locale === "en" ? `\n\nRelevant excerpts from earlier lectures in this classroom:\n${earlier.text}` : `\n\n같은 강의실의 이전 수업 중 관련 내용:\n${earlier.text}`
     : "";
@@ -911,8 +972,8 @@ export async function POST(request: Request) {
       : `\n\n지금 화면에 떠 있을 가능성이 높은 강의 자료:\n${earlier.screenText}`
     : "";
   const input = locale === "en"
-    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}${historyBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
-    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}${historyBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
+    ? `Lecture transcript:\n${context || "(No finalized transcript yet)"}${conceptBlock}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}${historyBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
+    : `강의 스크립트:\n${context || "(아직 확정된 스크립트 없음)"}${conceptBlock}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}${historyBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
 
   // Everything above this line is validation (auth, rate limit, credits, body
   // shape); only once all of it has passed does the response start streaming.
