@@ -1,337 +1,111 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
-
-import styles from "./landing.module.css";
-import { FREE_PILOT } from "./lib/free-pilot";
-import { getPlanLabel } from "./lib/plan-label";
-import type { BillingPlan } from "./lib/use-paddle-checkout";
-import { PricingCheckoutButton, PricingCheckoutMessage, PricingCheckoutProvider } from "./pricing-checkout";
 import ProfileMenu from "./profile-menu";
+import { getPlanLabel } from "./lib/plan-label";
+import { landingText } from "./landing-copy";
+import LandingInteractions from "./landing-interactions";
+import "./landing-experience.css";
 
 type Locale = "ko" | "en";
-
-const content = {
-  ko: {
-    homeLabel: "Lecue 홈",
-    navLabel: "주요 메뉴",
-    nav: ["기능", "요금", "자주 묻는 질문"],
-    signIn: "로그인",
-    signUp: "회원가입",
-    classroom: "내 강의실",
-    openClassroom: "강의실 열기",
-    open: "선택하기",
-    language: "EN",
-    heroLabel: "현장 강의를 위한 실시간 조교",
-    heroTitle: ["놓친 설명을,", "수업이 끝나기 전에."],
-    heroDescription: "Lecue는 현장 강의를 실시간으로 기록하고, 방금까지의 수업 흐름을 바탕으로 질문에 답하는 학습 서비스입니다. 답변을 읽는 동안에도 기록은 계속됩니다.",
-    heroCta: "7일 무료로 시작하기",
-    heroNote: "7일 무료 체험 · 180크레딧",
-    demoTitle: "질문과 강의가 나란히 흐릅니다",
-    featuresLabel: "무엇을 하는 서비스인가",
-    featuresTitle: ["수업 중에 필요한 것만,", "군더더기 없이."],
-    features: [
-      ["실시간 스크립트", "마이크로 들어온 강의를 문단 단위로 정리해 화면에 이어 붙입니다. 질문하는 동안에도 멈추지 않습니다."],
-      ["질문한 시점까지의 맥락", "답변은 그 수업에서 지금까지 나온 설명을 근거로 만듭니다. 아직 다루지 않은 내용을 앞질러 말하지 않습니다."],
-      ["필요할 때만 웹 검색", "강의 내용만으로 충분한지 먼저 판단하고, 최신 정보나 외부 확인이 필요할 때만 검색합니다."],
-      ["과목별 강의실", "수업 스크립트와 질문을 과목별로 모아 둡니다. 다음 수업의 답변이 지난 수업을 참고합니다."],
-    ],
-    stepsLabel: "쓰는 순서",
-    stepsTitle: ["세 번 누르면", "수업 준비 끝."],
-    steps: [
-      ["수업 전", "강의실 만들기", "과목 이름으로 강의실을 하나 만듭니다. 그 과목의 수업과 질문이 여기에 쌓입니다."],
-      ["수업 중", "기록 시작", "강의실에서 기록을 켜면 스크립트가 실시간으로 이어집니다. 한 수업은 최대 3시간입니다."],
-      ["흐름이 끊길 때", "그 자리에서 질문", "놓친 부분을 물으면 지금까지의 강의 내용을 근거로 답합니다. 기록은 계속됩니다."],
-    ],
-    demoQuestionTitle: "강의에 질문하기",
-    demoQuestionCount: "1개 질문",
-    demoQuestion: "미안 방금 증권회사 설명 놓쳤어. 뭐라고 했어?",
-    demoAssistant: "강의 조교 · AI",
-    demoAnswer: "방금 교수님이 증권회사는 기업과 투자자를 연결하는 중개 회사라고 했어요. 기업이 주식·채권을 발행해 돈을 모으도록 돕고, 투자자가 거래할 창구를 제공한다는 설명이었어요.",
-    demoGrounding: "강의 내용만으로 답했습니다.",
-    demoTranscriptTitle: "실시간 스크립트",
-    demoTranscriptCount: "3개 문단",
-    demoTranscript: [
-      "증권은 재산상의 권리를 표시한 문서나 전자 기록입니다.",
-      "주식은 회사의 일부를 소유할 권리이고, 채권은 빌려준 돈을 돌려받을 권리입니다.",
-      "증권회사는 기업이 이런 증권을 발행하도록 돕고 투자자가 거래할 수 있게 연결합니다.",
-    ],
-    roomsTitle: ["수업이 끝나도,", "질문한 맥락은 남게."],
-    roomsDescription: "과목별 강의실에 수업 스크립트와 질문을 모아 둡니다. 새 수업에서 질문하면 같은 강의실의 지난 설명도 필요한 만큼 참고합니다.",
-    roomsCta: "내 강의실로 이동",
-    roomsHeader: "최근 강의",
-    roomsComing: "강의실별 맥락 저장",
-    rooms: [
-      ["오늘", "경제학개론 · 증권시장", "1시간 18분 · 7개 질문"],
-      ["8월 20일", "재무관리 · 채권의 가격", "52분 · 4개 질문"],
-      ["8월 18일", "경영학원론 · 기업의 구조", "1시간 05분 · 9개 질문"],
-    ],
-    pricingLabel: "기간 한정 40% 프로모션 · 부가세 포함",
-    pricingTitle: ["수업 일정에 맞는", "이용 기간을 고르세요."],
-    pricingNoCard: "카카오페이·네이버페이·국내 카드",
-    pricingIncluded: "기록·질문·강의실 맥락 포함",
-    plans: [
-      { name: "무료 체험", time: "7일", price: "무료", unit: "180크레딧", detail: "계정당 한 번", billingPlan: "monthly" },
-      { name: "월간", time: "1개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "16,500원", price: "9,900원", priceNote: "/월", unit: "3,000크레딧 · 약 50시간", detail: "40% 프로모션", billingPlan: "monthly" },
-      { name: "집중 학기", time: "4개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "56,700원", price: "34,000원", priceNote: "/4개월", unit: "12,000크레딧 · 약 200시간", detail: "40% 프로모션", featured: true, billingPlan: "term" },
-      { name: "한 학기", time: "6개월", compareLabel: "프로모션 종료 후 예정가", comparePrice: "70,000원", price: "42,000원", priceNote: "/6개월", unit: "18,000크레딧 · 약 300시간", detail: "40% 프로모션", billingPlan: "semester" },
-    ],
-    featured: "가장 많이 선택",
-    pricingFootnote: "취소선 가격은 프로모션 종료 후 적용할 예정인 가격입니다. 종료 일정과 최종 결제 금액은 결제 전에 안내합니다.",
-    faqTitle: "자주 묻는 질문",
-    faqs: [
-      ["강의를 녹음해도 되나요?", "강의자와 기관의 녹음 정책을 먼저 확인하고, 녹음이 허용된 환경에서만 사용해야 합니다."],
-      ["온라인 강의용 서비스인가요?", "아니요. 교실, 학원, 세미나처럼 같은 공간에서 듣는 현장 강의를 우선해 만들고 있습니다."],
-      ["제 OpenAI·Claude·Gemini 키를 쓸 수 있나요?", "네. 현재 탭에서 한 번만 쓰거나 계정에 암호화해 저장할 수 있습니다. 해당 공급자의 모델 비용은 본인 계정에 별도로 청구됩니다."],
-      ["Google 로그인 정보는 어디에 사용하나요?", "Google에서 받은 이름, 이메일 주소와 프로필 사진은 Lecue 계정을 만들고 로그인 상태를 유지하는 데만 사용합니다. Gmail, Google Drive, 캘린더 등의 다른 Google 데이터에는 접근하지 않습니다."],
-    ],
-    finalTitle: ["다음 설명은,", "놓치지 않게."],
-    finalCta: "첫 강의실 열기",
-    checkoutOpening: "결제창 여는 중…",
-    footerDescription: "현장 강의를 따라가며 바로 이해하는 실시간 조교",
-    privacy: "개인정보처리방침",
-    terms: "이용약관",
-    refund: "환불 정책",
-    support: "support@lecue.app",
-    recordingNotice: "강의자와 기관의 녹음 정책을 확인한 뒤 사용하세요.",
-  },
-  en: {
-    homeLabel: "Lecue home",
-    navLabel: "Main navigation",
-    nav: ["Features", "Pricing", "FAQ"],
-    signIn: "Sign in",
-    signUp: "Sign up",
-    classroom: "My classrooms",
-    openClassroom: "Open classroom",
-    open: "Choose plan",
-    language: "한국어",
-    heroLabel: "A live assistant for in-person lectures",
-    heroTitle: ["Catch the explanation", "before class moves on."],
-    heroDescription: "Lecue is a learning service that transcribes in-person lectures in real time and answers from everything said up to the moment you ask. Recording continues while you read the answer.",
-    heroCta: "Start free",
-    heroNote: "7-day free trial · 180 credits",
-    demoTitle: "Questions and the lecture move side by side",
-    featuresLabel: "What Lecue does",
-    featuresTitle: ["Only what a lecture needs,", "and nothing else."],
-    features: [
-      ["Live transcript", "Speech from your microphone is written out paragraph by paragraph as the lecture runs. It does not pause while you ask."],
-      ["Context up to your question", "Answers are built from what the lecture has covered so far. Lecue does not run ahead of the class."],
-      ["Web search only when needed", "The model first decides whether the lecture is enough, and searches only for current information or outside verification."],
-      ["A classroom per subject", "Transcripts and questions stay grouped by subject, so the next lecture can draw on the last one."],
-    ],
-    stepsLabel: "How it works",
-    stepsTitle: ["Three taps", "and class is set."],
-    steps: [
-      ["Before class", "Open a classroom", "Create one classroom named after the subject. Its lectures and questions collect there."],
-      ["During class", "Start recording", "Turn recording on and the transcript follows the lecture live. One lecture can run up to 3 hours."],
-      ["When you lose the thread", "Ask right there", "Ask what you missed and the answer comes from the lecture so far. Recording keeps going."],
-    ],
-    demoQuestionTitle: "Ask about the lecture",
-    demoQuestionCount: "1 question",
-    demoQuestion: "Sorry, I missed what was just said about brokerages. What was it?",
-    demoAssistant: "Lecture assistant · AI",
-    demoAnswer: "The lecturer just said a brokerage connects companies with investors — helping a company raise money through shares or bonds, and giving investors a route to trade them.",
-    demoGrounding: "Answered from the lecture alone.",
-    demoTranscriptTitle: "Live transcript",
-    demoTranscriptCount: "3 paragraphs",
-    demoTranscript: [
-      "A security is a document or electronic record representing a financial right.",
-      "A share is ownership in a company. A bond is the right to be repaid money you lent.",
-      "A brokerage helps companies issue securities and connects investors to the market where they trade.",
-    ],
-    roomsTitle: ["Class may end.", "The context should not."],
-    roomsDescription: "Keep each subject's transcripts and questions in one classroom. New questions can draw on relevant explanations from earlier lectures in that same classroom.",
-    roomsCta: "Go to my classrooms",
-    roomsHeader: "Recent lectures",
-    roomsComing: "Context saved by classroom",
-    rooms: [
-      ["Today", "Introduction to Economics · Securities", "1 hr 18 min · 7 questions"],
-      ["Aug 20", "Corporate Finance · Bond Pricing", "52 min · 4 questions"],
-      ["Aug 18", "Business Fundamentals · Company Structure", "1 hr 05 min · 9 questions"],
-    ],
-    pricingLabel: "Limited 40% promotion · local taxes may apply",
-    pricingTitle: ["Choose a term", "that fits your schedule."],
-    pricingNoCard: "Cards, Apple Pay, Google Pay, PayPal, and local options",
-    pricingIncluded: "Transcription, questions, and classroom context included",
-    plans: [
-      { name: "Free trial", time: "7 days", price: "Free", unit: "180 credits", detail: "Once per account", billingPlan: "monthly" },
-      { name: "Monthly", time: "1 month", compareLabel: "Planned post-promotion price", comparePrice: "$13.29", price: "$7.99", priceNote: "/month", unit: "3,000 credits · about 50 hours", detail: "40% promotion", billingPlan: "monthly" },
-      { name: "Focused term", time: "4 months", compareLabel: "Planned post-promotion price", comparePrice: "$43.29", price: "$25.99", priceNote: "/4 months", unit: "12,000 credits · about 200 hours", detail: "40% promotion", featured: true, billingPlan: "term" },
-      { name: "Semester", time: "6 months", compareLabel: "Planned post-promotion price", comparePrice: "$54.99", price: "$32.99", priceNote: "/6 months", unit: "18,000 credits · about 300 hours", detail: "40% promotion", billingPlan: "semester" },
-    ],
-    featured: "Most selected",
-    pricingFootnote: "Struck-through prices are planned post-promotion prices. The end date and final charge are shown before checkout.",
-    faqTitle: "Common questions",
-    faqs: [
-      ["May I record any lecture?", "Check the lecturer's, institution's, and local recording rules first. Use Lecue only where recording is permitted."],
-      ["Is this for online courses?", "No. Lecue is designed first for classrooms, seminars, workshops, and other lectures you attend in person."],
-      ["Can I use my own OpenAI, Claude, or Gemini key?", "Yes. Use it once in the current tab or save it encrypted to your account. That provider bills its own model charges separately."],
-      ["How does Lecue use my Google sign-in data?", "Lecue uses your Google name, email address, and profile photo only to create your account and keep you signed in. It does not access Gmail, Google Drive, Calendar, or other Google data."],
-    ],
-    finalTitle: ["Stay with the next explanation", "from start to finish."],
-    finalCta: "Open my first classroom",
-    checkoutOpening: "Opening checkout…",
-    footerDescription: "A live assistant that helps you follow and understand in-person lectures",
-    privacy: "Privacy Policy",
-    terms: "Terms of Service",
-    refund: "Refund Policy",
-    support: "support@lecue.app",
-    recordingNotice: "Check the lecturer's and institution's recording rules before use.",
-  },
-} as const;
-
 type Profile = { displayName: string; email: string; avatarUrl: string | null };
 type LandingCreditStatus = { credits: number; planCode: string | null; trialUsed?: boolean };
 
-export default function LandingPage({
-  locale, isAuthenticated = false, profile, creditStatus,
-}: { locale: Locale; isAuthenticated?: boolean; profile?: Profile | null; creditStatus?: LandingCreditStatus | null }) {
-  const copy = content[locale];
+export default function LandingPage({ locale, isAuthenticated = false, profile, creditStatus }: {
+  locale: Locale; isAuthenticated?: boolean; profile?: Profile | null; creditStatus?: LandingCreditStatus | null;
+}) {
   const base = locale === "en" ? "/en" : "";
   const classroomPath = `${base}/classroom`;
-  const faqs = copy.faqs;
-  // 파일럿 중에는 과금을 암시하는 문구(무료·크레딧·체험)를 어디에도 쓰지 않는다.
-  const heroNote = FREE_PILOT
-    ? (locale === "en" ? "A laptop and a lecture are all you need." : "노트북 하나면 지금 수업부터 시작할 수 있습니다.")
-    : copy.heroNote;
-  const heroCta = FREE_PILOT ? (locale === "en" ? "Get started" : "시작하기") : copy.heroCta;
-  const anonCtaHref = FREE_PILOT ? `${base}/login?mode=signup` : `${base}/billing?plan=monthly`;
+  const startHref = isAuthenticated ? classroomPath : `${base}/login?next=${encodeURIComponent(classroomPath)}`;
+  const t = (text: string) => landingText(locale, text);
+  return <LandingInteractions locale={locale}>
 
-  return (
-    <main className={styles.page} id="top">
-      <header className={styles.header}>
-        <Link className={styles.brand} href={base || "/"} aria-label={copy.homeLabel}>Lecue</Link>
-        <nav className={styles.nav} aria-label={copy.navLabel}>
-          <a href="#features">{copy.nav[0]}</a>
-          {!FREE_PILOT && <a href="#pricing">{copy.nav[1]}</a>}
-          <a href="#faq">{copy.nav[2]}</a>
-        </nav>
-        <div className={styles.headerActions}>
-          {/* ?lang= tells the proxy to remember the choice; without it the IP
-              guess re-renders "/" in English and the toggle appears to do nothing. */}
-          {/* Link가 아니라 일반 앵커: 언어는 프록시가 ?lang=을 받아 쿠키로
-              굳히는 서버 왕복이 필요하다. 클라이언트 내비게이션(프리페치 캐시)은
-              그 왕복을 건너뛰어 첫 클릭이 무시됐다. */}
-          <a className={styles.languageLink} href={locale === "en" ? "/?lang=ko" : "/en?lang=en"}>{copy.language}</a>
-          {isAuthenticated ? (
-            <>
-              <ProfileMenu
-                locale={locale}
-                basePath={base}
-                classroomPath={classroomPath}
-                profile={profile ?? null}
-                planLabel={getPlanLabel(creditStatus?.planCode, locale)}
-                credits={creditStatus?.credits ?? null}
-              />
-              <Link className={styles.headerCta} href={classroomPath}>{copy.classroom}</Link>
-            </>
-          ) : (
-            <>
-              <Link className={styles.loginLink} href={`${base}/login`}>{copy.signIn}</Link>
-              <Link className={styles.headerCta} href={`${base}/login?mode=signup`}>{copy.signUp}</Link>
-            </>
-          )}
-        </div>
-      </header>
+<a className="skip-link" href="#main">{t("본문으로 바로가기")}</a>
+<header className="site-header"><div className="header-inner">
+<a className="wordmark" href="#home" aria-label={t("Lecue 홈으로")}>{"Lecue"}<span aria-hidden="true">{"."}</span></a>
+<nav aria-label={t("주요 메뉴")}><a href="#experience" data-open-demo>{t("직접 체험")}</a><a href="#how">{t("사용 방법")}</a><a href="#faq">{t("궁금한 점")}</a></nav>
+<div className="header-actions">
+      <a className="language-link" href={`${base || "/"}?lang=${locale === "ko" ? "en" : "ko"}`} aria-label={locale === "ko" ? "Switch to English" : "한국어로 변경"}>{locale === "ko" ? "EN" : "한국어"}</a>
+      {isAuthenticated ? <><ProfileMenu locale={locale} basePath={base} classroomPath={classroomPath} profile={profile ?? null} planLabel={getPlanLabel(creditStatus?.planCode, locale)} credits={creditStatus?.credits ?? null} /><Link className="button button-small" href={classroomPath}>{t("내 강의실")}</Link></> : <><Link className="login-link" href={`${base}/login`}>{t("로그인")}</Link><Link className="button button-small" href={startHref}>{t("무료로 시작")}</Link></>}
+    </div>
+</div></header>
+<main id="main">
+<section className="hero page-width" id="home" aria-labelledby="hero-title">
+<div id="hero-intro" className="hero-intro">
+<div className="hero-copy">
+<p className="eyebrow">{t("수업의 흐름을, 내 속도로.")}</p>
+<h1 id="hero-title">{t("놓친 설명을,")}<br />{" "}{t("수업이 끝나기 전에.")}</h1>
+<p className="hero-description">{t("필기하느라 놓친 앞의 설명.")}<br />{" "}{t("질문할 타이밍을 지나친 그 개념.")}<br />
+<strong>{t("지금 듣는 강의에, 바로 물어보세요.")}</strong></p>
+<div className="hero-actions"><button className="button" type="button" data-open-demo aria-controls="demo-panel" aria-expanded="false">{t("30초만 체험하기")}{" "}<span aria-hidden="true">{"↗"}</span></button><a className="text-link" href={startHref}>{t("무료로 내 강의 시작")}{" "}<span aria-hidden="true">{"→"}</span></a></div>
+<p className="fine-print">{t("가입 없이 먼저 체험 · 시작할 때도 카드 등록 없이")}</p>
+</div>
+<div className="hero-excerpt" id="experience" aria-label={t("통계학 강의 예시")}>
+<div className="excerpt-top"><span>{t("통계학 · 강의의 한 대목")}</span><time>{"37:42"}</time></div>
+<blockquote>{t("“조건부확률에서는 B가 높지만,")}<br />{" "}{t("주변확률에서는 관계가 뒤집힙니다.")}<br />
+{" "}<mark>{t("앞에서 본 가중치가 다르기 때문이죠.")}</mark>{"”"}</blockquote>
+<div className="excerpt-question"><span className="question-margin" aria-hidden="true">{"?"}</span><p>{t("둘 다 B가 높았는데,")}<br />{" "}{t("왜 합치면 A가 높은 거지?")}</p></div>
+<button className="excerpt-try" type="button" data-open-demo aria-controls="demo-panel" aria-expanded="false"><span>{t("이 대목, Lecue와 이해해 보기")}</span><span aria-hidden="true">{"↗"}</span></button>
+<span className="example-label">{t("체험을 위해 구성한 예시 강의")}</span>
+</div>
+</div>
+<div className="demo-panel" id="demo-panel" hidden aria-labelledby="demo-title">
+<div className="demo-header"><div><p className="eyebrow">{t("30초 체험 · 통계학")}</p><h2 id="demo-title">{t("앞의 설명을 놓친 순간.")}</h2></div><button className="button button-outline demo-close" id="demo-close" type="button">{t("체험 닫기")}{" "}<span aria-hidden="true">{"×"}</span></button></div>
+<div className="demo-layout">
+<div className="lecture-side">
+<div className="panel-label"><span>{t("지금 듣고 있는 설명")}</span><time>{"37:42"}</time></div>
+<blockquote className="lecture-quote">{t("“각 기기에서는 B가 높아도, 합치면 A가 높아질 수 있습니다. 앞서 본")}{" "}<mark>{t("가중치가 다르기 때문")}</mark>{t("이죠.”")}</blockquote>
+<button className="button mobile-explain" id="mobile-explain" type="button" aria-controls="demo-answer" aria-expanded="false">{t("왜 반대인지, 맥락 이어보기")}{" "}<span aria-hidden="true">{"→"}</span></button>
+<table className="rates-table"><caption>{t("페이지 방문자 중 구매한 비율 · 예시 데이터")}</caption><thead><tr><th scope="col">{t("방문 기기")}</th><th scope="col">{t("페이지 A")}</th><th scope="col">{t("페이지 B")}</th></tr></thead><tbody><tr><th scope="row">{"PC"}</th><td>{"90%"}</td><td><strong>{"95%"}</strong></td></tr><tr><th scope="row">{t("모바일")}</th><td>{"10%"}</td><td><strong>{"20%"}</strong></td></tr><tr className="total-row"><th scope="row" id="total-label">{t("합치면")}</th><td id="total-a"><strong>{"82%"}</strong></td><td id="total-b">{"35%"}</td></tr></tbody></table>
+<p className="table-footnote" id="table-footnote">{t("PC에서도, 모바일에서도 B가 높은데 합계는 반대예요.")}</p>
+<div className="earlier-context" id="earlier-context" hidden><div className="panel-label"><span>{t("앞에서 나온 설명")}</span><time>{"37:05"}</time></div><p>{t("“A 방문자 100명 중 PC는 90명, 모바일은 10명입니다. B는 PC 20명, 모바일 80명이에요. 전체 비율은")}{" "}<strong>{t("각 기기의 방문자 비중으로 가중 평균")}</strong>{t("을 냅니다.”")}</p></div>
+</div>
+<div className="answer-side">
+<div className="panel-label"><span>{t("Lecue에 물어보기")}</span><span>{t("강의 맥락으로")}</span></div>
+<div className="demo-before" id="demo-before"><h3>{t("둘 다 B가 높은데,")}<br />{" "}{t("왜 합치면 반대예요?")}</h3><p>{t("교수님이 말한 ‘가중치’.")}<br />{" "}{t("앞에서 무엇을 설명했는지 놓쳤어요.")}</p><button className="button" id="explain-button" type="button" aria-controls="demo-answer" aria-expanded="false">{t("놓친 맥락 이어보기")}{" "}<span aria-hidden="true">{"→"}</span></button><span className="fine-print">{t("마이크 없이, 이 질문 하나만 체험해 보세요.")}</span></div>
+<div className="demo-answer" id="demo-answer" hidden>
+<p className="answer-question">{t("“왜 합치면 반대예요?”")}</p><h3>{t("비율을 섞는 재료의 양이")}<br />{" "}{t("서로 달랐어요.")}</h3>
+<p>{t("앞에서 A에는")}{" "}<strong>{t("구매 비율이 높은 PC 방문자")}</strong>{t("가 훨씬 많다고 했어요. A와 B는 PC·모바일을 같은 비율로 섞은 평균이 아니에요.")}</p>
+<div className="visitor-mix" aria-label={t("페이지별 방문자 구성")}><div className="mix-legend"><span><i className="pc-swatch" aria-hidden="true"></i>{"PC"}</span><span><i className="mobile-swatch" aria-hidden="true"></i>{t("모바일")}</span></div><div className="mix-row"><span>{"A"}</span><div className="mix-track" role="img" aria-label={t("A 방문자: PC 90명, 모바일 10명")} id="mix-a"><span className="mix-pc" style={{ "--portion": .9 } as CSSProperties}></span></div><span className="mix-value" id="mix-label-a">{"90 : 10"}</span></div><div className="mix-row"><span>{"B"}</span><div className="mix-track" role="img" aria-label={t("B 방문자: PC 20명, 모바일 80명")} id="mix-b"><span className="mix-pc" style={{ "--portion": .2 } as CSSProperties}></span></div><span className="mix-value" id="mix-label-b">{"20 : 80"}</span></div></div>
+<button className="source-link" id="source-button" type="button" aria-controls="earlier-context" aria-expanded="false"><span aria-hidden="true">{"↖"}</span>{" "}{t("37:05 · 앞에서 설명한 근거 보기")}</button>
+<div className="what-if"><button id="equalize-button" type="button" aria-pressed="false">{t("PC·모바일을 반반씩 비교하면?")}{" "}<span aria-hidden="true">{"→"}</span></button><p id="what-if-result" hidden aria-live="polite">{t("같은 비중으로 비교하면 A는 50%, B는 57.5%예요. 달랐던 것은 각 페이지의 방문자 구성이었어요.")}</p></div>
+</div>
+<p className="visually-hidden" id="demo-announcement" aria-live="polite"></p>
+</div>
+</div>
+<div className="demo-footer"><button className="text-link" type="button" id="demo-return"><span aria-hidden="true">{"←"}</span>{" "}{t("홈으로 돌아가기")}</button><p id="demo-footer-copy">{t("예시 데이터로 잠깐 체험 중이에요.")}</p><a className="button button-small" href={startHref}>{t("내 수업에서도 써보기")}{" "}<span aria-hidden="true">{"→"}</span></a></div>
+</div>
+<div className="hero-bottom"><p>{t("강의를 기록하고.")}<br />
+<strong>{t("막힌 대목을 풀고. 다시 꺼내 보고.")}</strong></p><a href="#how">{t("Lecue가 수업을 돕는 방법")}{" "}<span aria-hidden="true">{"↓"}</span></a></div>
+</section>
+<section className="context-section" aria-labelledby="context-title"><div className="page-width context-layout"><div><p className="eyebrow">{t("이해는 연결될 때 시작되니까.")}</p><h2 id="context-title">{t("검색창에는 없는,")}<br />{" "}{t("지금 우리 수업의 맥락.")}</h2></div><div className="context-copy"><p>{t("같은 개념도 교수님이 든 예시와")}<br />{" "}{t("앞에서 정한 조건을 알아야 이해되는 순간이 있어요.")}</p><p>{t("Lecue는 지금까지의 강의 내용을 함께 봅니다.")}<br />{" "}{t("“왜 이렇게 되죠?”라는 짧은 질문에도")}<br />{" "}{t("놓친 연결 고리를 찾아 설명해 줍니다.")}</p><div className="margin-question"><span aria-hidden="true">{"“"}</span><p>{t("이 식에서 이 항은 왜 없어졌지?")}<br />{" "}{t("아까 말씀하신 조건이 뭐였지?")}</p></div></div></div></section>
+<section className="page-width how-section" id="how" aria-labelledby="how-title">
+<div className="section-heading"><p className="eyebrow">{t("수업에 가져가는 작은 여유")}</p><h2 id="how-title">{t("처음부터 끝까지,")}<br />{" "}{t("듣는 흐름을 지켜줘요.")}</h2></div>
+<div className="journey">
+<article className="journey-step"><span className="phase">{t("수업 전")}</span><h3>{t("노트북을 열고,")}<br />{" "}{t("기록을 시작하세요.")}</h3><p>{t("과목과 강의 언어를 고르고 시작해요. 강의 자료가 있다면 함께 올려둘 수 있어요.")}</p><div className="start-snippet" aria-label={t("기록 시작 화면 예시")}><span>{t("오늘의 수업")}</span><strong>{t("통계학")}</strong><span className="snippet-rule"></span><span>{t("한국어 강의")}</span><span className="snippet-action">{t("강의 시작")}{" "}<span aria-hidden="true">{"→"}</span></span></div></article>
+<article className="journey-step"><span className="phase">{t("수업 중")}</span><h3>{t("막힌 부분을,")}<br />{" "}{t("그 자리에서 물어보세요.")}</h3><p>{t("앞에서 한 설명을 다시 찾느라 흐름을 놓치지 않도록. 답변을 읽는 동안에도 기록은 이어져요.")}</p><div className="question-snippet"><p>{t("방금 ‘가중치’가 무슨 뜻이었죠?")}</p><span>{t("앞에서 설명한 PC·모바일")}<br />{" "}{t("방문자 비중을 말해요.")}</span></div></article>
+<article className="journey-step"><span className="phase">{t("수업 후")}</span><h3>{t("내가 헷갈렸던 곳부터,")}<br />{" "}{t("가볍게 복습하세요.")}</h3><p>{t("강의 기록과 질문이 과목별로 남아요. 복습 노트로 정리하면 다음 수업 전에 다시 훑기 좋아요.")}</p><div className="review-snippet"><span>{t("통계학")}</span><strong>{t("다시 볼 질문")}</strong><p>{t("전체와 부분의 결론이 왜 다를까?")}</p><span className="snippet-line"></span><span className="snippet-line short"></span></div></article>
+</div><p className="recording-note">{t("강의자와 기관의 녹음 정책을 확인하고, 녹음이 허용된 수업에서 사용하세요.")}</p>
+</section>
+<section className="review-section" id="review" aria-labelledby="review-title"><div className="page-width review-layout">
+<div className="review-copy"><p className="eyebrow">{t("수업이 끝난 다음에도")}</p><h2 id="review-title">{t("남는 건 기록,")}<br />{" "}{t("다시 보는 건")}<br />{" "}{t("내가 막혔던 순간.")}</h2><p>{t("처음부터 전부 다시 읽을 필요 없도록.")}<br />{" "}{t("내 질문과 설명이 함께 남아,")}<br />{" "}{t("복습의 시작점을 만들어 줍니다.")}</p><button className="text-link" id="preview-note-button" type="button" aria-controls="note-details" aria-expanded="false">{t("복습 노트 한 장 펼쳐보기")}{" "}<span aria-hidden="true">{"↗"}</span></button></div>
+<article className="notebook" aria-label={t("복습 노트 예시")}><div className="notebook-top"><span>{t("통계학")}</span><span>{t("복습 노트 · 예시")}</span></div><h3>{t("전체와 부분의")}<br />{" "}{t("결론이 달라질 때.")}</h3><p className="note-subtitle">{t("심슨의 역설 · 조건부확률과 가중 평균")}</p><div className="note-question"><span>{t("내가 질문한 대목")}</span><p>{t("“둘 다 B가 높은데, 왜 합치면 반대예요?”")}</p></div><p className="note-body">{t("전체 비율은 각 집단의 비율을")}<br />{" "}{t("그 집단의 크기에 맞춰 섞은 값이다.")}<br />
+<mark>{t("무엇이 얼마나 섞였는지부터 확인한다.")}</mark></p><details id="note-details"><summary>{t("숫자로 다시 확인하기")}{" "}<span aria-hidden="true">{"+"}</span></summary><div><p>{"A: 90% × 0.9 + 10% × 0.1 ="}{" "}<strong>{"82%"}</strong><br />{" "}{"B: 95% × 0.2 + 20% × 0.8 ="}{" "}<strong>{"35%"}</strong></p><p>{t("PC·모바일 비중을 반반으로 맞추면 A 50%, B 57.5%. 단순한 전체 비율만으로 페이지 자체의 효과를 판단하지 않는다.")}</p><p className="note-source">{t("개념 참고:")}{" "}<a href="https://www.stat.berkeley.edu/~stark/SticiGui/Text/experiments.htm">{t("UC Berkeley 통계학 강의")}</a><br />{" "}{t("페이지와 방문자 수는 체험용으로 구성한 예시입니다.")}</p></div></details><div className="notebook-bottom"><span>{t("이해한 대목부터, 다음 수업으로.")}</span><span aria-hidden="true">{"L."}</span></div></article>
+</div></section>
+<section className="page-width faq-section" id="faq" aria-labelledby="faq-title">
+<div><p className="eyebrow">{t("시작하기 전에")}</p><h2 id="faq-title">{t("궁금한 점이")}<br />{" "}{t("남았나요?")}</h2><a className="support-link" href="mailto:support@lecue.app">{"support@lecue.app"}{" "}<span aria-hidden="true">{"↗"}</span></a></div>
+<div className="faq-list">
+<details><summary>{t("지금 무료로 쓸 수 있나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("네. 현재 무료 체험 운영 중이며 카드 등록 없이 시작할 수 있어요. 제공된 credits는 강의실 프로필 메뉴에서 확인할 수 있습니다.")}</p></details>
+<details><summary>{t("30초 체험에는 가입이나 녹음이 필요한가요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("필요하지 않아요. 미리 구성한 통계 강의와 설명으로 Lecue의 흐름을 경험합니다. 마이크를 켜지 않으며, ‘체험 닫기’나 Escape 키로 바로 돌아올 수 있어요.")}</p><button className="text-link" type="button" data-open-demo>{t("지금 잠깐 체험하기 →")}</button></details>
+<details><summary>{t("어떤 강의에서 쓰는 서비스인가요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("교실·학원·세미나처럼 같은 공간에서 듣는 현장 강의를 중심으로 만들고 있어요. 노트북 마이크가 강의자의 목소리를 또렷하게 담을 수 있는 환경에서 사용해 주세요.")}</p></details>
+<details><summary>{t("강의를 녹음해도 괜찮나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("강의자와 기관의 녹음 정책을 먼저 확인해 주세요. 필요한 허락을 받은 환경에서 사용해야 합니다. 사용 중에는 기록을 일시정지하거나 끝낼 수 있어요.")}</p></details>
+<details><summary>{t("별도의 AI 구독이나 API 키가 필요한가요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("기본 사용에는 필요하지 않아요. Lecue 계정으로 시작할 수 있습니다. 개인 API 키를 연결하는 고급 설정도 있지만, 처음 사용할 때 설정할 필요는 없어요.")}</p></details>
+<details><summary>{t("AI 답변을 그대로 믿어도 되나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("음성 인식이나 AI 설명에는 오류가 생길 수 있어요. 중요한 내용은 강의 기록·수업 자료와 함께 확인해 주세요. 강의자의 설명과 다르다면 그 대목을 구체적으로 다시 물어볼 수 있습니다.")}</p></details>
+<details><summary>{t("강의 기록과 질문은 어떻게 보관되나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("로그인한 계정의 강의실에 모아 다시 확인할 수 있어요. 데이터 처리와 보관에 관한 자세한 내용은")}{" "}<a href={`${base}/privacy`}>{t("개인정보처리방침")}</a>{t("에서 확인할 수 있습니다.")}</p></details>
+</div>
+</section>
+<section className="closing-section" aria-labelledby="closing-title"><div className="page-width closing-layout"><div><p>{t("다음 수업에는, 조금 더 가벼운 마음으로.")}</p><h2 id="closing-title">{t("놓친 부분을 묻고,")}<br />{" "}{t("다시 수업 속으로.")}</h2></div><div className="closing-actions"><a className="button button-light" href={startHref}>{t("무료로 내 강의 시작")}{" "}<span aria-hidden="true">{"→"}</span></a><button className="closing-demo" type="button" data-open-demo>{t("아직 궁금하다면, 30초만 체험")}</button><span>{t("현재 무료 체험 운영 중 · 카드 등록 없이")}</span></div></div></section>
+</main>
+<footer className="site-footer page-width"><div className="footer-top"><a className="wordmark" href="#home" aria-label={t("Lecue 홈으로")}>{"Lecue"}<span aria-hidden="true">{"."}</span></a><p>{t("수업의 흐름을, 내 속도로.")}</p><a className="back-top" href="#home">{t("맨 위로")}{" "}<span aria-hidden="true">{"↑"}</span></a></div><div className="footer-bottom"><span>{"© 2026 Lecue"}</span><nav aria-label={t("서비스 안내")}><a href={`${base}/privacy`}>{t("개인정보처리방침")}</a><a href={`${base}/terms`}>{t("이용약관")}</a><a href="mailto:support@lecue.app">{t("문의")}</a><button id="theme-toggle" type="button">{t("화면 밝기")}</button></nav></div></footer>
 
-      <section className={styles.hero} aria-labelledby={`hero-title-${locale}`}>
-        <div className={styles.heroCopy}>
-          <p className={styles.heroLabel}>{copy.heroLabel}</p>
-          <h1 id={`hero-title-${locale}`}>{copy.heroTitle[0]}<br />{copy.heroTitle[1]}</h1>
-          <p className={styles.heroDescription}>{copy.heroDescription}</p>
-          <div className={styles.heroActions}>
-            <Link className={styles.primaryCta} href={isAuthenticated ? classroomPath : anonCtaHref}>{isAuthenticated ? copy.openClassroom : heroCta}<span aria-hidden>→</span></Link>
-          </div>
-          <p className={styles.heroNote}>{heroNote}</p>
-        </div>
-
-        <div className={`${styles.productFrame} ${styles.heroProductFrame}`} id="product" aria-label={copy.demoTitle}>
-          <div className={styles.productTopbar}><b>Lecue</b><span>{locale === "en" ? "Introduction to Economics" : "경제학개론 · 증권시장"}</span><em><i />{locale === "en" ? "Recording" : "기록 중"}&nbsp;&nbsp;32:18</em></div>
-          <div className={styles.productPanes}>
-            <section className={styles.questionPane} aria-label={copy.demoQuestionTitle}>
-              <header><h3>{copy.demoQuestionTitle}</h3><span>{copy.demoQuestionCount}</span></header>
-              <div className={styles.demoMessages}><div className={styles.userQuestion}>{copy.demoQuestion}</div><div className={styles.demoAnswer}><span>{copy.demoAssistant}</span><p>{copy.demoAnswer}</p><small>{copy.demoGrounding}</small></div></div>
-              <div className={styles.demoInput}>{locale === "en" ? "Ask about this lecture" : "강의 내용에서 궁금한 점을 물어보세요"}<span>↑</span></div>
-            </section>
-            <section className={styles.transcriptPane} aria-label={copy.demoTranscriptTitle}>
-              <header><h3>{copy.demoTranscriptTitle}</h3><span>{copy.demoTranscriptCount}</span></header>
-              <div className={styles.demoTranscript}>{copy.demoTranscript.map((line, index) => <p className={index === 2 ? styles.currentTranscript : undefined} key={line}>{line}</p>)}</div>
-            </section>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.features} id="features" aria-labelledby={`features-title-${locale}`}>
-        <header className={`${styles.featuresIntro} ${styles.reveal}`}>
-          <p>{copy.featuresLabel}</p>
-          <h2 id={`features-title-${locale}`}>{copy.featuresTitle[0]}<br />{copy.featuresTitle[1]}</h2>
-        </header>
-        <div className={`${styles.featureGrid} ${styles.reveal}`}>
-          {copy.features.map(([title, detail]) => <article key={title}><h3>{title}</h3><p>{detail}</p></article>)}
-        </div>
-      </section>
-
-      <section className={styles.steps} id="steps" aria-labelledby={`steps-title-${locale}`}>
-        <header className={`${styles.stepsIntro} ${styles.reveal}`}>
-          <p>{copy.stepsLabel}</p>
-          <h2 id={`steps-title-${locale}`}>{copy.stepsTitle[0]}<br />{copy.stepsTitle[1]}</h2>
-        </header>
-        <ol className={`${styles.stepList} ${styles.reveal}`}>
-          {copy.steps.map(([when, title, detail]) => <li key={title}><span>{when}</span><h3>{title}</h3><p>{detail}</p></li>)}
-        </ol>
-      </section>
-
-      <section className={styles.rooms} id="rooms" aria-labelledby={`rooms-title-${locale}`}>
-        <div className={`${styles.roomsCopy} ${styles.reveal}`}><h2 id={`rooms-title-${locale}`}>{copy.roomsTitle[0]}<br />{copy.roomsTitle[1]}</h2><span>{copy.roomsDescription}</span><Link href={`${base}/classroom`}>{copy.roomsCta} →</Link></div>
-        <div className={`${styles.roomShelf} ${styles.reveal}`}>
-          <header><strong>{copy.roomsHeader}</strong><span>{copy.roomsComing}</span></header>
-          {copy.rooms.map(([date, title, detail]) => <article key={title}><time>{date}</time><div><h3>{title}</h3><p>{detail}</p></div><span>→</span></article>)}
-        </div>
-      </section>
-
-      {!FREE_PILOT && (
-      <section className={styles.pricing} id="pricing" aria-labelledby={`pricing-title-${locale}`}>
-        <header className={`${styles.pricingIntro} ${styles.reveal}`}><p>{copy.pricingLabel}</p><h2 id={`pricing-title-${locale}`}>{copy.pricingTitle[0]}<br />{copy.pricingTitle[1]}</h2></header>
-        <PricingCheckoutProvider locale={locale} basePath={base}>
-          <div className={`${styles.planGrid} ${styles.reveal}`}>
-            {copy.plans.map((plan) => {
-              const isTrialCard = plan.price === "무료" || plan.price === "Free";
-              // A learner who has already used their trial was still shown a
-              // free-trial card, and clicking it opened a paid monthly
-              // checkout — the server picks the non-trial price once
-              // trial_used_at is set. Show them the monthly card instead.
-              const trialSpent = isTrialCard && creditStatus?.trialUsed === true;
-              const monthly = copy.plans[1];
-              const ctaLabel = isTrialCard && !trialSpent ? copy.heroCta : copy.open;
-              return (
-                <article className={"featured" in plan ? styles.featuredPlan : undefined} key={plan.name}>
-                  <div><span>{trialSpent ? monthly.name : plan.name}</span>{"featured" in plan && <b>{copy.featured}</b>}</div>
-                  <h3>{trialSpent ? monthly.time : plan.time}</h3>
-                  {/* deslop-ignore-next-line 09 -- 프로모션가와 종료 후 예정가를 명시적으로 비교 */}
-                  {"comparePrice" in plan && <div className={styles.comparePrice}><span>{plan.compareLabel}</span><del>{plan.comparePrice}</del></div>}
-                  <div className={styles.planPrice}><strong>{trialSpent ? monthly.price : plan.price}</strong>{trialSpent ? <span>{monthly.priceNote}</span> : "priceNote" in plan && <span>{plan.priceNote}</span>}</div>
-                  <p>{trialSpent ? monthly.unit : plan.unit}</p><small>{trialSpent ? monthly.detail : plan.detail}</small>
-                  {isAuthenticated ? (
-                    <PricingCheckoutButton plan={plan.billingPlan as BillingPlan} pendingLabel={copy.checkoutOpening} label={<>{ctaLabel}<span>→</span></>} />
-                  ) : (
-                    <Link href={`${base}/billing?plan=${plan.billingPlan}`}>{ctaLabel}<span>→</span></Link>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-          <PricingCheckoutMessage className={styles.pricingFootnote} />
-          <p className={styles.pricingFootnote}>{copy.pricingFootnote}</p>
-          <div className={styles.pricingFacts}><span>{copy.pricingNoCard}</span><span>{copy.pricingIncluded}</span></div>
-        </PricingCheckoutProvider>
-      </section>
-      )}
-
-      <section className={`${styles.faq} ${styles.reveal}`} id="faq" aria-labelledby={`faq-title-${locale}`}>
-        <h2 id={`faq-title-${locale}`}>{copy.faqTitle}</h2>
-        <div>{faqs.map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden>+</span></summary><p>{answer}</p></details>)}</div>
-      </section>
-
-      <section className={styles.finalCta}><p>{copy.finalTitle[0]}<br />{copy.finalTitle[1]}</p><Link href={isAuthenticated ? classroomPath : `${base}/login?mode=signup`}>{isAuthenticated ? copy.openClassroom : copy.finalCta}<span>→</span></Link></section>
-      <footer className={styles.footer}><div><strong>Lecue</strong></div><p>{copy.footerDescription}</p><div><Link href={`${base}/privacy`}>{copy.privacy}</Link><Link href={`${base}/terms`}>{copy.terms}</Link><Link href={`${base}/refund-policy`}>{copy.refund}</Link><a href={`mailto:${copy.support}`}>{copy.support}</a></div><small>{copy.recordingNotice}</small></footer>
-    </main>
-  );
+  </LandingInteractions>;
 }
