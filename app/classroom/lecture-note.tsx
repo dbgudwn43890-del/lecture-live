@@ -3,6 +3,7 @@
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { useEffect, useRef, useState } from "react";
+import WorkspaceDialog from "./workspace-dialog";
 
 import type { LectureNote, NoteBlock } from "../lib/lecture-note";
 
@@ -19,7 +20,7 @@ export default function LectureNotePanel({
 
   async function load() {
     try {
-      const response = await fetch(`/api/lecture-notes?sessionId=${encodeURIComponent(sessionId)}`);
+      const response = await fetch(`/api/lecture-notes?sessionId=${encodeURIComponent(sessionId)}`, { headers: { "X-Site-Locale": isEnglish ? "en" : "ko" } });
       const data = await response.json() as { note?: { status: string; content: LectureNote | null } | null; remainingGenerations?: number | null; error?: string };
       if (!response.ok) throw new Error(data.error);
       if (typeof data.remainingGenerations === "number") setRemaining(data.remainingGenerations);
@@ -36,21 +37,18 @@ export default function LectureNotePanel({
   async function generate(force: boolean) {
     setPhase("generating");
     setMessage("");
-    // 생성은 1~2분 걸린다. 다른 탭에 가 있어도 끝나면 알려줄 수 있게 미리 허락을 받는다.
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      void Notification.requestPermission();
-    }
     try {
       const response = await fetch("/api/lecture-notes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Site-Locale": isEnglish ? "en" : "ko" },
         body: JSON.stringify({ sessionId, force }),
       });
       const data = await response.json() as { note?: { status: string; content: LectureNote | null }; error?: string };
       if (!response.ok && response.status !== 202) throw new Error(data.error);
       if (data.note?.status === "ready" && data.note.content) { setNote(data.note.content); setPhase("ready"); }
       else setPhase("generating");
-      setRemaining((current) => (current === null ? null : Math.max(0, current - 1)));
+      // A cached note or another tab's 202 response does not use another generation.
+      if (response.status === 201) setRemaining((current) => (current === null ? null : Math.max(0, current - 1)));
     } catch (caught) {
       setMessage(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not create the note." : "노트를 만들지 못했습니다.");
       setPhase("failed");
@@ -80,16 +78,10 @@ export default function LectureNotePanel({
   }, [phase, isEnglish]);
 
   return (
-    <div
-      className="note-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label={isEnglish ? "Lecture note" : "강의 노트"}
-      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
-    >
+    <WorkspaceDialog label={isEnglish ? "Review note" : "복습 노트"} onClose={onClose}>
       <div className="note-panel">
         <header className="note-topbar">
-          <strong>{isEnglish ? "Lecture note" : "강의 노트"}</strong>
+          <strong>{isEnglish ? "Review note" : "복습 노트"}</strong>
           <div>
             {remaining !== null && phase !== "loading" && (
               <span className="note-quota">{isEnglish ? `${remaining} left today` : `오늘 ${remaining}회 남음`}</span>
@@ -104,7 +96,7 @@ export default function LectureNotePanel({
                 {isEnglish ? "Regenerate" : "다시 만들기"}
               </button>
             )}
-            <button type="button" className="banner-dismiss" onClick={onClose} aria-label={isEnglish ? "Close" : "닫기"}>✕</button>
+            <button type="button" className="banner-dismiss" onClick={onClose} aria-label={isEnglish ? "Back to lecture" : "강의실로 돌아가기"}>✕</button>
           </div>
         </header>
 
@@ -112,16 +104,16 @@ export default function LectureNotePanel({
         {phase === "none" && (
           <div className="note-empty">
             <span className="note-mark" aria-hidden="true">✎</span>
-            <h2>{isEnglish ? "Turn this lecture into a note" : "이 강의를 한 권의 노트로"}</h2>
+            <h2>{isEnglish ? "Reconnect what you learned" : "헷갈렸던 순간까지, 한눈에."}</h2>
             <p>{isEnglish
-              ? "A structured review note built from everything this lecture left behind — with formulas, diagrams, and the material pages that matter."
-              : "이 수업이 남긴 모든 기록으로 구조화된 복습 노트를 만듭니다. 수식과 개념 도식, 중요한 자료 페이지까지 함께 정리됩니다."}</p>
+              ? "Bring together the lecture, your questions, and course materials. Revisit the concepts with formulas and diagrams where they help."
+              : "강의 기록과 내가 한 질문, 올려 둔 자료를 함께 정리해요. 수식과 도식이 필요한 개념도 차근차근 다시 볼 수 있어요."}</p>
             <ul className="note-ingredients">
               <li>{isEnglish ? "Live transcript" : "실시간 스크립트"}</li>
               <li>{isEnglish ? "My questions" : "내가 한 질문"}</li>
               <li>{isEnglish ? "Lecture materials" : "강의 자료"}</li>
             </ul>
-            <button type="button" className="note-create-button" onClick={() => void generate(false)}>
+            <button type="button" className="note-create-button" disabled={remaining === 0} onClick={() => void generate(false)}>
               {isEnglish ? "Create note" : "노트 만들기"}
             </button>
           </div>
@@ -131,47 +123,33 @@ export default function LectureNotePanel({
           <div className="note-empty">
             <span className="note-mark" aria-hidden="true">✎</span>
             <p>{message || (isEnglish ? "Could not create the note." : "노트를 만들지 못했습니다.")}</p>
-            <button type="button" className="note-create-button" onClick={() => void generate(true)}>
-              {isEnglish ? "Try again" : "다시 시도"}
+            <button type="button" className="note-create-button" disabled={phase === "failed" && remaining === 0} onClick={() => phase === "error" ? void load() : void generate(true)}>
+              {phase === "error" ? (isEnglish ? "Reload note" : "노트 다시 불러오기") : (isEnglish ? "Try again" : "다시 시도")}
             </button>
           </div>
         )}
 
         {phase === "ready" && note && <NoteArticle note={note} isEnglish={isEnglish} />}
       </div>
-    </div>
+    </WorkspaceDialog>
   );
 }
 
-/** 생성은 1~2분 걸린다. 침묵하는 스피너 대신 지금 어느 단계인지 보여준다. */
+/** Only display measured elapsed time; the API does not report generation stages. */
 function GeneratingState({ isEnglish }: { isEnglish: boolean }) {
-  const stages = isEnglish
-    ? ["Re-reading the transcript", "Grouping the key concepts", "Setting formulas and diagrams", "Finishing the note"]
-    : ["스크립트를 다시 읽는 중", "핵심 개념을 묶는 중", "수식과 도식을 정리하는 중", "노트를 마무리하는 중"];
-  const [stage, setStage] = useState(0);
-
+  const [seconds, setSeconds] = useState(0);
   useEffect(() => {
-    // ponytail: 실제 진행률 신호가 없다. 경과 시간으로 단계만 짐작해 보여준다.
-    const boundaries = [15_000, 40_000, 75_000];
     const startedAt = Date.now();
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      setStage(boundaries.filter((boundary) => elapsed >= boundary).length);
-    }, 1_000);
-    return () => clearInterval(timer);
+    const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - startedAt) / 1_000)), 1_000);
+    return () => window.clearInterval(timer);
   }, []);
-
   return (
-    <div className="note-generating" role="status">
+    <div className="note-generating">
       <div className="note-generating-art" aria-hidden="true"><span /><span /><span /></div>
-      <strong>{stages[stage]}</strong>
-      <div className="note-progress" aria-hidden="true"><i /></div>
-      <ol className="note-stages" aria-hidden="true">
-        {stages.map((label, index) => (
-          <li key={label} className={index < stage ? "done" : index === stage ? "current" : undefined}>{label}</li>
-        ))}
-      </ol>
-      <p>{isEnglish ? "This can take a minute or two. You can close this — the note keeps writing." : "1~2분 정도 걸립니다. 창을 닫아도 노트는 계속 만들어져요."}</p>
+      <strong role="status">{isEnglish ? "Building your review note" : "오늘의 강의를 정리하고 있어요"}</strong>
+      <p>{isEnglish ? "Connecting the transcript, your questions, and the lecture materials." : "강의 기록과 질문, 자료를 함께 읽고 복습 노트를 만들고 있어요."}</p>
+      <span className="note-wait-detail">{isEnglish ? `${seconds}s since opening this view` : `이 화면에서 ${seconds}초 기다리는 중`}</span>
+      <p>{isEnglish ? "The time needed depends on the lecture. You can return to the lecture and open the note again later." : "강의 길이에 따라 시간이 걸릴 수 있어요. 강의실로 돌아가 다른 내용을 보다가 다시 열어도 괜찮아요."}</p>
     </div>
   );
 }
@@ -185,8 +163,11 @@ export function NoteArticle({ note, isEnglish }: { note: LectureNote; isEnglish:
         <h1>{note.title}</h1>
         <p className="note-summary">{note.summary}</p>
       </header>
+      <nav className="note-contents" aria-label={isEnglish ? "Note contents" : "노트 목차"}>
+        {note.sections.map((section, index) => <a href={`#note-section-${index}`} key={index}>{section.heading}</a>)}
+      </nav>
       {note.sections.map((section, sectionIndex) => (
-        <section className="note-section" key={sectionIndex}>
+        <section className="note-section" id={`note-section-${sectionIndex}`} key={sectionIndex}>
           <h2>
             <span aria-hidden="true">{String(sectionIndex + 1).padStart(2, "0")}</span>
             {section.heading}

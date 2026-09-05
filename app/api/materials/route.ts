@@ -7,7 +7,7 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { isUuid } from "../../lib/billing";
 import { bootstrapTerms } from "../../lib/bootstrap-terms";
 import { splitTerms } from "../../lib/glossary";
-import { chunkPages, splitPages } from "../../lib/material-text";
+import { chunkPages, readTextMaterial, splitPages } from "../../lib/material-text";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
 
@@ -223,6 +223,17 @@ export async function POST(request: Request) {
       );
       return NextResponse.json({ error: isEnglish ? "Could not read this PDF." : "이 PDF를 읽지 못했습니다." }, { status: 422 });
     }
+  } else if (["txt", "csv", "tsv"].includes(type.extension)) {
+    try {
+      pages = readTextMaterial(bytes);
+      pageCount = pages.length;
+      keyterms = bootstrapTerms(pages.map((page) => page.text).join(" "), [], 40);
+    } catch (error) {
+      const tooLarge = error instanceof Error && error.message === "TEXT_TOO_LARGE";
+      return NextResponse.json({ error: tooLarge
+        ? (isEnglish ? "Split text materials into files of 500,000 characters or less." : "텍스트 자료를 50만 자 이하로 나누어 올려 주세요.")
+        : (isEnglish ? "Save this text file as UTF-8 or UTF-16 and upload it again." : "텍스트 파일을 UTF-8 또는 UTF-16으로 저장한 뒤 다시 올려 주세요.") }, { status: 422 });
+    }
   } else {
     let markdown: string;
     try {
@@ -249,7 +260,9 @@ export async function POST(request: Request) {
   }
   const chunks = chunkPages(pages);
   if (!chunks.length) {
-    return NextResponse.json({ error: isEnglish ? "This PDF has no selectable text. Upload a text-based PDF for now." : "이 PDF에는 선택 가능한 텍스트가 없습니다. 현재는 텍스트 기반 PDF를 올려 주세요." }, { status: 422 });
+    return NextResponse.json({ error: type.extension === "pdf"
+      ? (isEnglish ? "This PDF has no selectable text. Upload a text-based PDF for now." : "이 PDF에는 선택 가능한 텍스트가 없습니다. 현재는 텍스트 기반 PDF를 올려 주세요.")
+      : (isEnglish ? "This material has no readable text." : "이 자료에서 읽을 수 있는 텍스트를 찾지 못했습니다.") }, { status: 422 });
   }
 
   let embeddings;

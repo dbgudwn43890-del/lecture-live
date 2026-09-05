@@ -35,3 +35,15 @@ test("keeps readable output when the model omits page markers", () => {
     { page: 1, text: "스택은 후입선출 구조입니다." },
   ]);
 });
+
+test("native text preserves Korean, tables and literal model-style headings without AI rewriting", async () => {
+  const { readTextMaterial, MAX_NATIVE_TEXT_CHARACTERS } = await import("./material-text.ts");
+  const original = '## TERMS\r\n용어,정의\r\n"RAG, 검색",검색 증강 생성';
+  const expected = original.replaceAll('\r\n', '\n');
+  assert.deepEqual(readTextMaterial(new TextEncoder().encode(original)), [{ page: 1, text: expected }]);
+  assert.deepEqual(readTextMaterial(Buffer.from('\ufeff한국어\tEnglish', 'utf16le')), [{ page: 1, text: '한국어\tEnglish' }]);
+  assert.deepEqual(readTextMaterial(new TextEncoder().encode('  \n  ')), []);
+  assert.throws(() => readTextMaterial(Uint8Array.from([0xc3, 0x28])));
+  assert.throws(() => readTextMaterial(new TextEncoder().encode('abc\u0000def')), /INVALID_TEXT/);
+  assert.throws(() => readTextMaterial(new TextEncoder().encode('가'.repeat(MAX_NATIVE_TEXT_CHARACTERS + 1))), /TEXT_TOO_LARGE/);
+});

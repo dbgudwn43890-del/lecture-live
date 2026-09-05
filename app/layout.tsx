@@ -50,7 +50,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   return (
-    <html lang={locale} className={`${sans.variable} ${mono.variable}`}>
+    <html lang={locale} className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body>
         {/* 저장된 테마(lecue-theme) 또는 OS 설정을 첫 페인트 전에 적용한다.
             CSS의 다크 팔레트는 전부 [data-theme="dark"]에 걸려 있다. */}

@@ -64,6 +64,8 @@ Configure the required environment variables in `.env.local`. Apply the SQL migr
 
 Open [http://localhost:3000](http://localhost:3000). Microphone access requires localhost or HTTPS.
 
+For Google sign-in, Supabase **Authentication → URL Configuration → Redirect URLs** must allow both `http://localhost:3000/auth/callback` and `http://localhost:3000/auth/callback?next=*`. The login page includes an encoded destination in `next`; allowing only the bare callback can send the browser to the production Site URL instead. Keep Site URL set to the production domain. Use `localhost` consistently when signing in and opening the classroom; `127.0.0.1` has separate cookies and would need its own allowed callback.
+
 ## Validation
 
 ```sh

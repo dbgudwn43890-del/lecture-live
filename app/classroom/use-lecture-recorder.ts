@@ -262,25 +262,28 @@ export function useLectureRecorder(options: RecorderOptions) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Strict Mode replays setup after cleanup. A replay must not leave every
+    // start/open action permanently locked behind the unmount stop marker.
+    finishingRef.current = false;
+    return () => {
       // Unmount is a stop. Without marking it as one, the socket's onclose
       // sees a live recording and schedules reconnects forever against the
       // dead mic stream — a new WebSocket and token fetch every 30 seconds
       // until the tab closes.
       finishingRef.current = true;
+      startedAtRef.current = 0;
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
       stopSocketTimers();
-      recorderRef.current?.stop();
+      if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
       socketRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       stopMicMeter();
-    },
-    [],
-  );
+    };
+  }, []);
 
   function currentElapsedMs() {
     return Math.min(MAX_LECTURE_MS, elapsedBaseMsRef.current

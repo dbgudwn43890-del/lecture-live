@@ -1,6 +1,8 @@
+import "./workspace.css";
+
 export function ClassroomLoadingShell({ isEnglish = false }: { isEnglish?: boolean }) {
   return (
-    <main className="workspace classroom-skeleton" aria-busy="true">
+    <main className="workspace experience classroom-skeleton" aria-busy="true">
       <p className="sr-only">{isEnglish ? "Loading the classroom…" : "강의실을 불러오는 중입니다…"}</p>
       <aside className="workspace-sidebar" aria-hidden="true">
         <strong className="sidebar-brand">Lecue</strong>

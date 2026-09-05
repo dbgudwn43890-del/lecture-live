@@ -29,9 +29,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Invalid lecture session." : "수업 정보를 확인해 주세요." }, { status: 400 });
   }
 
-  // Deepgram은 지원 프로그램이라 당장 원가 0, Soniox는 실비($0.12/hr)다.
-  // 그래서 기본 "ko"는 Deepgram에 남고, 한·영 혼용을 고른 수업만 Soniox로
-  // 간다 (문장 안 두 언어 동시 인식, CER 실측 0%: scripts/eval-stt.mts).
+  // 지원 크레딧이 남아 있는 동안 Deepgram 사용료를 상계할 수 있다.
+  // ko/en은 Deepgram, 한·영 혼용은 Soniox로 간다. Soniox는 토큰 과금이며
+  // 약 $0.12/h는 참고치다. 실시간 강의 품질은 별도 평가가 필요하다.
   let language = deepgramLanguage(body.language, "ko");
   const useSoniox = language === "multi" && Boolean(process.env.SONIOX_API_KEY);
   // Deepgram의 multi 모델은 한국어를 지원하지 않는다. Soniox 키가 없으면
@@ -175,7 +175,7 @@ export async function POST(request: Request) {
         accessToken,
         credits: Number(credit.remaining_credits),
         // ponytail: 어휘 갱신 재접속은 Deepgram 경로에만 있다. Soniox context도
-        // 접속 시점에만 붙지만, 예산이 10배라 부트스트랩 없이도 대부분 담긴다.
+        // 접속 시점에만 붙는다. 실제 입력은 공통 mergeKeyterms의 상한을 따른다.
         // 용어 누락 신고가 쌓이면 같은 refreshInMs 경로를 여기에도 연다.
         refreshInMs: null,
         listenUrl: SONIOX_LISTEN_URL,

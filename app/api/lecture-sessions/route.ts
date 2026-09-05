@@ -163,7 +163,7 @@ export async function GET(request: Request) {
   const [{ data: session, error: sessionError }, { rows: segments, error: segmentError }, { data: questions, error: questionError }] = await Promise.all([
     current.supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds,recorded_ms").eq("id", sessionId).maybeSingle(),
     fetchAllSegments(current.supabase, sessionId, 50_000),
-    current.supabase.from("lecture_questions").select("id,question,answer,provider,model,external_sources,lecture_sources,created_at").eq("session_id", sessionId).order("created_at"),
+    current.supabase.from("lecture_questions").select("id,question,answer,question_at_ms,provider,model,external_sources,lecture_sources,material_sources,created_at").eq("session_id", sessionId).order("created_at"),
   ]);
 
   if (sessionError || segmentError || questionError || !session) {

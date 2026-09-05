@@ -1,6 +1,19 @@
 export type MaterialPage = { page: number; text: string };
 export type MaterialChunk = { startPage: number; endPage: number; text: string };
 
+export const MAX_NATIVE_TEXT_CHARACTERS = 500_000;
+
+/** Text and delimited tables already contain their source; no model transcription. */
+export function readTextMaterial(bytes: Uint8Array): MaterialPage[] {
+  const encoding = bytes[0] === 0xff && bytes[1] === 0xfe ? "utf-16le"
+    : bytes[0] === 0xfe && bytes[1] === 0xff ? "utf-16be" : "utf-8";
+  const text = new TextDecoder(encoding, { fatal: true }).decode(bytes).replace(/\r\n?/g, "\n").trim();
+  if (text.length > MAX_NATIVE_TEXT_CHARACTERS) throw new Error("TEXT_TOO_LARGE");
+  if (/[\u0000-\u0008\u000e-\u001f]/u.test(text)) throw new Error("INVALID_TEXT");
+  // Keep headings, CSV quotes, delimiters and terminology exactly as supplied.
+  return text ? [{ page: 1, text }] : [];
+}
+
 /**
  * 색인 모델은 페이지마다 `## p.3` 형태의 머리글을 먼저 쓰도록 지시받는다.
  * 모델이 그 형식을 빠뜨려도 실제 추출 텍스트는 첫 구간으로 보존한다.
