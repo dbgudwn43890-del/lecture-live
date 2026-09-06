@@ -4,9 +4,14 @@ import { useEffect, useRef, useState } from "react";
 
 import type { DeepgramFinal, DeepgramLanguage } from "../lib/deepgram";
 import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
+import { acquireLectureInput, LectureInputError, type LectureInput, type LectureInputSource } from "../lib/lecture-input";
 import { adaptSonioxMessages, type SonioxMessage } from "../lib/soniox";
 
 export type Status = "idle" | "connecting" | "recording" | "paused" | "ended" | "error";
+/** connecting 안의 세부: 공유 선택창이 열려 있는지, 서버·STT를 여는 중인지. */
+export type ConnectingPhase = "selecting" | "opening" | null;
+export type PauseReason = "manual" | "capture-ended" | "network" | null;
+export type { LectureInputSource };
 
 export type Segment = {
   id: string;
@@ -25,6 +30,8 @@ export type SessionSummary = {
   duration_seconds: number;
   recorded_ms: number;
   question_count: number;
+  /** 구버전 행·응답에는 없다. 없으면 microphone으로 읽는다. */
+  input_source?: LectureInputSource;
 };
 
 type DeepgramResult = DeepgramFinal & {
@@ -37,6 +44,12 @@ type DeepgramResult = DeepgramFinal & {
 const RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 30_000];
 
 export const MAX_LECTURE_MS = 10_800_000;
+/** 시작 준비(세션 start + 재시도) 총 제한. 넘으면 캡처·버퍼를 정리하고 새 선택창을 열지 않는다. */
+const START_DEADLINE_MS = 15_000;
+/** 첫 소켓이 열리기 전 모아 두는 WebM 조각 상한. 넘으면 버린 사실을 알리고 새 헤더로 다시 시작한다. */
+const PENDING_AUDIO_MAX_BYTES = 2 * 1024 * 1024;
+/** 탭 오디오가 이만큼 조용하면 한 번만 "강의를 재생해 주세요"를 띄운다. */
+const SILENCE_NOTICE_MS = 10_000;
 
 type RecorderOptions = {
   locale: "ko" | "en";
@@ -80,13 +93,31 @@ export function useLectureRecorder(options: RecorderOptions) {
   const { locale, isEnglish, speechLanguage, activeClassroomId, activeSessionId, lectureTitle } = options;
 
   const [status, setStatus] = useState<Status>("idle");
+  const [connectingPhase, setConnectingPhase] = useState<ConnectingPhase>(null);
+  const [pauseReason, setPauseReason] = useState<PauseReason>(null);
+  const [inputSource, setInputSource] = useState<LectureInputSource>("microphone");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [interim, setInterim] = useState("");
 
   const socketRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  /** 레코더·소켓·미터가 보는 audio-only 스트림. inputRef.current.audioStream의 미러. */
   const streamRef = useRef<MediaStream | null>(null);
+  /** 원본 캡처와 그 수명. 탭 공유는 일시정지 중에도 여기 살아 있다. */
+  const inputRef = useRef<LectureInput | null>(null);
+  /** 세션에 고정된 입력 종류. 재개는 이 값만 읽고, 클라이언트가 중간에 바꾸지 않는다. */
+  const sourceRef = useRef<LectureInputSource>("microphone");
+  // 시작/재개 시도 식별자. 선택창이 열린 사이 종료·unmount되면 늦게 도착한
+  // 스트림을 즉시 버리고 세션을 만들지 않기 위해 증가시킨다.
+  const operationIdRef = useRef(0);
+  // 서버 pause가 아직 확정되지 않은 세션. 이 값이 있으면 resume을 보내지 않는다.
+  const pendingPauseRef = useRef<string | null>(null);
+  const pendingAudioBytesRef = useRef(0);
+  const pendingAudioOverflowRef = useRef(false);
+  const lastSignalAtRef = useRef(0);
+  const silenceNoticedRef = useRef(false);
+  const silenceNoticeShownRef = useRef(false);
   const startedAtRef = useRef(0);
   const elapsedBaseMsRef = useRef(0);
   const segmentIdsRef = useRef(new Set<string>());
@@ -131,19 +162,53 @@ export function useLectureRecorder(options: RecorderOptions) {
   // 항상 최신 상태·함수를 ref로 읽는다.
   const statusRef = useRef(status);
   useEffect(() => { statusRef.current = status; }, [status]);
-  const pauseRef = useRef<() => Promise<void>>(async () => {});
+  const pauseRef = useRef<(reason?: Exclude<PauseReason, null>) => Promise<void>>(async () => {});
 
-  /** 덮개 닫힘·마이크 뽑힘: 죽은 스트림으로 '기록 중'인 척하는 좀비를 막는다. */
-  function watchStreamTracks(stream: MediaStream) {
-    const deadMicMessage = isEnglish
-      ? "The microphone was disconnected, so the lecture is paused. Check the mic and press Resume."
-      : "마이크 연결이 끊겨 일시정지했습니다. 마이크를 확인한 뒤 '이어하기'를 눌러 주세요.";
-    stream.getTracks().forEach((track) => {
-      track.onended = () => {
-        if (streamRef.current !== stream || finishingRef.current || statusRef.current !== "recording") return;
-        void pauseRef.current().then(() => options.setError(deadMicMessage));
-      };
-    });
+  const deadMicMessage = isEnglish
+    ? "The microphone was disconnected, so the lecture is paused. Check the mic and press Resume."
+    : "마이크 연결이 끊겨 일시정지했습니다. 마이크를 확인한 뒤 '이어하기'를 눌러 주세요.";
+  const captureEndedMessage = isEnglish
+    ? "Sharing ended. Recording is paused."
+    : "공유가 끝나 기록을 멈췄어요.";
+  const pauseSavingMessage = isEnglish
+    ? "Saving the pause… Resume becomes available once it is saved."
+    : "일시정지를 저장하는 중이에요. 저장되면 이어 들을 수 있어요.";
+
+  /** 원본·오디오 트랙 전부 해제. 여러 번 불러도 안전. 외부 종료 핸들러가 재진입하지 않는다(dispose가 먼저 disposed를 세운다). */
+  function releaseInput() {
+    inputRef.current?.dispose();
+    inputRef.current = null;
+    streamRef.current = null;
+    stopMicMeter();
+  }
+
+  /**
+   * 덮개 닫힘·마이크 뽑힘·"공유 중지" 클릭·강의 탭 닫힘: 죽은 스트림으로
+   * '기록 중'인 척하는 좀비를 막는다. 원본 비디오·오디오 중 하나라도 ended면
+   * 같은 처리를 한 번만 한다. mute/unmute는 종료가 아니라 무시한다.
+   */
+  function watchInput(input: LectureInput) {
+    let handled = false;
+    const onEnded = () => {
+      // 앱의 자체 stop은 dispose가 disposed를 먼저 세워 여기서 걸러진다.
+      if (handled || inputRef.current !== input || input.disposed) return;
+      handled = true;
+      if (input.source === "microphone") {
+        if (finishingRef.current || statusRef.current !== "recording") return;
+        void pauseRef.current("capture-ended").then(() => options.setError(deadMicMessage));
+        return;
+      }
+      if (statusRef.current === "recording" && !finishingRef.current) {
+        void pauseRef.current("capture-ended");
+        return;
+      }
+      // 이미 일시정지 중(또는 전환 중)에 공유가 끝났다: 죽은 캡처만 놓는다.
+      // 다음 이어 듣기는 클릭에서 새 선택창을 연다(LIFE-04).
+      releaseInput();
+      setPauseReason("capture-ended");
+      options.setError(captureEndedMessage);
+    };
+    input.captureStream.getTracks().forEach((track) => { track.onended = onEnded; });
   }
 
   /** 종료 PATCH 한 번. 성공하면 로컬 미러를 지운다. */
@@ -163,10 +228,41 @@ export function useLectureRecorder(options: RecorderOptions) {
     }
   }
 
-  // 오프라인 종료 복구: online 이벤트와 30초 간격으로 미저장 종료를 재시도하고,
+  /**
+   * 서버 pause 한 번. 409는 이미 paused/completed라는 뜻이라 확정으로 본다.
+   * 성공하면 서버가 인정한 recorded_ms로 시계를 맞춘다.
+   */
+  async function submitPause(sessionId: string): Promise<boolean> {
+    try {
+      const response = await fetch("/api/lecture-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        body: JSON.stringify({ action: "pause", sessionId }),
+      });
+      const data = await response.json().catch(() => ({})) as { recordedMs?: number };
+      if (!response.ok && response.status !== 409) return false;
+      if (response.ok && typeof data.recordedMs === "number" && activeSessionIdRef.current === sessionId && startedAtRef.current === 0) {
+        elapsedBaseMsRef.current = data.recordedMs;
+        streamOffsetMsRef.current = data.recordedMs;
+        setElapsedMs(data.recordedMs);
+      }
+      if (pendingPauseRef.current === sessionId) {
+        pendingPauseRef.current = null;
+        options.setNotice("");
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // 오프라인 종료 복구: online 이벤트와 30초 간격으로 미저장 종료·일시정지를 재시도하고,
   // 마운트 시엔 지난 방문에서 남은 로컬 미러(새로고침으로 날아갈 뻔한 꼬리)를 밀어 넣는다.
   useEffect(() => {
     const retry = () => {
+      // 공유가 끝난 뒤 오프라인이었다면 서버는 아직 recording이다. 연결이 돌아오는
+      // 즉시 닫아야 그 사이 시간이 다음 세그먼트 과금에 섞이지 않는다(BILL-02).
+      if (pendingPauseRef.current) void submitPause(pendingPauseRef.current);
       const pending = pendingFinishRef.current;
       if (!pending) return;
       void submitFinishSave(pending.sessionId, pending.durationMs, segmentsRef.current).then((saved) => {
@@ -272,6 +368,8 @@ export function useLectureRecorder(options: RecorderOptions) {
       // dead mic stream — a new WebSocket and token fetch every 30 seconds
       // until the tab closes.
       finishingRef.current = true;
+      // 열려 있던 선택창의 늦은 승인은 stale 시도로 버려진다(LIFE-01).
+      operationIdRef.current += 1;
       startedAtRef.current = 0;
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current);
@@ -280,8 +378,7 @@ export function useLectureRecorder(options: RecorderOptions) {
       stopSocketTimers();
       if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
       socketRef.current?.close();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      stopMicMeter();
+      releaseInput();
     };
   }, []);
 
@@ -374,11 +471,11 @@ export function useLectureRecorder(options: RecorderOptions) {
   function scheduleReconnect() {
     const stream = streamRef.current;
     if (!stream || finishingRef.current || startedAtRef.current === 0) return;
-    // 소켓이 아니라 마이크가 죽었다면 재연결은 무음만 듣는다. 일시정지로 전환.
+    // 소켓이 아니라 입력이 죽었다면 재연결은 무음만 듣는다. 일시정지로 전환.
+    // 살아 있는 캡처는 그대로 재사용한다 — 공유창을 다시 열지 않는다.
     if (stream.getAudioTracks().some((track) => track.readyState === "ended")) {
-      void pauseRef.current().then(() => options.setError(isEnglish
-        ? "The microphone was disconnected, so the lecture is paused. Check the mic and press Resume."
-        : "마이크 연결이 끊겨 일시정지했습니다. 마이크를 확인한 뒤 '이어하기'를 눌러 주세요."));
+      const mic = sourceRef.current === "microphone";
+      void pauseRef.current("capture-ended").then(() => { if (mic) options.setError(deadMicMessage); });
       return;
     }
     const attempt = reconnectAttemptRef.current;
@@ -400,11 +497,21 @@ export function useLectureRecorder(options: RecorderOptions) {
    */
   function startMicMeter(stream: MediaStream) {
     stopMicMeter();
-    const context = new AudioContext();
-    audioContextRef.current = context;
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 256;
-    context.createMediaStreamSource(stream).connect(analyser);
+    lastSignalAtRef.current = Date.now();
+    silenceNoticeShownRef.current = false;
+    let context: AudioContext;
+    let analyser: AnalyserNode;
+    try {
+      context = new AudioContext();
+      audioContextRef.current = context;
+      analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      // analyser에만 연결한다. destination에 붙이면 강의 소리가 이중으로 들린다.
+      context.createMediaStreamSource(stream).connect(analyser);
+      if (context.state === "suspended") void context.resume().catch(() => {});
+    } catch {
+      return; // 미터가 없어도 STT 입력은 막지 않는다.
+    }
     const data = new Uint8Array(analyser.frequencyBinCount);
     const tick = () => {
       if (audioContextRef.current !== context) return;
@@ -415,6 +522,24 @@ export function useLectureRecorder(options: RecorderOptions) {
       meterRef.current?.style.setProperty("--level", level);
       // 스크립트 페인의 오브도 같은 값을 읽는다. ref 배선 없이 루트 변수 하나로.
       document.documentElement.style.setProperty("--mic-level", level);
+      // 탭 오디오는 "트랙이 있다"와 "소리가 들어온다"가 다르다. 10초 무음이면 한
+      // 번만 비차단 안내, 소리가 돌아오면 지운다. 매 프레임 state를 건드리지 않는다.
+      if (sourceRef.current === "browser-tab" && statusRef.current === "recording") {
+        const now = Date.now();
+        if (peak >= 3) {
+          lastSignalAtRef.current = now;
+          if (silenceNoticeShownRef.current) {
+            silenceNoticeShownRef.current = false;
+            options.setNotice("");
+          }
+        } else if (!silenceNoticedRef.current && now - lastSignalAtRef.current > SILENCE_NOTICE_MS) {
+          silenceNoticedRef.current = true;
+          silenceNoticeShownRef.current = true;
+          options.setNotice(isEnglish
+            ? "Play your lecture. Recording continues when audio arrives."
+            : "강의를 재생해 주세요. 소리가 들어오면 계속 기록해요.");
+        }
+      }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -443,8 +568,15 @@ export function useLectureRecorder(options: RecorderOptions) {
       if (socket?.readyState === WebSocket.OPEN) {
         socket.send(event.data);
         lastSentAtRef.current = Date.now();
+      } else if (pendingAudioBytesRef.current + event.data.size > PENDING_AUDIO_MAX_BYTES) {
+        // 첫 소켓 전 버퍼 상한. 조용히 일부만 버리면 헤더 없는 조각이 남으므로
+        // 전부 버리고, 소켓이 열릴 때 새 헤더로 다시 시작하며 누락을 알린다.
+        pendingAudioRef.current = [];
+        pendingAudioBytesRef.current = 0;
+        pendingAudioOverflowRef.current = true;
       } else {
         pendingAudioRef.current.push(event.data);
+        pendingAudioBytesRef.current += event.data.size;
       }
     };
     recorder.onstop = () => {
@@ -507,8 +639,19 @@ export function useLectureRecorder(options: RecorderOptions) {
       // WebM 헤더부터 온전하다. 재연결이면 대기 조각은 죽은 레코더의
       // 중간 클러스터라, 새 레코더의 헤더 앞에 흘리면 디코딩이 깨진다.
       if (!firstConnection) pendingAudioRef.current = [];
+      if (pendingAudioOverflowRef.current) {
+        // 버퍼가 넘쳐 헤더 조각을 잃었다. 중간 조각부터 보내지 않고 레코더를 새로
+        // 시작해 온전한 컨테이너로 흘린다. 잃은 구간은 사용자에게 말한다.
+        pendingAudioOverflowRef.current = false;
+        if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+        recorderRef.current = null;
+        options.setNotice(isEnglish
+          ? "The connection took too long, so the opening moments were not recorded."
+          : "연결이 오래 걸려 시작 부분 일부가 기록되지 않았어요.");
+      }
       startMediaRecorder(stream);
       for (const chunk of pendingAudioRef.current.splice(0)) socket.send(chunk);
+      pendingAudioBytesRef.current = 0;
       if (!firstConnection) {
         // 새 소켓의 시계는 0에서 다시 시작한다. 이 값을 더하지 않으면 재연결 뒤
         // 세그먼트가 강의 첫머리와 겹쳐 순서와 앵커가 함께 무너진다.
@@ -585,8 +728,13 @@ export function useLectureRecorder(options: RecorderOptions) {
             ? { action: "pause", sessionId: activeSessionIdRef.current }
             : { sessionId: activeSessionIdRef.current, durationMs: 0, segments: [] }),
         }).then(() => options.loadCredits());
-        stream.getTracks().forEach((track) => track.stop());
-        stopMicMeter();
+        // 탭 공유는 살아 있으면 그대로 두어 이어 듣기가 선택창 없이 된다.
+        if (recoverAsPaused && sourceRef.current === "browser-tab" && inputRef.current && !inputRef.current.disposed) {
+          inputRef.current.audioStream.getAudioTracks().forEach((track) => { track.enabled = false; });
+          stopMicMeter();
+        } else {
+          releaseInput();
+        }
       }
       options.setError(isEnglish
         ? "Speech recognition could not connect. Check the network and API settings."
@@ -605,32 +753,87 @@ export function useLectureRecorder(options: RecorderOptions) {
   }
 
   /**
-   * Microphone failures arrive as DOMExceptions whose message is written by
-   * the browser, in the browser's language, and says nothing about how to
-   * recover. Translate the two that actually happen.
+   * 입력 실패는 브라우저 원문 예외로 온다. 원문·API 이름은 노출하지 않고 복구
+   * 방법이 있는 문구로 바꾼다. 서버가 준 메시지(크레딧 등)는 그대로 쓴다.
    */
-  function microphoneMessage(caught: unknown) {
-    const name = caught instanceof DOMException ? caught.name : "";
-    if (name === "NotAllowedError" || name === "SecurityError") {
-      return isEnglish
-        ? "Microphone access is blocked. Allow it for this site in your browser's address bar, then start again."
-        : "마이크 사용이 차단돼 있습니다. 브라우저 주소창에서 이 사이트의 마이크를 허용한 뒤 다시 시작해 주세요.";
+  function inputMessage(caught: unknown) {
+    if (caught instanceof LectureInputError) {
+      const tab = sourceRef.current === "browser-tab";
+      switch (caught.code) {
+        case "cancelled": return isEnglish ? "Sharing didn’t start. You can try again." : "선택 화면을 닫았어요. 다시 시작할 수 있어요.";
+        case "no-audio": return isEnglish ? "Share the tab’s audio too." : "탭 소리도 함께 공유해 주세요.";
+        case "wrong-surface": return isEnglish ? "Choose the browser tab playing your lecture." : "강의가 재생되는 브라우저 탭을 선택해 주세요.";
+        case "unsupported": return tab
+          ? (isEnglish ? "Use Chrome on a computer for online lectures." : "온라인 강의는 컴퓨터의 Chrome에서 이용해 주세요.")
+          : (isEnglish ? "This browser does not support microphone input." : "이 브라우저는 마이크 입력을 지원하지 않습니다.");
+        case "mic-blocked": return isEnglish
+          ? "Microphone access is blocked. Allow it for this site in your browser's address bar, then start again."
+          : "마이크 사용이 차단돼 있습니다. 브라우저 주소창에서 이 사이트의 마이크를 허용한 뒤 다시 시작해 주세요.";
+        case "mic-missing": return isEnglish
+          ? "No microphone is available. Connect one, close apps that may be using it, and start again."
+          : "사용할 수 있는 마이크가 없습니다. 마이크를 연결하고 마이크를 쓰는 다른 앱을 닫은 뒤 다시 시작해 주세요.";
+        default: return tab
+          ? (isEnglish ? "Couldn’t connect the lecture audio. Try again." : "강의 소리를 연결하지 못했어요. 다시 시도해 주세요.")
+          : (isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.");
+      }
     }
-    if (name === "NotFoundError" || name === "NotReadableError") {
-      return isEnglish
-        ? "No microphone is available. Connect one, close apps that may be using it, and start again."
-        : "사용할 수 있는 마이크가 없습니다. 마이크를 연결하고 마이크를 쓰는 다른 앱을 닫은 뒤 다시 시작해 주세요.";
+    if (caught instanceof DOMException) {
+      // fetch 시간 초과(AbortError) 등. 원문 대신 연결 실패 문구.
+      return sourceRef.current === "browser-tab"
+        ? (isEnglish ? "Couldn’t connect the lecture audio. Try again." : "강의 소리를 연결하지 못했어요. 다시 시도해 주세요.")
+        : (isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.");
     }
     return caught instanceof Error && caught.message
       ? caught.message
-      : isEnglish ? "Could not start the microphone." : "마이크를 시작하지 못했습니다.";
+      : isEnglish ? "Could not start the lecture." : "강의를 시작하지 못했습니다.";
   }
 
-  async function startLecture() {
+  /** 취소된 시도의 늦은 결과를 조용히 버릴 때 던지는 표식. */
+  const STALE = Symbol("stale-operation");
+
+  /**
+   * 세션 start. 같은 startRequestId로 15초 안에서 재시도하므로, 응답만 유실돼도
+   * 서버가 기존 행을 돌려주고 두 번째 세션·과금은 생기지 않는다(NET-02).
+   * 요청 ID를 바꿔 재전송하지는 않는다.
+   */
+  async function startSession(draftSessionId: string, source: LectureInputSource): Promise<SessionSummary> {
+    const startRequestId = crypto.randomUUID();
+    const deadline = Date.now() + START_DEADLINE_MS;
+    const title = lectureTitle.trim() || (isEnglish ? `Lecture ${new Date().toLocaleDateString("en-US")}` : `${new Date().toLocaleDateString("ko-KR")} 수업`);
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining < 1_000) throw new LectureInputError("failed");
+      try {
+        const response = await fetch("/api/lecture-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          signal: AbortSignal.timeout(remaining),
+          body: JSON.stringify({
+            action: "start",
+            sessionId: draftSessionId || null,
+            classroomId: activeClassroomId || null,
+            title,
+            inputSource: source,
+            startRequestId,
+          }),
+        });
+        const data = await response.json() as { session?: SessionSummary; error?: string };
+        if (!response.ok || !data.session) throw new Error(data.error);
+        return data.session;
+      } catch (caught) {
+        // 서버가 답했다(4xx/5xx)면 재시도하지 않는다. 네트워크/타임아웃만 같은 ID로 다시.
+        const transport = caught instanceof TypeError || (caught instanceof DOMException && caught.name !== "SyntaxError");
+        if (!transport) throw caught;
+      }
+    }
+  }
+
+  async function startLecture(source: LectureInputSource = "microphone") {
     // 더블클릭이 리렌더보다 빠르면 status 검사만으로는 두 번 다 통과해서
-    // getUserMedia·세션 생성·소켓이 전부 이중으로 뜬다.
+    // 캡처·세션 생성·소켓이 전부 이중으로 뜬다. 선택창도 하나만(UX-05).
     if (finishingRef.current || startingRef.current || status === "connecting" || status === "recording" || status === "paused") return;
     startingRef.current = true;
+    const operationId = ++operationIdRef.current;
     // ACC-02/ACC-03의 계정 동의는 여기서 묻지 않는다. 가입할 때 받고, 기록이
     // 없는 계정은 강의실에 들어오는 순간 한 번 묻는다 — 강의가 막 시작되려는
     // 순간에 약관을 읽히는 것은 동의를 받는 방법이 아니라 누르게 만드는 방법이다.
@@ -641,53 +844,63 @@ export function useLectureRecorder(options: RecorderOptions) {
     const draftSessionId = status === "idle" ? activeSessionIdRef.current : "";
     saveFailuresRef.current = 0;
     vocabularyRefreshedRef.current = false;
+    silenceNoticedRef.current = false;
+    pendingAudioOverflowRef.current = false;
+    pendingAudioBytesRef.current = 0;
+    sourceRef.current = source;
+    setInputSource(source);
+    setPauseReason(null);
     if (!draftSessionId) options.setActiveSessionId("");
+
+    // iOS/iPadOS Safari에는 webm 녹음이 없어 MediaRecorder 생성이 영어 원문
+    // 예외로 터졌다. 캡처를 요청하기 전에 막고, 있는 대안(파일 업로드)을 안내한다.
+    const recorderSupported = typeof MediaRecorder !== "undefined"
+      && (MediaRecorder.isTypeSupported("audio/webm;codecs=opus") || MediaRecorder.isTypeSupported("audio/webm"));
+    if (!recorderSupported && source === "microphone") {
+      startingRef.current = false;
+      options.setError(isEnglish
+        ? "Live recording is not supported in this browser (Safari on iPhone/iPad). Use Chrome on a laptop, or record with a voice memo app and add the file with the Upload recording button."
+        : "이 브라우저(아이폰·아이패드 Safari)에서는 실시간 녹음이 지원되지 않아요. 노트북 Chrome을 쓰거나, 음성 메모 앱으로 녹음한 파일을 '녹음 파일' 버튼으로 올려 주세요.");
+      setStatus("error");
+      return;
+    }
+
+    setConnectingPhase(source === "browser-tab" ? "selecting" : null);
     setStatus("connecting");
+    // 클릭 핸들러의 동기 구간. getDisplayMedia는 이 줄에서 즉시 호출된다 —
+    // 앞에 await가 하나라도 있으면 사용자 활성화가 사라진다.
+    const acquiring = acquireLectureInput(source, audioConstraints());
 
     let startedSessionId = "";
+    let input: LectureInput | null = null;
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error(isEnglish
-          ? "This browser does not support microphone input."
-          : "이 브라우저는 마이크 입력을 지원하지 않습니다.");
+      input = await acquiring;
+      if (operationIdRef.current !== operationId || finishingRef.current) {
+        // 선택창이 열린 사이 종료·이동했다. 도착한 트랙은 즉시 놓고 세션은 만들지 않는다(LIFE-01).
+        input.dispose();
+        throw STALE;
       }
-      // iOS/iPadOS Safari에는 webm 녹음이 없어 MediaRecorder 생성이 영어 원문
-      // 예외로 터졌다. 마이크를 요청하기 전에 막고, 있는 대안(파일 업로드)을 안내한다.
-      if (typeof MediaRecorder === "undefined"
-        || (!MediaRecorder.isTypeSupported("audio/webm;codecs=opus") && !MediaRecorder.isTypeSupported("audio/webm"))) {
-        throw new Error(isEnglish
-          ? "Live recording is not supported in this browser (Safari on iPhone/iPad). Use Chrome on a laptop, or record with a voice memo app and add the file with the Upload recording button."
-          : "이 브라우저(아이폰·아이패드 Safari)에서는 실시간 녹음이 지원되지 않아요. 노트북 Chrome을 쓰거나, 음성 메모 앱으로 녹음한 파일을 '녹음 파일' 버튼으로 올려 주세요.");
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints() });
-      streamRef.current = stream;
-      watchStreamTracks(stream);
+      inputRef.current = input;
+      streamRef.current = input.audioStream;
+      watchInput(input);
+      setConnectingPhase("opening");
+      const stream = input.audioStream;
       startMicMeter(stream);
       streamOffsetMsRef.current = 0;
       pendingAudioRef.current = [];
       socketOpenedRef.current = false;
+      // 첫 조각은 서버 세션보다 먼저 잡힌다. 로컬 시계도 그 시점에서 시작해
+      // 자막 시각(소켓 스트림 시계 0)과 정렬한다. 서버 started_at은 몇백 ms 뒤다.
       startedAtRef.current = Date.now();
       setElapsedMs(0);
       startMediaRecorder(stream);
-      setStatus("recording");
-      options.setMobilePane("transcript");
 
-      const sessionResponse = await fetch("/api/lecture-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({
-          action: "start",
-          sessionId: draftSessionId || null,
-          classroomId: activeClassroomId || null,
-          title: lectureTitle.trim() || (isEnglish ? `Lecture ${new Date().toLocaleDateString("en-US")}` : `${new Date().toLocaleDateString("ko-KR")} 수업`),
-        }),
-      });
-      const sessionData = await sessionResponse.json() as { session?: SessionSummary; error?: string };
-      if (!sessionResponse.ok || !sessionData.session) throw new Error(sessionData.error);
-      startedSessionId = sessionData.session.id;
-      options.setActiveSessionId(sessionData.session.id);
-      activeSessionIdRef.current = sessionData.session.id;
-      options.setLectureTitle(sessionData.session.title);
+      const session = await startSession(draftSessionId, source);
+      startedSessionId = session.id;
+      if (operationIdRef.current !== operationId) throw STALE;
+      options.setActiveSessionId(session.id);
+      activeSessionIdRef.current = session.id;
+      options.setLectureTitle(session.title);
       setSegments([]);
       segmentsRef.current = [];
       segmentIdsRef.current.clear();
@@ -695,15 +908,19 @@ export function useLectureRecorder(options: RecorderOptions) {
       finalBufferRef.current = [];
       showInterim("");
       options.clearMessages();
+      // 서버가 승인한 뒤에야 '기록 중'. 준비 중 UI와 실제 기록 상태를 구분한다.
+      setStatus("recording");
+      setConnectingPhase(null);
+      options.setMobilePane("transcript");
 
       await connectDeepgram(stream);
       startingRef.current = false;
     } catch (caught) {
       startingRef.current = false;
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      stopMicMeter();
+      if (inputRef.current === input) releaseInput();
       pendingAudioRef.current = [];
+      pendingAudioBytesRef.current = 0;
       startedAtRef.current = 0;
       if (startedSessionId && !socketOpenedRef.current) {
         void fetch("/api/lecture-sessions", {
@@ -712,45 +929,65 @@ export function useLectureRecorder(options: RecorderOptions) {
           body: JSON.stringify({ sessionId: startedSessionId, durationMs: 0, segments: [] }),
         });
       }
-      options.setError(microphoneMessage(caught));
+      if (caught === STALE) return;
+      setConnectingPhase(null);
+      // 취소는 오류가 아니다: 원래 준비 화면으로, 빨간 오류 없이 한 줄만.
+      if (caught instanceof LectureInputError && caught.code === "cancelled") {
+        options.setNotice(inputMessage(caught));
+        setStatus("idle");
+        return;
+      }
+      options.setError(inputMessage(caught));
       setStatus("error");
     }
   }
 
-  async function pauseLecture() {
+  /**
+   * 사용자 입력 즉시 전송을 멈춘다. 서버 pause 응답을 기다리며 오디오를 더
+   * 보내지 않는다. 탭 공유는 살려 두고(브라우저 공유 표시가 남는다) 오디오
+   * track만 끈다 — 이어 듣기가 선택창 없이 되도록. 마이크는 기존처럼 놓는다.
+   * 공유 종료(capture-ended)면 원본까지 전부 정리한다.
+   */
+  async function pauseLecture(reason: Exclude<PauseReason, null> = "manual") {
     if (status !== "recording" || finishingRef.current) return;
     finishingRef.current = true;
+    const sessionId = activeSessionIdRef.current;
+    const input = inputRef.current;
     try {
-      const response = await fetch("/api/lecture-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ action: "pause", sessionId: activeSessionIdRef.current }),
-      });
-      const data = await response.json() as { recordedMs?: number; error?: string };
-      if (!response.ok) throw new Error(data.error);
       if (reconnectTimerRef.current !== null) window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
       stopSocketTimers();
-      // 종료와 같은 이유로, 멈춘 레코더의 꼬리 확정을 기다린 뒤에 비운다.
+      // 화면은 1초 안에 일시정지로 바뀐다(LIFE-03). 아래 꼬리 대기는 그 뒤에.
+      const localMs = currentElapsedMs();
+      elapsedBaseMsRef.current = localMs;
+      startedAtRef.current = 0;
+      streamOffsetMsRef.current = localMs;
+      setElapsedMs(localMs);
+      const keepShare = reason === "manual" && input?.source === "browser-tab" && !input.disposed;
+      if (keepShare) {
+        input.audioStream.getAudioTracks().forEach((track) => { track.enabled = false; });
+        stopMicMeter();
+      } else {
+        releaseInput();
+      }
+      setPauseReason(reason === "manual" && sourceRef.current === "browser-tab" && !keepShare ? "capture-ended" : reason);
+      setStatus("paused");
+      if (reason === "capture-ended" && sourceRef.current === "browser-tab") options.setError(captureEndedMessage);
+      // 멈춘 레코더의 꼬리 확정을 기다린 뒤에 비운다.
       if (recorderRef.current?.state === "recording") {
         recorderRef.current.stop();
         await new Promise((resolve) => setTimeout(resolve, 1_200));
       }
       flushUtterance();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      stopMicMeter();
       pendingAudioRef.current = [];
+      pendingAudioBytesRef.current = 0;
       socketRef.current?.close();
-      const recordedMs = data.recordedMs ?? currentElapsedMs();
-      elapsedBaseMsRef.current = recordedMs;
-      startedAtRef.current = 0;
-      streamOffsetMsRef.current = recordedMs;
-      setElapsedMs(recordedMs);
-      setStatus("paused");
-    } catch (caught) {
-      options.setError(caught instanceof Error && caught.message
-        ? caught.message
-        : isEnglish ? "Could not pause the lecture." : "강의를 일시정지하지 못했습니다.");
+      // 서버 pause. 실패하면 '저장 중'으로 두고 online/30초마다 재시도한다.
+      // 서버 상태를 모른 채 resume을 보내지 않는다.
+      if (sessionId && !(await submitPause(sessionId))) {
+        pendingPauseRef.current = sessionId;
+        options.setNotice(pauseSavingMessage);
+      }
     } finally {
       finishingRef.current = false;
     }
@@ -759,47 +996,89 @@ export function useLectureRecorder(options: RecorderOptions) {
   // 매 렌더마다 최신 클로저로 갱신 — 트랙 ended 콜백이 낡은 status를 읽지 않게.
   pauseRef.current = pauseLecture;
 
+  /**
+   * 탭의 원본 트랙이 살아 있으면 권한창 없이 재사용한다. 끝났으면(공유 중지,
+   * 새로고침 복원) 클릭의 동기 구간에서 새 선택창을 연다 — 자동 재허용은 없다.
+   * source는 세션에 고정: 탭 재개에서 getUserMedia는 호출되지 않는다.
+   */
   async function resumeLecture() {
     if (status !== "paused" || finishingRef.current) return;
+    if (pendingPauseRef.current) {
+      options.setNotice(pauseSavingMessage);
+      void submitPause(pendingPauseRef.current);
+      return;
+    }
     finishingRef.current = true;
+    const operationId = ++operationIdRef.current;
     options.setError("");
+    options.setNotice("");
+    const source = sourceRef.current;
+    const existing = inputRef.current;
+    const live = Boolean(existing && !existing.disposed
+      && existing.audioStream.getAudioTracks().some((track) => track.readyState === "live"));
+    setConnectingPhase(live ? "opening" : source === "browser-tab" ? "selecting" : null);
     setStatus("connecting");
-    let stream: MediaStream | null = null;
+    // 동기 구간: 권한창은 여기서 열린다.
+    const acquiring = live && existing ? Promise.resolve(existing) : acquireLectureInput(source, audioConstraints());
+    let input: LectureInput | null = null;
+    let installed = live;
     let resumed = false;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints() });
+      input = await acquiring;
+      if (operationIdRef.current !== operationId) {
+        if (!live) input.dispose();
+        throw STALE;
+      }
+      if (!live) {
+        releaseInput();
+        inputRef.current = input;
+        streamRef.current = input.audioStream;
+        watchInput(input);
+        installed = true;
+      }
+      setConnectingPhase("opening");
       const response = await fetch("/api/lecture-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+        signal: AbortSignal.timeout(START_DEADLINE_MS),
         body: JSON.stringify({ action: "resume", sessionId: activeSessionIdRef.current }),
       });
       const data = await response.json() as { recordedMs?: number; error?: string };
       if (!response.ok) throw new Error(data.error);
       resumed = true;
+      if (operationIdRef.current !== operationId) throw STALE;
+      // recorded_ms가 오프셋. 일시정지한 시간은 새 자막 시각에 들어가지 않는다.
       const recordedMs = data.recordedMs ?? elapsedBaseMsRef.current;
       elapsedBaseMsRef.current = recordedMs;
       streamOffsetMsRef.current = recordedMs;
       startedAtRef.current = Date.now();
-      streamRef.current = stream;
-      watchStreamTracks(stream);
+      const stream = input.audioStream;
+      stream.getAudioTracks().forEach((track) => { track.enabled = true; });
       startMicMeter(stream);
       pendingAudioRef.current = [];
+      pendingAudioBytesRef.current = 0;
+      pendingAudioOverflowRef.current = false;
       socketOpenedRef.current = false;
       reconnectAttemptRef.current = 0;
+      setPauseReason(null);
       setStatus("recording");
+      setConnectingPhase(null);
       await connectDeepgram(stream, true);
     } catch (caught) {
-      stream?.getTracks().forEach((track) => track.stop());
-      stopMicMeter();
       startedAtRef.current = 0;
-      if (resumed) {
-        await fetch("/api/lecture-sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({ action: "pause", sessionId: activeSessionIdRef.current }),
-        }).catch(() => {});
+      if (caught === STALE) {
+        if (resumed) void submitPause(activeSessionIdRef.current);
+        return;
       }
-      options.setError(microphoneMessage(caught));
+      // 새로 얻은 캡처가 실패했으면 놓는다. 살아 있던 탭 공유는 그대로 둔다.
+      if (!live) {
+        if (installed) releaseInput();
+        else input?.dispose();
+      }
+      if (resumed) await submitPause(activeSessionIdRef.current);
+      setConnectingPhase(null);
+      if (caught instanceof LectureInputError && caught.code === "cancelled") options.setNotice(inputMessage(caught));
+      else options.setError(inputMessage(caught));
       setStatus("paused");
     } finally {
       finishingRef.current = false;
@@ -809,6 +1088,8 @@ export function useLectureRecorder(options: RecorderOptions) {
   async function finishLecture() {
     if (finishingRef.current) return;
     finishingRef.current = true;
+    // 선택창이 열려 있었다면 늦은 승인은 stale로 버려진다.
+    operationIdRef.current += 1;
     if (reconnectTimerRef.current !== null) {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
@@ -819,6 +1100,8 @@ export function useLectureRecorder(options: RecorderOptions) {
     // 버튼을 누른 즉시 화면을 종료 상태로 바꾼다. 아래 1.2초 대기 동안
     // "기록 중"이 그대로면 눌리지 않은 줄 알고 다시 누른다.
     setStatus("ended");
+    setConnectingPhase(null);
+    setPauseReason(null);
     // 레코더를 먼저 멈춰 종료 신호를 보내고, 공급자가 맺음말을 확정할 시간을
     // 준다. flush를 먼저 하면 마지막 문장이 버퍼에 닿기 전에 창이 닫힌다.
     // ponytail: 고정 1.2초 대기. Deepgram 마지막 Results/Soniox finished를
@@ -829,10 +1112,11 @@ export function useLectureRecorder(options: RecorderOptions) {
     }
     flushUtterance();
     pendingAudioRef.current = [];
-    // 마이크는 여기서 놓는다. 재연결이 같은 스트림을 다시 쓰므로 레코더가 멈출
-    // 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    stopMicMeter();
+    pendingAudioBytesRef.current = 0;
+    // 입력은 여기서 놓는다(원본·오디오 둘 다). 재연결이 같은 스트림을 다시
+    // 쓰므로 레코더가 멈출 때마다 트랙을 끄면 두 번째 소켓이 무음을 듣는다.
+    releaseInput();
+    pendingPauseRef.current = null;
     const sessionId = activeSessionIdRef.current;
     if (sessionId) {
       const saved = await submitFinishSave(sessionId, durationMs, segmentsRef.current);
@@ -868,8 +1152,18 @@ export function useLectureRecorder(options: RecorderOptions) {
     void finishLecture();
   }
 
+  /** 세션 복원(열기)에서 저장된 source를 세션에 고정한다. 캡처는 열지 않는다. */
+  function restoreInputSource(source: LectureInputSource | undefined) {
+    const next = source ?? "microphone";
+    sourceRef.current = next;
+    setInputSource(next);
+    setPauseReason(next === "browser-tab" ? "capture-ended" : null);
+    setConnectingPhase(null);
+  }
+
   return {
     status, setStatus, elapsedMs, setElapsedMs, segments, setSegments, interim, showInterim,
+    connectingPhase, pauseReason, inputSource, restoreInputSource,
     meterRef, segmentsRef, segmentIdsRef, confirmedSegmentIdsRef, activeSessionIdRef,
     finishingRef, saveFailuresRef, elapsedBaseMsRef, startedAtRef, streamOffsetMsRef,
     currentElapsedMs, flushUtterance,

@@ -23,7 +23,7 @@ export default function PrivacyPage() {
               <tr><td>계정</td><td>이메일, 내부 계정 식별자, 가입·로그인 일시, Google 로그인 선택 시 이름·프로필 이미지</td><td>회원 식별, 로그인 유지, 계정 보호</td><td>회원가입·로그인</td></tr>
               <tr><td>강의 이용</td><td>강의실·수업 제목, 스크립트, 질문, 답변, 출처, 기록 시간</td><td>강의 기록 저장·열람, 강의 맥락을 반영한 답변 제공</td><td>강의 기록·질문</td></tr>
               <tr><td>강의 자료</td><td>이용자가 올린 강의 자료에서 추출한 텍스트·색인, PDF 원본</td><td>답변에 자료 내용과 출처 반영, 강의 노트에 자료 페이지 표시</td><td>자료 업로드</td></tr>
-              <tr><td>음성</td><td>마이크 음성 스트림</td><td>실시간 음성 인식</td><td>기록 중</td></tr>
+              <tr><td>음성</td><td>마이크 음성 스트림, 온라인 강의에서 이용자가 선택한 브라우저 탭의 오디오 스트림</td><td>실시간 음성 인식</td><td>기록 중</td></tr>
               <tr><td>개인 AI 연결</td><td>선택한 공급자·모델, 이용자가 입력한 API 키</td><td>이용자가 선택한 AI 공급자의 답변 제공</td><td>해당 기능 선택 시</td></tr>
               <tr><td>서비스 이용</td><td>IP 주소, 브라우저·기기 정보, 접속 일시, 쿠키, 오류·보안 로그</td><td>서비스 보안, 부정 이용 방지, 오류 대응</td><td>접속·이용 과정에서 자동 생성</td></tr>
               <tr><td>결제</td><td>상품, 금액, 결제·구독·환불 상태, 결제 사업자가 제공하는 고객·거래 식별자, 잔여 크레딧</td><td>결제, 구독, 크레딧과 환불 관리</td><td>체험·결제·환불 시</td></tr>
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
         <div>
           <p>강의실 이름, 수업 제목, 스크립트, 질문과 답변은 계정에 연결해 저장합니다. 같은 강의실의 이전 수업 중 질문과 관련된 내용을 답변에 참고할 수 있습니다.</p>
           <p>이용자가 올린 강의 자료는 추출한 텍스트·색인과 함께 PDF 원본을 비공개 저장소에 보관합니다. 강의 노트에서 자료의 해당 페이지를 이용자 본인이 확인할 수 있게 하기 위한 것이며, 원본은 본인에게만 발급되는 단기 서명 주소로만 열립니다. PDF가 아닌 자료는 원본을 보관하지 않습니다. 자료를 삭제하면 원본 파일과 추출 텍스트·색인도 함께 삭제합니다.</p>
-          <p>마이크 음성은 음성 인식 사업자에게 실시간으로 전송되며 Lecue는 음성 원본을 별도로 저장하지 않습니다.</p>
+          <p>마이크 음성과, 온라인 강의에서 이용자가 직접 선택한 브라우저 탭의 오디오는 음성 인식 사업자에게 실시간으로 전송되며 Lecue는 음성 원본을 별도로 저장하지 않습니다. 탭 공유 시 브라우저가 함께 넘기는 화면 영상은 브라우저 안에서만 수신되고 Lecue 서버나 외부에 전송·저장되지 않습니다. 선택한 탭의 제목·주소도 저장하지 않습니다.</p>
           <p>개인 AI API 키는 이용자가 저장을 선택한 경우에만 암호화해 보관합니다. 저장하지 않은 키는 현재 브라우저 탭에서만 사용합니다. 저장된 키 원문은 화면에 다시 표시하거나 로그에 기록하지 않으며 이용자는 언제든 교체하거나 삭제할 수 있습니다.</p>
         </div>
       </section>
@@ -76,8 +76,8 @@ export default function PrivacyPage() {
               <thead><tr><th>받는 사업자</th><th>목적·항목</th><th>국가·시점·기간</th></tr></thead>
               <tbody>
                 <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>계정 인증과 서비스 데이터 보관: 이메일, 계정 정보, 강의 기록, 저장을 선택한 암호화된 API 키</td><td>대한민국(AWS 서울 리전) / 가입·저장 시 / 삭제 또는 탈퇴 시까지</td></tr>
-                <tr><td><a href="https://soniox.com/privacy" target="_blank" rel="noreferrer">Soniox, Inc.</a></td><td>한국어 수업 실시간 음성 인식: 마이크 음성</td><td>미국 / 기록 중 / 사업자 정책에 따른 처리 기간</td></tr>
-                <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>영어 수업 실시간 음성 인식과 녹음 파일 변환: 마이크 음성, 업로드한 녹음</td><td>미국 / 기록·변환 중 / 사업자 정책에 따른 처리 기간</td></tr>
+                <tr><td><a href="https://soniox.com/privacy" target="_blank" rel="noreferrer">Soniox, Inc.</a></td><td>한국어 수업 실시간 음성 인식: 마이크 음성, 선택한 탭 오디오</td><td>미국 / 기록 중 / 사업자 정책에 따른 처리 기간</td></tr>
+                <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>영어 수업 실시간 음성 인식과 녹음 파일 변환: 마이크 음성, 선택한 탭 오디오, 업로드한 녹음</td><td>미국 / 기록·변환 중 / 사업자 정책에 따른 처리 기간</td></tr>
                 <tr><td><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI, L.L.C.</a></td><td>AI 답변, 필요한 웹 검색과 관련 강의 내용 확인: 스크립트, 질문, 관련 강의 기록</td><td>미국 등 사업자 처리 국가 / 질문 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">Anthropic, PBC</a></td><td>이용자가 선택한 AI 답변: 스크립트, 질문, 개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google LLC</a></td><td>Google 로그인 또는 이용자가 선택한 AI 답변: 계정 정보 또는 스크립트·질문·개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>

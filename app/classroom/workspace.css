@@ -299,3 +299,21 @@
   .workspace-dialog .note-body { padding: 0; }
   .note-contents { display: none; }
 }
+
+/* ── 온라인 강의: 두 시작 동작 ──────────────────────────────────────── */
+.start-choice { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.experience .start-choice .start-button { min-height: 44px; }
+.experience .start-online { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+.experience .start-online:hover { background: var(--soft-blue); }
+.experience .start-choice.preparation-start { display: flex; width: 100%; }
+.experience .start-choice.preparation-start .start-button { flex: 1 1 0; min-height: 48px; font-size: 14px; gap: 10px; }
+.start-choice.empty-start-button { margin-top: 10px; }
+.experience.is-preparing .topbar .start-choice.is-duplicate-of-center { display: none; }
+.experience .start-button:focus-visible, .experience .pause-button:focus-visible, .experience .stop-button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.experience .pause-button, .experience .stop-button { min-height: 44px; }
+/* 강의 탭과 나란히 둔 420~640px 창: 시작·일시정지·종료가 한 줄에 안 들어가면 줄바꿈. */
+@media (max-width: 640px) {
+  .experience .start-choice { width: 100%; }
+  .experience .start-choice .start-button { flex: 1 1 0; }
+  .experience .lecture-controls { max-width: none; }
+}

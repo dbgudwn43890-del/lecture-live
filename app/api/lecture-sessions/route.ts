@@ -12,6 +12,10 @@ export const runtime = "nodejs";
 /** One lecture's hard cap. Past this a "recording" row cannot still be live. */
 const MAX_LECTURE_MS = 10_800_000;
 
+const SESSION_COLUMNS = "id,classroom_id,title,status,started_at,ended_at,duration_seconds,recorded_ms,input_source";
+const INPUT_SOURCES = ["microphone", "browser-tab"] as const;
+type InputSource = (typeof INPUT_SOURCES)[number];
+
 type SegmentBody = TranscriptPart & { id?: unknown };
 type SegmentRow = { client_id: string; start_ms: number; end_ms: number; text: string };
 
@@ -161,7 +165,7 @@ export async function GET(request: Request) {
   // "segment" saves during recording are never capped like the PATCH
   // completion payload is) — it's just a safety ceiling against a runaway read.
   const [{ data: session, error: sessionError }, { rows: segments, error: segmentError }, { data: questions, error: questionError }] = await Promise.all([
-    current.supabase.from("lecture_sessions").select("id,classroom_id,title,status,started_at,ended_at,duration_seconds,recorded_ms").eq("id", sessionId).maybeSingle(),
+    current.supabase.from("lecture_sessions").select(SESSION_COLUMNS).eq("id", sessionId).maybeSingle(),
     fetchAllSegments(current.supabase, sessionId, 50_000),
     current.supabase.from("lecture_questions").select("id,question,answer,question_at_ms,provider,model,external_sources,lecture_sources,material_sources,created_at").eq("session_id", sessionId).order("created_at"),
   ]);
@@ -178,7 +182,7 @@ export async function POST(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
 
-  let body: { action?: unknown; classroomId?: unknown; sessionId?: unknown; title?: unknown; segment?: unknown; latencyMs?: unknown };
+  let body: { action?: unknown; classroomId?: unknown; sessionId?: unknown; title?: unknown; segment?: unknown; latencyMs?: unknown; inputSource?: unknown; startRequestId?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
@@ -189,6 +193,18 @@ export async function POST(request: Request) {
     const classroomId = validId(body.classroomId) ? body.classroomId : null;
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title || title.length > 80) return NextResponse.json({ error: current.isEnglish ? "Check the lecture title." : "수업 제목을 확인해 주세요." }, { status: 400 });
+    // Missing = an older client = microphone. Anything else that isn't a known
+    // source is a 400, never silently coerced. A draft has no source yet; it is
+    // fixed when the draft turns into a start, and pause/resume never re-read it
+    // from the client.
+    if (body.inputSource !== undefined && !INPUT_SOURCES.includes(body.inputSource as InputSource)) {
+      return NextResponse.json({ error: current.isEnglish ? "Check the lecture input." : "강의 입력 방식을 확인해 주세요." }, { status: 400 });
+    }
+    const inputSource: InputSource = (body.inputSource as InputSource | undefined) ?? "microphone";
+    if (body.startRequestId !== undefined && !validId(body.startRequestId)) {
+      return NextResponse.json({ error: current.isEnglish ? "Invalid request." : "요청 형식이 올바르지 않습니다." }, { status: 400 });
+    }
+    const startRequestId = body.action === "start" && validId(body.startRequestId) ? body.startRequestId : null;
     if (body.classroomId !== null && body.classroomId !== undefined && body.classroomId !== "" && !classroomId) {
       return NextResponse.json({ error: current.isEnglish ? "Check the classroom." : "강의실을 확인해 주세요." }, { status: 400 });
     }
@@ -207,17 +223,36 @@ export async function POST(request: Request) {
       console.error("Lecture start has no admin client");
       return NextResponse.json({ error: current.isEnglish ? "Lectures are not configured yet." : "수업 기록이 아직 설정되지 않았습니다." }, { status: 503 });
     }
+    // A start whose response was lost: the client retries with the same
+    // startRequestId, and the row it created the first time is returned as-is
+    // instead of a second billed session. Drafts are re-used by id, so the
+    // draft path is already idempotent (`eq status=draft` makes a replay a no-op
+    // update that falls through to the lookup below).
+    if (startRequestId) {
+      const { data: existing } = await current.supabase.from("lecture_sessions").select(SESSION_COLUMNS)
+        .eq("user_id", current.userId).eq("start_request_id", startRequestId).maybeSingle();
+      if (existing) return NextResponse.json({ session: existing }, { status: 201 });
+    }
     const query = draftId && admin
-      ? admin.from("lecture_sessions").update({ status: "recording", started_at: now, recording_started_at: now, recorded_ms: 0 }).eq("id", draftId).eq("user_id", current.userId).eq("status", "draft")
+      ? admin.from("lecture_sessions").update({ status: "recording", started_at: now, recording_started_at: now, recorded_ms: 0, input_source: inputSource, start_request_id: startRequestId }).eq("id", draftId).eq("user_id", current.userId).eq("status", "draft")
       : current.supabase.from("lecture_sessions").insert({
           classroom_id: classroomId,
           user_id: current.userId,
           title,
           status: body.action === "draft" ? "draft" : "recording",
           recording_started_at: body.action === "draft" ? null : now,
+          input_source: inputSource,
+          start_request_id: startRequestId,
         });
-    const { data, error } = await query.select("id,classroom_id,title,status,started_at,ended_at,duration_seconds,recorded_ms").single();
+    const { data, error } = await query.select(SESSION_COLUMNS).single();
     if (error) {
+      // 23505 = the unique (user_id, start_request_id) index: a retry raced the
+      // original insert. Hand back the row that won.
+      if (startRequestId && error.code === "23505") {
+        const { data: raced } = await current.supabase.from("lecture_sessions").select(SESSION_COLUMNS)
+          .eq("user_id", current.userId).eq("start_request_id", startRequestId).maybeSingle();
+        if (raced) return NextResponse.json({ session: raced }, { status: 201 });
+      }
       console.error("Lecture start save failed", error.code);
       return NextResponse.json({ error: current.isEnglish ? "Could not create the lecture record." : "수업 기록을 만들지 못했습니다." }, { status: 500 });
     }

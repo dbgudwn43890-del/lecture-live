@@ -507,3 +507,84 @@ test("segment save meters from the session id alone, never from anything the cli
   assert.deepEqual(rpc?.payload, { p_session_id: sessionId });
   assert.equal(calls.filter((call) => call.table === "transcript_segments" && call.op === "upsert").length, 1);
 });
+
+test("start stores the input source and defaults an older client to microphone", async () => {
+  const session = {
+    id: randomUUID(), classroom_id: null, title: "온라인 수업", status: "recording",
+    started_at: "2026-09-06T00:00:00.000Z", ended_at: null, duration_seconds: 0, recorded_ms: 0, input_source: "browser-tab",
+  };
+  outcomes["lecture_sessions.insert"] = { data: session, error: null };
+
+  const online = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: session.title, inputSource: "browser-tab" }),
+  }));
+  assert.equal(online?.status, 201);
+  assert.equal((calls.find((call) => call.table === "lecture_sessions" && call.op === "insert")?.payload as { input_source: string }).input_source, "browser-tab");
+  assert.equal(((await online?.json()) as { session: { input_source: string } }).session.input_source, "browser-tab");
+
+  calls = [];
+  const legacy = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: session.title }),
+  }));
+  assert.equal(legacy?.status, 201);
+  assert.equal((calls.find((call) => call.table === "lecture_sessions" && call.op === "insert")?.payload as { input_source: string }).input_source, "microphone");
+});
+
+test("an unknown input source is a 400 and creates nothing", async () => {
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: "수업", inputSource: "system-audio" }),
+  }));
+  assert.equal(response?.status, 400);
+  assert.equal(calls.filter((call) => call.table === "lecture_sessions").length, 0);
+});
+
+test("a retried start with the same request id returns the existing session instead of a second one", async () => {
+  const startRequestId = randomUUID();
+  const session = {
+    id: randomUUID(), classroom_id: null, title: "응답 유실", status: "recording",
+    started_at: "2026-09-06T00:00:00.000Z", ended_at: null, duration_seconds: 0, recorded_ms: 0, input_source: "browser-tab",
+  };
+  // First attempt: nothing exists yet, insert lands.
+  outcomes["lecture_sessions.select"] = { data: null, error: null };
+  outcomes["lecture_sessions.insert"] = { data: session, error: null };
+  const first = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: session.title, inputSource: "browser-tab", startRequestId }),
+  }));
+  assert.equal(first?.status, 201);
+  assert.equal((calls.find((call) => call.op === "insert")?.payload as { start_request_id: string }).start_request_id, startRequestId);
+
+  // Retry after the response was lost: the lookup finds the row, no insert.
+  calls = [];
+  outcomes["lecture_sessions.select"] = { data: session, error: null };
+  const retry = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: session.title, inputSource: "browser-tab", startRequestId }),
+  }));
+  assert.equal(retry?.status, 201);
+  assert.equal(((await retry?.json()) as { session: { id: string } }).session.id, session.id);
+  assert.equal(calls.filter((call) => call.op === "insert").length, 0);
+
+  // Two retries racing: the insert hits the unique index and the winner's row comes back.
+  calls = [];
+  let selects = 0;
+  outcomes["lecture_sessions.select"] = () => ({ data: selects++ === 0 ? null : session, error: null });
+  outcomes["lecture_sessions.insert"] = { data: null, error: { code: "23505" } };
+  const raced = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: session.title, startRequestId }),
+  }));
+  assert.equal(raced?.status, 201);
+  assert.equal(((await raced?.json()) as { session: { id: string } }).session.id, session.id);
+});
+
+test("a start request id that is not a uuid is rejected", async () => {
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
+    method: "POST",
+    body: JSON.stringify({ action: "start", classroomId: null, title: "수업", startRequestId: "not-a-uuid" }),
+  }));
+  assert.equal(response?.status, 400);
+});

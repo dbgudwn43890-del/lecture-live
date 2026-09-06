@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowRight, ArrowUp, BookOpen, ChevronLeft, ChevronRight, CreditCard, LogOut, Mic, MoreHorizontal, MoreVertical, Plus, Search, Settings2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, ChevronLeft, ChevronRight, CreditCard, LogOut, Mic, MonitorPlay, MoreHorizontal, MoreVertical, Plus, Search, Settings2, Upload } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import WorkspaceDialog from "./workspace-dialog";
@@ -271,10 +271,43 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   });
   const {
     status, setStatus, elapsedMs, setElapsedMs, segments, setSegments, interim, showInterim,
+    connectingPhase, pauseReason, inputSource, restoreInputSource,
     meterRef, segmentsRef, segmentIdsRef, confirmedSegmentIdsRef, activeSessionIdRef,
     finishingRef, saveFailuresRef, elapsedBaseMsRef, startedAtRef, streamOffsetMsRef,
     flushUtterance, startLecture, pauseLecture, resumeLecture, finishLecture, stopLecture,
   } = recorder;
+  const onlineLecture = inputSource === "browser-tab";
+  // 온라인 시작만 배포 설정으로 끌 수 있다. 기존 세션 열기·현장 강의는 막지 않는다.
+  const onlineLectureEnabled = process.env.NEXT_PUBLIC_ONLINE_LECTURE !== "off";
+  // 온라인 강의는 준비/기록 상태 문구가 다르다. 처음부터 "소리가 들린다"고 말하지 않는다.
+  const statusLabel = onlineLecture
+    ? status === "connecting"
+      ? connectingPhase === "selecting"
+        ? (isEnglish ? "Choose your lecture tab" : "강의 탭을 선택해 주세요")
+        : (isEnglish ? "Connecting your lecture audio…" : "강의 소리를 연결하고 있어요…")
+      : status === "recording" ? (isEnglish ? "Online lecture · Recording" : "온라인 강의 · 기록 중")
+      : statusCopy[status]
+    : statusCopy[status];
+  const resumeLabel = pauseReason === "capture-ended" && onlineLecture
+    ? (isEnglish ? "Choose lecture tab" : "강의 다시 선택")
+    : onlineLecture ? (isEnglish ? "Resume" : "이어 듣기") : (isEnglish ? "Resume" : "이어하기");
+
+  /** 두 시작 동작. 사용 방식 선택 뒤 시작을 다시 누르는 구성은 없다 — 클릭이 곧 시작이다. */
+  function renderStartButtons(disabled: boolean, className = "", icons = false) {
+    return (
+      <div className={`start-choice${className ? ` ${className}` : ""}`}>
+        <button type="button" className="start-button" onClick={() => void startLecture("microphone")} disabled={disabled}>
+          {icons && <Mic size={17} aria-hidden="true" />}{isEnglish ? "In-person lecture" : "현장 강의 듣기"}
+        </button>
+        {onlineLectureEnabled && (
+          <button type="button" className="start-button start-online" onClick={() => void startLecture("browser-tab")} disabled={disabled}>
+            {icons && <MonitorPlay size={17} aria-hidden="true" />}{isEnglish ? "Online lecture" : "온라인 강의 듣기"}
+          </button>
+        )}
+      </div>
+    );
+  }
+  const onlineHint = isEnglish ? "Choose your lecture tab to start." : "강의가 재생되는 탭을 선택하면 바로 시작해요.";
 
   const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
   const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
@@ -1032,6 +1065,9 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       startedAtRef.current = 0;
       streamOffsetMsRef.current = recordedMs;
       setElapsedMs(recordedMs);
+      // 새로고침은 브라우저 공유를 닫는다. 자동으로 다시 캡처하지 않고, 이어 듣기
+      // 클릭에서 선택창을 연다(LIFE-05).
+      restoreInputSource(data.session.input_source);
       setStatus(nextStatus);
       setMobilePane((data.questions?.length ?? 0) > 0 ? "chat" : "transcript");
       setMobileSidebarOpen(false);
@@ -1918,7 +1954,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 <i /><i /><i /><i /><i />
               </span>
             )}
-            <span>{statusCopy[status]}</span>
+            <span>{statusLabel}</span>
             <time>{formatTime(elapsedMs)}</time>
           </div>
 
@@ -1927,11 +1963,9 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               <button
                 className="pause-button"
                 type="button"
-                onClick={status === "paused" ? resumeLecture : pauseLecture}
+                onClick={() => void (status === "paused" ? resumeLecture() : pauseLecture())}
                 disabled={status === "connecting"}
-              >{status === "paused"
-                  ? isEnglish ? "Resume" : "이어하기"
-                  : isEnglish ? "Pause" : "일시정지"}</button>
+              >{status === "paused" ? resumeLabel : isEnglish ? "Pause" : "일시정지"}</button>
               <button className="stop-button" type="button" onClick={stopLecture} disabled={status === "connecting"}>
                 {isEnglish ? "End lecture" : "강의 종료"}
               </button>
@@ -1963,16 +1997,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               )}
               {/* 빈 화면 한가운데 시작 버튼이 떠 있는 동안엔 상단 중복을 데스크톱에서만
                   숨긴다(CSS). 모바일 채팅 탭에선 가운데 버튼이 안 보여 상단이 유일한 시작점. */}
-              {status !== "ended" && (
-                <button
-                  className={`start-button${status === "idle" && canStart && segments.length === 0 && !interim ? " is-duplicate-of-center" : ""}`}
-                  type="button"
-                  onClick={startLecture}
-                  disabled={!canStart}
-                >
-                  {isEnglish ? "Start lecture" : "강의 시작"}
-                </button>
-              )}
+              {status !== "ended" && renderStartButtons(!canStart, status === "idle" && canStart && segments.length === 0 && !interim ? "is-duplicate-of-center" : "")}
             </div>
           )}
         </header>
@@ -2144,8 +2169,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               </div>
               <div className="preparation-mic"><span><strong>{isEnglish ? "Microphone" : "마이크"}</strong><small>{isEnglish ? "Use your laptop near the lecturer. Permission is requested when you start." : "노트북을 강사 가까이 두세요. 시작할 때 마이크 사용을 요청해요."}</small></span><button type="button" onClick={() => setSettingsOpen(true)}>{isEnglish ? "Choose mic" : "장치 선택"}</button></div>
               <label className="preparation-material"><input type="file" accept=".pdf,.docx,.pptx,.txt,.csv,.tsv,.xlsx,.xls" disabled={materialPending} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadMaterial(file); }} /><Upload size={18} aria-hidden="true" /><span><strong>{materialPending ? (isEnglish ? "Reading material…" : "자료를 읽고 있어요…") : materials.length ? (isEnglish ? `${materials.length} materials ready · add more` : `자료 ${materials.length}개 준비됨 · 더 추가하기`) : (isEnglish ? "Add lecture material" : "강의 자료 미리 올리기")}</strong><small>{isEnglish ? "Optional · helps with terminology and answers" : "선택 사항 · 전문용어 인식과 질문에 도움이 돼요"}</small></span></label>
-              <button type="button" className="start-button preparation-start" onClick={startLecture} disabled={!canStart || materialPending}><Mic size={17} aria-hidden="true" />{isEnglish ? "Start lecture" : "강의 시작"}<ArrowRight size={18} aria-hidden="true" /></button>
-              <p className="preparation-permission">{isEnglish ? "Start after confirming permission to record this lecture." : "현장 녹음 허용 여부를 확인한 뒤 시작하세요."}</p>
+              {renderStartButtons(!canStart || materialPending, "preparation-start", true)}
+              <p className="preparation-permission">{onlineLectureEnabled ? onlineHint : (isEnglish ? "Start after confirming permission to record this lecture." : "현장 녹음 허용 여부를 확인한 뒤 시작하세요.")}</p>
             </div>
           </section>
         )}
@@ -2426,16 +2451,16 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                         : "노트북을 강사 가까이 두면 인식률이 좋아져요."}</span>
                     )}
                     {/* 이 화면의 유일한 할 일이 우상단 구석에만 있으면 멀다. */}
-                    {canStart && (
-                      <button type="button" className="start-button empty-start-button" onClick={startLecture}>
-                        {isEnglish ? "Start lecture" : "강의 시작"}
-                      </button>
-                    )}
+                    {canStart && renderStartButtons(false, "empty-start-button")}
                   </>
                 ) : (
                   <p>{status === "connecting"
-                    ? isEnglish ? "Connecting to the microphone" : "마이크와 연결하는 중입니다"
+                    ? onlineLecture
+                      ? (isEnglish ? "Connecting your lecture audio…" : "강의 소리를 연결하고 있어요…")
+                      : (isEnglish ? "Connecting to the microphone" : "마이크와 연결하는 중입니다")
                     : status === "ended" ? (isEnglish ? "No speech was saved for this lecture." : "이 수업에는 저장된 강의 내용이 없습니다.")
+                    : status === "paused" && onlineLecture && pauseReason === "manual"
+                      ? (isEnglish ? "Recording is paused. The tab stays connected so you can resume." : "기록은 멈췄어요. 이어 듣기를 위해 탭 연결을 유지해요.")
                     : isEnglish ? "Speech will appear here once you start the lecture" : "강의를 시작하면 말이 이곳에 쌓입니다"}</p>
                 )}
               </div>
