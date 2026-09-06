@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildLectureContext,
   completedWindows,
+  pendingSummaryWindows,
   pickWindows,
   segmentsInWindow,
   SUMMARY_PROMPT,
@@ -21,6 +22,13 @@ test("요약 프롬프트가 핵심어 보존과 STT 오류 정정 지시를 담
 });
 
 const line = (startMs: number, text: string) => ({ startMs, endMs: startMs + 4_000, text });
+
+test("quiet early windows do not block later summaries; existing and ongoing windows are skipped", () => {
+  const segments = Array.from({ length: 8 }, (_, i) => line(i * SUMMARY_WINDOW_MS, i < 3 ? "짧은 인사" : "강의".repeat(250)));
+  assert.deepEqual(pendingSummaryWindows(segments, []).map(row => row.windowIndex), [3, 4, 5]);
+  assert.deepEqual(pendingSummaryWindows(segments, [3, 4, 5]).map(row => row.windowIndex), [6]);
+  assert.deepEqual(pendingSummaryWindows([], []), []);
+});
 
 test("only windows that have finished are queued for summarising", () => {
   // 25분 진행: 0번과 1번 창은 끝났고 2번은 진행 중이다.

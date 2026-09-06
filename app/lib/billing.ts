@@ -52,6 +52,7 @@ export function verifyPaddleSignature(
     "hex",
   );
   return signatures.some((signature) => {
+    if (!/^[a-f0-9]{64}$/i.test(signature)) return false;
     const actual = Buffer.from(signature, "hex");
     return actual.length === expected.length && timingSafeEqual(actual, expected);
   });
@@ -76,6 +77,11 @@ export function paddleApiBase() {
     : "https://api.paddle.com";
 }
 
+export class PaddleApiError extends Error {
+  status: number;
+  constructor(status: number) { super("Paddle API request failed"); this.status = status; }
+}
+
 export async function paddleRequest<T>(path: string, init: RequestInit = {}) {
   const apiKey = process.env.PADDLE_API_KEY;
   if (!apiKey) throw new Error("PADDLE_API_KEY is not configured");
@@ -93,7 +99,7 @@ export async function paddleRequest<T>(path: string, init: RequestInit = {}) {
   const payload = await response.json().catch(() => null) as { data?: T; meta?: { request_id?: string }; error?: { code?: string } } | null;
   if (!response.ok || !payload?.data) {
     console.error("Paddle API request failed", response.status, payload?.error?.code ?? "unknown", payload?.meta?.request_id ?? "");
-    throw new Error("Paddle API request failed");
+    throw new PaddleApiError(response.status);
   }
   return payload.data;
 }

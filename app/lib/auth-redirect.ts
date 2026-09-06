@@ -26,7 +26,7 @@ export function getSafeAuthNext(value: string | null, fallback = "/classroom") {
 
 // The pages that exist in both languages. /en/<path> is the English twin of
 // <path>; everything else (the API, /auth, /stt-lab) has one form only.
-const LOCALIZABLE_PATHS = ["/", "/login", "/classroom", "/billing", "/privacy", "/terms"];
+const LOCALIZABLE_PATHS = ["/", "/login", "/classroom", "/billing", "/privacy", "/terms", "/refund-policy"];
 
 /**
  * Where a request for `path` belongs once the visitor's language is known, or

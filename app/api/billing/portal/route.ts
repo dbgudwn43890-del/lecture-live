@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthenticatedUserId } from "../../../lib/auth";
 import { paddleRequest } from "../../../lib/billing";
+import { sameOrigin } from "../../../lib/billing-config";
 import { checkSharedRateLimit } from "../../../lib/rate-limit";
 import { createAdminClient } from "../../../lib/supabase/admin";
 
@@ -10,6 +11,7 @@ export const runtime = "nodejs";
 type PortalSession = { urls: { general: { overview: string } } };
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
   const isEnglish = request.headers.get("x-site-locale") === "en";
   const userId = await getAuthenticatedUserId();
   if (!userId) return NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 });
@@ -18,7 +20,8 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ error: isEnglish ? "Billing storage is not configured." : "결제 저장 기능이 설정되지 않았습니다." }, { status: 503 });
-  const { data: account } = await admin.from("billing_accounts").select("paddle_customer_id").eq("user_id", userId).maybeSingle();
+  const { data: account, error } = await admin.from("billing_accounts").select("paddle_customer_id").eq("user_id", userId).maybeSingle();
+  if (error) return NextResponse.json({ error: isEnglish ? "Could not load billing. Try again." : "결제 정보를 불러오지 못했습니다. 다시 시도해 주세요." }, { status: 503 });
   if (!account?.paddle_customer_id) {
     return NextResponse.json({ error: isEnglish ? "No payment history was found." : "결제 내역이 없습니다." }, { status: 404 });
   }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import LegalPage from "../../legal-page";
 import styles from "../../legal.module.css";
+import { PLANS, STARTER_CREDITS, STARTER_DAYS } from "../../lib/plans";
 
 export const metadata: Metadata = {
   title: "Terms of Service | Lecue",
@@ -27,24 +28,23 @@ export default function EnglishTermsPage() {
 
       <section><h2>6. Plans and credits</h2><div>
         <div className={styles.tableWrap}><table><thead><tr><th>Plan</th><th>Term</th><th>Credits</th><th>Billing</th></tr></thead><tbody>
-          <tr><td>Free trial</td><td>7 days</td><td>180 · multiple lectures · once per account</td><td>Converts to Monthly after trial</td></tr>
-          <tr><td>Monthly</td><td>1 month</td><td>4,200 each billing period</td><td>Renews monthly until cancelled</td></tr>
-          <tr><td>4-month pass</td><td>4 months</td><td>16,800</td><td>One-time purchase; no renewal</td></tr>
-          <tr><td>Semester</td><td>6 months</td><td>25,200</td><td>One-time purchase; no renewal</td></tr>
+          <tr><td>Free trial</td><td>{STARTER_DAYS} days</td><td>{STARTER_CREDITS} credits · once per account</td><td>No card or automatic payment</td></tr>
+          <tr><td>Monthly</td><td>1 month</td><td>{PLANS.monthly.credits.toLocaleString()} each billing period</td><td>Renews monthly until cancelled</td></tr>
+          <tr><td>Semester</td><td>{PLANS.semester.months} months</td><td>{PLANS.semester.credits.toLocaleString()}</td><td>One-time purchase; no renewal</td></tr>
         </tbody></table></div>
         <ul>
           <li>Checkout shows the actual price, tax, promotion, first charge date, and renewal amount.</li>
-          <li>The trial ends after 7 days or when all 180 credits are used. Credits may be split across multiple lectures during the trial.</li>
+          <li>The trial ends after {STARTER_DAYS} days or when all {STARTER_CREDITS} credits are used. It does not convert to a paid plan automatically. Previously granted credits and existing purchases keep their original entitlement and expiry.</li>
           <li>One credit is charged for each started recording minute. A partial minute costs one credit, and the same minute in the same lecture is not charged twice.</li>
           <li>Each lecture may record for up to 3 hours. A new lecture may be started while credits remain.</li>
-          <li>Monthly credits do not roll over. Credits from the 4-month and Semester passes expire when their respective terms end.</li>
+          <li>Monthly credits do not roll over. Semester credits expire four months after purchase.</li>
           <li>Questions, AI answers, and necessary web search use no separate credit while recording.</li>
           <li>A personal AI connection follows the same Lecue credit rule. The external provider may charge the member separately.</li>
           <li>Recording stops when credits are exhausted, but existing records remain available.</li>
         </ul>
       </div></section>
 
-      <section><h2>7. Payment and renewal</h2><div><ol><li>Paddle handles sale, payment, tax, recurring billing, and refunds. Paddle's buyer terms and privacy notice also apply at checkout.</li><li>Monthly and post-trial Monthly charges occur at the amount and date shown at checkout.</li><li>Members must review the product, amount, renewal cycle, and cancellation terms before purchase.</li><li>A subscription may be cancelled at any time through billing management. Cancellation stops the next charge; an already-paid period does not end immediately unless a refund is approved.</li></ol></div></section>
+      <section><h2>7. Payment and renewal</h2><div><ol><li>Paddle handles sale, payment, tax, recurring billing, and refunds. Paddle's buyer terms and privacy notice also apply at checkout.</li><li>Monthly renews at the amount and date shown at checkout. The card-free trial and Semester do not renew automatically.</li><li>Members must review the product, amount, renewal cycle, and cancellation terms before purchase.</li><li>A subscription may be cancelled at any time through billing management. Cancellation stops the next charge; an already-paid period does not end immediately unless a refund is approved.</li></ol></div></section>
 
       <section><h2>8. Cancellation and refunds</h2><div><ol><li>A payment may be fully refunded within 7 days if none of that paid period's credits have been used.</li><li>After partial use, a refund may deduct the service and credits already supplied to the extent allowed by applicable law.</li><li>If our fault prevents delivery or the Service is materially different from its description, we provide the remedy required by law.</li><li>Mandatory consumer rights in a member's country override any less favorable term here.</li><li>Refund requests go to our support contact. An approved refund is posted according to Paddle and the payment method's processing time.</li></ol></div></section>
 

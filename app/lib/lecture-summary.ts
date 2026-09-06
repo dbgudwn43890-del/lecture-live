@@ -44,6 +44,15 @@ export function segmentsInWindow(segments: SummarySegment[], windowIndex: number
   return segments.filter((segment) => segment.startMs >= start && segment.startMs < end);
 }
 
+/** Filter quiet windows before the batch limit so later lectures cannot starve. */
+export function pendingSummaryWindows(segments: SummarySegment[], existing: Iterable<number>, limit = 3) {
+  if (!segments.length) return [];
+  return completedWindows(segments.at(-1)!.endMs, existing)
+    .map(windowIndex => ({ windowIndex, sourceText: segmentsInWindow(segments, windowIndex).map(segment => segment.text).join("\n") }))
+    .filter(window => window.sourceText.length >= 400)
+    .slice(0, limit);
+}
+
 export const SUMMARY_PROMPT = [
   "대학 강의 스크립트 한 구간이다. 나중에 다른 모델이 읽고 질문에 답하도록",
   "압축하라. 산문 아니라 색인이다.",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import LegalPage from "../legal-page";
 import styles from "../legal.module.css";
+import { PLANS, STARTER_CREDITS, STARTER_DAYS } from "../lib/plans";
 
 export const metadata: Metadata = {
   title: "이용약관 | Lecue",
@@ -67,18 +68,17 @@ export default function TermsPage() {
           <div className={styles.tableWrap}><table>
             <thead><tr><th>상품</th><th>이용 기간</th><th>포함 크레딧</th><th>결제 방식</th></tr></thead>
             <tbody>
-              <tr><td>무료 체험</td><td>7일</td><td>180크레딧 · 여러 수업 · 계정당 한 번</td><td>체험 종료 후 월간 구독 전환</td></tr>
-              <tr><td>월간 구독</td><td>1개월</td><td>매 결제 주기 4,200크레딧</td><td>해지 전까지 매월 자동 갱신</td></tr>
-              <tr><td>4개월권</td><td>4개월</td><td>16,800크레딧</td><td>한 번 결제, 자동 갱신 없음</td></tr>
-              <tr><td>한 학기권</td><td>6개월</td><td>25,200크레딧</td><td>한 번 결제, 자동 갱신 없음</td></tr>
+              <tr><td>무료 체험</td><td>{STARTER_DAYS}일</td><td>{STARTER_CREDITS} credits · 계정당 한 번</td><td>카드 등록·자동 결제 없음</td></tr>
+              <tr><td>Monthly</td><td>1개월</td><td>매 결제 주기 {PLANS.monthly.credits.toLocaleString()} credits</td><td>해지 전까지 매월 자동 갱신</td></tr>
+              <tr><td>Semester</td><td>{PLANS.semester.months}개월</td><td>{PLANS.semester.credits.toLocaleString()} credits</td><td>한 번 결제, 자동 갱신 없음</td></tr>
             </tbody>
           </table></div>
           <ul>
             <li>실제 가격, 세금, 프로모션, 첫 결제일과 갱신 금액은 결제 화면에 표시합니다.</li>
-            <li>무료 체험은 시작 후 7일이 지나거나 180크레딧을 모두 사용하면 끝납니다. 체험 기간 안에는 여러 수업에 나눠 사용할 수 있습니다.</li>
+            <li>무료 체험은 시작 후 {STARTER_DAYS}일이 지나거나 {STARTER_CREDITS} credits를 모두 사용하면 끝납니다. 유료 플랜을 직접 선택하지 않으면 결제되지 않습니다. 기존에 지급된 credits와 기존 구매분에는 원래 지급 조건과 만료일이 적용됩니다.</li>
             <li>강의 기록을 시작한 매 1분마다 1크레딧을 사용합니다. 1분 미만 구간도 1크레딧이며 같은 수업의 같은 분에 중복 차감하지 않습니다.</li>
             <li>수업 1회는 최대 3시간이며 잔여 크레딧이 있으면 새 수업을 시작할 수 있습니다.</li>
-            <li>월간 크레딧은 다음 결제 주기로 이월되지 않고, 4개월권과 한 학기권 크레딧은 각 이용 기간이 끝나면 소멸합니다.</li>
+            <li>Monthly credits는 다음 결제 주기로 이월되지 않고, Semester credits는 결제일부터 4개월 후 만료됩니다.</li>
             <li>질문, AI 답변과 필요한 웹 검색은 강의 기록 중 별도 크레딧을 사용하지 않습니다.</li>
             <li>개인 AI를 사용해도 Lecue 크레딧 기준은 같으며 외부 공급자 이용료는 회원이 별도로 부담합니다.</li>
             <li>크레딧을 모두 사용하면 갱신 또는 새 상품 구매 전까지 기록이 중단되지만 기존 기록은 열람할 수 있습니다.</li>
@@ -90,7 +90,7 @@ export default function TermsPage() {
         <h2>제7조 결제와 자동 갱신</h2>
         <div><ol>
           <li>결제는 Paddle이 판매·결제·세금·정기결제와 환불을 담당하는 방식으로 처리합니다. 결제 시 Paddle의 구매자 약관과 개인정보처리방침이 함께 적용됩니다.</li>
-          <li>월간 구독과 무료 체험 후 전환되는 월간 구독은 결제 화면에 표시된 금액과 날짜에 자동 결제됩니다.</li>
+          <li>Monthly는 결제 화면에 표시된 금액과 날짜에 자동 갱신됩니다. 카드 없는 무료 체험과 Semester는 자동 갱신되지 않습니다.</li>
           <li>회원은 결제 전에 상품, 금액, 갱신 주기와 해지 조건을 확인해야 합니다.</li>
           <li>구독 관리 화면에서 언제든 해지할 수 있으며 해지하면 다음 결제가 중단됩니다. 이미 결제한 이용 기간은 환불 승인 없이 즉시 종료되지 않습니다.</li>
         </ol></div>

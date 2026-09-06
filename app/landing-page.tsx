@@ -22,7 +22,7 @@ export default function LandingPage({ locale, isAuthenticated = false, profile, 
 <a className="skip-link" href="#main">{t("본문으로 바로가기")}</a>
 <header className="site-header"><div className="header-inner">
 <a className="wordmark" href="#home" aria-label={t("Lecue 홈으로")}>{"Lecue"}<span aria-hidden="true">{"."}</span></a>
-<nav aria-label={t("주요 메뉴")}><a href="#experience" data-open-demo>{t("직접 체험")}</a><a href="#how">{t("사용 방법")}</a><a href="#faq">{t("궁금한 점")}</a></nav>
+<nav aria-label={t("주요 메뉴")}><a href="#experience" data-open-demo>{t("직접 체험")}</a><a href="#how">{t("사용 방법")}</a><Link href={`${base}/billing`}>{locale === "en" ? "Plans" : "플랜"}</Link><a href="#faq">{t("궁금한 점")}</a></nav>
 <div className="header-actions">
       <a className="language-link" href={`${base || "/"}?lang=${locale === "ko" ? "en" : "ko"}`} aria-label={locale === "ko" ? "Switch to English" : "한국어로 변경"}>{locale === "ko" ? "EN" : "한국어"}</a>
       {isAuthenticated ? <><ProfileMenu locale={locale} basePath={base} classroomPath={classroomPath} profile={profile ?? null} planLabel={getPlanLabel(creditStatus?.planCode, locale)} credits={creditStatus?.credits ?? null} /><Link className="button button-small" href={classroomPath}>{t("내 강의실")}</Link></> : <><Link className="login-link" href={`${base}/login`}>{t("로그인")}</Link><Link className="button button-small" href={startHref}>{t("무료로 시작")}</Link></>}
@@ -94,7 +94,7 @@ export default function LandingPage({ locale, isAuthenticated = false, profile, 
 <section className="page-width faq-section" id="faq" aria-labelledby="faq-title">
 <div><p className="eyebrow">{t("시작하기 전에")}</p><h2 id="faq-title">{t("궁금한 점이")}<br />{" "}{t("남았나요?")}</h2><a className="support-link" href="mailto:support@lecue.app">{"support@lecue.app"}{" "}<span aria-hidden="true">{"↗"}</span></a></div>
 <div className="faq-list">
-<details><summary>{t("지금 무료로 쓸 수 있나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("네. 현재 무료 체험 운영 중이며 카드 등록 없이 시작할 수 있어요. 제공된 credits는 강의실 프로필 메뉴에서 확인할 수 있습니다.")}</p></details>
+<details><summary>{t("지금 무료로 쓸 수 있나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{locale === "en" ? "Yes. Start with free credits, without a payment card. Check your credits in your classroom profile, and choose a plan when you need more." : "네. 카드 등록 없이 무료 credits로 시작할 수 있어요. 강의실 프로필에서 credits를 확인하고, 더 필요할 때 플랜을 선택하세요."} <Link href={`${base}/billing`}>{locale === "en" ? "View plans" : "플랜 보기"}</Link></p></details>
 <details><summary>{t("30초 체험에는 가입이나 녹음이 필요한가요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("필요하지 않아요. 미리 구성한 통계 강의와 설명으로 Lecue의 흐름을 경험합니다. 마이크를 켜지 않으며, ‘체험 닫기’나 Escape 키로 바로 돌아올 수 있어요.")}</p><button className="text-link" type="button" data-open-demo>{t("지금 잠깐 체험하기 →")}</button></details>
 <details><summary>{t("어떤 강의에서 쓰는 서비스인가요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("교실·학원·세미나처럼 같은 공간에서 듣는 현장 강의를 중심으로 만들고 있어요. 노트북 마이크가 강의자의 목소리를 또렷하게 담을 수 있는 환경에서 사용해 주세요.")}</p></details>
 <details><summary>{t("강의를 녹음해도 괜찮나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("강의자와 기관의 녹음 정책을 먼저 확인해 주세요. 필요한 허락을 받은 환경에서 사용해야 합니다. 사용 중에는 기록을 일시정지하거나 끝낼 수 있어요.")}</p></details>

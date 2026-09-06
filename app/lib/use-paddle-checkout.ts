@@ -1,150 +1,96 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
-
-export type BillingPlan = "monthly" | "term" | "semester";
+import type { PurchasePlan } from "./plans";
 type Locale = "ko" | "en";
-type PaddleEvent = { name?: string };
+type PaddleEvent = { name?: string; data?: { transaction_id?: string } };
+type Callback = (event: PaddleEvent) => void;
+type Settings = { displayMode: "overlay"; variant: "one-page"; theme: "light" | "dark"; locale: Locale; showAddDiscounts: false; allowLogout: false };
 type PaddleApi = {
+  Initialized?: boolean;
   Environment: { set(environment: "sandbox"): void };
-  Initialize(options: {
-    token: string;
-    checkout: { settings: { displayMode: "overlay"; variant: "one-page"; theme: "light"; locale: Locale } };
-    eventCallback(event: PaddleEvent): void;
-  }): void;
-  Checkout: { open(options: { transactionId: string }): void };
+  Initialize(options: { token: string; eventCallback: Callback }): void;
+  Update(options: { eventCallback: Callback }): void;
+  Checkout: { open(options: { transactionId: string; settings: Settings }): void };
 };
+declare global { interface Window { Paddle?: PaddleApi } }
 
-declare global {
-  interface Window { Paddle?: PaddleApi }
-}
-
-const copy = {
-  ko: {
-    notConfigured: "결제창 설정이 아직 완료되지 않았습니다.",
-    opening: "안전한 결제창을 여는 중입니다…",
-    processing: "결제 완료를 확인하고 크레딧을 반영하는 중입니다…",
-    syncing: "결제는 완료됐습니다. 크레딧 반영 중이니 잠시 후 새로고침해 주세요.",
-    openFailed: "결제창을 열지 못했습니다. 다시 시도해 주세요.",
-  },
-  en: {
-    notConfigured: "Checkout has not been configured yet.",
-    opening: "Opening secure checkout…",
-    processing: "Confirming payment and adding your credits…",
-    syncing: "Payment completed. Credits are still syncing; refresh in a moment.",
-    openFailed: "Could not open checkout. Try again.",
-  },
-} as const;
-
-export function usePaddleCheckout(
-  locale: Locale,
-  onCreditsGranted: () => void,
-  // Both call sites navigate away in onCreditsGranted, so the slow-webhook
-  // path needs a way to refresh in place instead of announcing a success that
-  // has not happened yet.
-  onRefresh?: () => void,
-) {
+export function usePaddleCheckout(locale: Locale, onGranted: () => void) {
   const [ready, setReady] = useState(false);
-  const [pending, setPending] = useState<BillingPlan | "webhook" | null>(null);
+  const [pending, setPending] = useState<PurchasePlan | "sync" | null>(null);
   const [message, setMessage] = useState("");
-  const initializedRef = useRef(false);
-  const baselineRef = useRef<{ credits: number; grantAt: string | null }>({ credits: 0, grantAt: null });
-  // Paddle's eventCallback is registered once, so it would close over the
-  // first render's `pending`. Read it through a ref instead.
-  const pendingRef = useRef<BillingPlan | "webhook" | null>(null);
-  // The 20-second poll after checkout used to keep running after the buyer
-  // navigated away, then yanked them to /classroom from whatever page they
-  // were reading.
-  const unmountedRef = useRef(false);
-  useEffect(() => () => { unmountedRef.current = true; }, []);
-  const t = copy[locale];
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const active = useRef(true), busy = useRef(false), polling = useRef(false);
+  const transaction = useRef<string | null>(null);
+  const en = locale === "en";
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const unavailable = () => { setReady(false); setMessage(en ? "Checkout could not load. Reload the page or check your connection." : "결제창을 불러오지 못했습니다. 연결을 확인하거나 페이지를 새로고침해 주세요."); };
 
-  function updatePending(next: BillingPlan | "webhook" | null) {
-    pendingRef.current = next;
-    setPending(next);
+  async function checkPayment() {
+    if (!transaction.current || polling.current) return;
+    polling.current = true; busy.current = true;
+    setPending("sync"); setUnconfirmed(true);
+    setMessage(en ? "Confirming payment and adding your credits…" : "결제를 확인하고 credits를 반영하고 있어요…");
+    try {
+      for (let i = 0; i < 20 && active.current; i++) {
+        try {
+          const response = await fetch(`/api/billing/status?transaction=${encodeURIComponent(transaction.current)}`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+          const data = response.ok ? await response.json() : null;
+          if (!active.current) return;
+          if (data?.granted === true) {
+            sessionStorage.removeItem("lecue-pending-payment"); setUnconfirmed(false); setPending(null);
+            setMessage(en ? "Payment confirmed. Your credits are ready." : "결제가 확인됐어요. credits를 사용할 수 있습니다.");
+            onGranted(); return;
+          }
+        } catch { /* A failed read is not proof of payment failure. */ }
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      if (active.current) setMessage(en ? "Confirmation is taking longer. Do not pay again. Check payment status below or contact support." : "결제 확인이 지연되고 있어요. 다시 결제하지 마세요. 아래에서 상태를 확인하거나 문의해 주세요.");
+    } finally { polling.current = false; busy.current = false; if (active.current) setPending(null); }
   }
 
   function initializePaddle() {
-    if (initializedRef.current || !window.Paddle) return;
+    if (!window.Paddle) return;
     const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
-    if (!token) {
-      setMessage(t.notConfigured);
-      return;
-    }
-    if (process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "sandbox") window.Paddle.Environment.set("sandbox");
-    window.Paddle.Initialize({
-      token,
-      checkout: { settings: { displayMode: "overlay", variant: "one-page", theme: "light", locale } },
-      eventCallback(event) {
-        if (event.name === "checkout.completed") return void waitForCredits();
-        // Closing the overlay leaves no other signal, so without this the
-        // plan buttons stayed disabled on "opening checkout…" until a reload.
-        // Paddle emits closed right after completed, though, so a close that
-        // follows a successful purchase must not cancel the credit wait.
-        if (event.name === "checkout.closed" || event.name === "checkout.error") {
-          if (pendingRef.current === "webhook") return;
-          updatePending(null);
-          setMessage(event.name === "checkout.error" ? t.openFailed : "");
-        }
-      },
-    });
-    initializedRef.current = true;
-    setReady(true);
-  }
-
-  async function waitForCredits() {
-    updatePending("webhook");
-    setMessage(t.processing);
-    const baseline = baselineRef.current;
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-      if (unmountedRef.current) return;
-      try {
-        const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
-        if (response.ok) {
-          const current = await response.json() as { credits?: number; latestGrantAt?: string | null };
-          if (unmountedRef.current) return;
-          if ((current.credits ?? 0) > baseline.credits || current.latestGrantAt !== baseline.grantAt) {
-            updatePending(null);
-            onCreditsGranted();
-            return;
-          }
-        }
-      } catch {
-        // A flaky poll is just a missed attempt, not an unhandled rejection.
+    if (!token) return unavailable();
+    const eventCallback: Callback = event => {
+      if (!active.current) return;
+      if (event.name === "checkout.completed" && transaction.current && event.data?.transaction_id === transaction.current) {
+        sessionStorage.setItem("lecue-pending-payment", transaction.current); void checkPayment();
+      } else if (["checkout.closed", "checkout.error"].includes(event.name ?? "") && !polling.current) {
+        busy.current = false; setPending(null);
+        if (event.name === "checkout.error") setMessage(en ? "Checkout could not continue. Check your connection and try again." : "결제를 진행하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
       }
-    }
-    if (unmountedRef.current) return;
-    // Refresh in place. Calling onCreditsGranted here navigated the buyer to
-    // a "payment success" screen with none of the credits actually granted.
-    onRefresh?.();
-    updatePending(null);
-    setMessage(t.syncing);
-  }
-
-  async function startCheckout(plan: BillingPlan) {
-    if (!window.Paddle || !ready || pending) return;
-    updatePending(plan);
-    setMessage(t.opening);
+    };
     try {
-      const statusResponse = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
-      const status = statusResponse.ok ? await statusResponse.json() as { credits?: number; latestGrantAt?: string | null } : {};
-      baselineRef.current = { credits: status.credits ?? 0, grantAt: status.latestGrantAt ?? null };
-
-      const response = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ plan }),
-      });
-      const data = await response.json() as { transactionId?: string; error?: string };
-      if (!response.ok || !data.transactionId) throw new Error(data.error);
-      window.Paddle!.Checkout.open({ transactionId: data.transactionId });
-      setMessage("");
-    } catch (caught) {
-      setMessage(caught instanceof Error && caught.message ? caught.message : t.openFailed);
-      updatePending(null);
-    }
+      if (window.Paddle.Initialized) window.Paddle.Update({ eventCallback });
+      else {
+        if (process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "sandbox") window.Paddle.Environment.set("sandbox");
+        window.Paddle.Initialize({ token, eventCallback });
+      }
+      setReady(true);
+    } catch { unavailable(); }
   }
 
-  return { ready, pending, message, initializePaddle, startCheckout };
+  useEffect(() => {
+    const saved = sessionStorage.getItem("lecue-pending-payment");
+    if (saved && /^txn_[a-z0-9]+$/.test(saved)) { transaction.current = saved; setUnconfirmed(true); }
+    if (window.Paddle) initializePaddle();
+  }, [locale]);
+
+  async function startCheckout(plan: PurchasePlan) {
+    if (busy.current || unconfirmed || !ready || !window.Paddle) return;
+    busy.current = true; setPending(plan); setMessage("");
+    try {
+      const response = await fetch("/api/billing/checkout", { method: "POST", headers: { "Content-Type": "application/json", "X-Site-Locale": locale }, body: JSON.stringify({ plan }), signal: AbortSignal.timeout(30000) });
+      const data = await response.json();
+      if (!response.ok || !data.transactionId) throw new Error(data.error);
+      if (!active.current) return;
+      transaction.current = data.transactionId;
+      window.Paddle.Checkout.open({ transactionId: data.transactionId, settings: { displayMode: "overlay", variant: "one-page", locale, theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light", showAddDiscounts: false, allowLogout: false } });
+    } catch (error) {
+      busy.current = false;
+      if (active.current) { setPending(null); setMessage(error instanceof Error && error.message ? error.message : en ? "Could not open checkout. Try again." : "결제창을 열지 못했습니다. 다시 시도해 주세요."); }
+    }
+  }
+  return { ready, pending, message, unconfirmed, initializePaddle, startCheckout, checkPayment, unavailable };
 }

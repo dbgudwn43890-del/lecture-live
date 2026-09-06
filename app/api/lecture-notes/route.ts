@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { isUuid } from "../../lib/billing";
+import { withGenerationLease } from "../../lib/generation-lease";
 import { NOTE_SCHEMA, notePrompt, type LectureNote } from "../../lib/lecture-note";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
@@ -85,10 +86,12 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: isEnglish ? "Invalid request." : "요청을 확인해 주세요." }, { status: 400 });
   }
-  if (!isUuid(body.sessionId)) {
+  if (!body || !isUuid(body.sessionId)) {
     return NextResponse.json({ error: isEnglish ? "Invalid lecture session." : "수업 정보를 확인해 주세요." }, { status: 400 });
   }
   const sessionId = body.sessionId;
+
+  return withGenerationLease(supabase, sessionId, "note", isEnglish, async () => {
 
   // RLS가 소유자로 좁힌다. 노트는 끝난 강의에서만 만든다.
   const [{ data: session }, { data: existing }] = await Promise.all([
@@ -179,6 +182,7 @@ export async function POST(request: Request) {
   }
   await saveConcepts(supabase, userId, session.classroom_id, sessionId, note);
   return NextResponse.json({ note: { status: "ready", content: note, updated_at: updatedAt } }, { status: 201 });
+  });
 }
 
 /**

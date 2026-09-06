@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import LectureWorkspace from "./workspace-client";
 import { getClassroomData } from "../lib/classroom-data";
 import { getCreditStatus } from "../lib/credit-status";
-import { FREE_PILOT, ensureFreePilotGrant } from "../lib/free-pilot";
+import { ensureFreePilotGrant } from "../lib/free-pilot";
 import { createClient } from "../lib/supabase/server";
 
 export default async function ClassroomPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -21,7 +21,7 @@ export default async function ClassroomPage({ searchParams }: { searchParams: Pr
   ]);
 
   // 피드백 기간: 그랜트가 하나도 없는 새 계정에 무료 크레딧을 심는다.
-  if (FREE_PILOT && !("error" in creditStatus) && creditStatus.latestGrantAt === null) {
+  if (!("error" in creditStatus) && creditStatus.latestGrantAt === null) {
     if (await ensureFreePilotGrant(user.id)) creditStatus = await getCreditStatus(supabase);
   }
 

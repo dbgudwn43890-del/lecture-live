@@ -105,8 +105,8 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const isPublic = path === "/" || path === "/en" || [
-    "/login", "/api", "/privacy", "/terms",
-    "/en/login", "/en/privacy", "/en/terms",
+    "/login", "/api", "/privacy", "/terms", "/billing", "/refund-policy",
+    "/en/login", "/en/privacy", "/en/terms", "/en/billing", "/en/refund-policy",
   ].some((prefix) => isUnder(path, prefix));
 
   if (!data?.claims && !isPublic) {
