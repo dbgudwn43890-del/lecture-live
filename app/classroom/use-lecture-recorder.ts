@@ -96,6 +96,7 @@ export function useLectureRecorder(options: RecorderOptions) {
   const [connectingPhase, setConnectingPhase] = useState<ConnectingPhase>(null);
   const [pauseReason, setPauseReason] = useState<PauseReason>(null);
   const [inputSource, setInputSource] = useState<LectureInputSource>("microphone");
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [interim, setInterim] = useState("");
@@ -176,6 +177,7 @@ export function useLectureRecorder(options: RecorderOptions) {
 
   /** 원본·오디오 트랙 전부 해제. 여러 번 불러도 안전. 외부 종료 핸들러가 재진입하지 않는다(dispose가 먼저 disposed를 세운다). */
   function releaseInput() {
+    setPreviewStream(null);
     inputRef.current?.dispose();
     inputRef.current = null;
     streamRef.current = null;
@@ -881,6 +883,7 @@ export function useLectureRecorder(options: RecorderOptions) {
         throw STALE;
       }
       inputRef.current = input;
+      setPreviewStream(input.source === "browser-tab" ? new MediaStream(input.captureStream.getVideoTracks()) : null);
       streamRef.current = input.audioStream;
       watchInput(input);
       setConnectingPhase("opening");
@@ -1032,6 +1035,7 @@ export function useLectureRecorder(options: RecorderOptions) {
       if (!live) {
         releaseInput();
         inputRef.current = input;
+        setPreviewStream(input.source === "browser-tab" ? new MediaStream(input.captureStream.getVideoTracks()) : null);
         streamRef.current = input.audioStream;
         watchInput(input);
         installed = true;
@@ -1163,7 +1167,7 @@ export function useLectureRecorder(options: RecorderOptions) {
 
   return {
     status, setStatus, elapsedMs, setElapsedMs, segments, setSegments, interim, showInterim,
-    connectingPhase, pauseReason, inputSource, restoreInputSource,
+    connectingPhase, pauseReason, inputSource, restoreInputSource, previewStream,
     meterRef, segmentsRef, segmentIdsRef, confirmedSegmentIdsRef, activeSessionIdRef,
     finishingRef, saveFailuresRef, elapsedBaseMsRef, startedAtRef, streamOffsetMsRef,
     currentElapsedMs, flushUtterance,

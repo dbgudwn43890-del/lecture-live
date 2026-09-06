@@ -40,9 +40,8 @@ export function localePathFor(path: string, prefersEnglish: boolean) {
   const koreanPath = isEnglishPath ? (path === "/en" ? "/" : path.slice(3)) : path;
   if (!LOCALIZABLE_PATHS.includes(koreanPath)) return null;
 
-  // The landing page renders in either language at "/", so it is never moved —
-  // redirecting it would fight the marketing links that point at the bare root.
-  if (koreanPath === "/") return null;
+  // Root can render either locale; /en is fixed English and must leave on Korean selection.
+  if (koreanPath === "/") return isEnglishPath && !prefersEnglish ? "/" : null;
 
   const target = prefersEnglish ? `/en${koreanPath}` : koreanPath;
   return target === path ? null : target;

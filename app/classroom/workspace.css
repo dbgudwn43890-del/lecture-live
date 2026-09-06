@@ -4,7 +4,7 @@
   --signal: #405e42; --signal-dark: #314c34; --focus: #405e42; --accent: #ad9557;
   --soft-blue: #eef1e7; --tint: #e9eedf; --line: #dce1d5; --line-strong: #c4ccbd;
   --radius: 8px; --radius-hard: 6px;
-  grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); background: var(--paper); height: 100dvh; min-height: 0; overflow: hidden;
+  position: relative; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); background: var(--paper); height: 100dvh; min-height: 0; overflow: hidden;
 }
 [data-theme="dark"] .workspace.experience {
   --paper: #181f19; --surface: #202a21; --ink: #e6ecdf; --muted: #afbba7;
@@ -86,16 +86,16 @@
 .experience .message { margin-bottom: 28px; }
 .experience .message-assistant > p { font-size: 15px; line-height: 1.95; color: var(--ink); }
 .experience .message-label { color: var(--signal); font-size: 11px; font-weight: 600; }
-.experience .message-user { background: var(--soft-blue); color: var(--ink); border-radius: 8px 8px 2px 8px; }
+.experience .message-user { background: transparent; color: var(--ink); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; border-radius: 0; }
 .experience .message-user p { font-size: 14px; line-height: 1.7; }
-.experience .question-moment { display: flex; flex-wrap: wrap; gap: 6px; color: var(--muted); background: transparent; border: 0; padding: 0 0 8px; font-size: 10px; text-align: left; }
+.experience .question-moment { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; color: var(--muted); background: transparent; border: 0; padding: 4px 0; min-height: 28px; font-size: 11px; text-align: right; }
 .question-moment span { font-family: var(--font-mono), monospace; }
 .experience .question-moment:hover { color: var(--signal); text-decoration: underline; }
-.experience .question-form { position: relative; inset: auto; flex-shrink: 0; width: auto; margin: 8px 24px 24px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: none; backdrop-filter: none; }
+.experience .question-form { position: relative; inset: auto; flex-shrink: 0; width: auto; margin: 8px 24px 16px; padding: 6px 8px 6px 14px; align-items: center; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: none; backdrop-filter: none; }
 .experience .question-form:focus-within { border-color: var(--signal); box-shadow: 0 0 0 2px var(--tint); }
-.experience .question-form textarea { font-size: 14px; min-height: 42px; max-height: 144px; line-height: 1.6; }
+.experience .question-form textarea { font-size: 14px; min-height: 40px; height: 40px; max-height: 144px; padding: 9px 0; line-height: 22px; overflow-y: auto; }
 .experience .question-form textarea::placeholder { color: var(--muted); }
-.experience .question-form button { border-radius: 5px; background: var(--signal); color: var(--on-signal); width: 36px; height: 36px; }
+.experience .question-form button { border-radius: 5px; background: var(--signal); color: var(--on-signal); width: 40px; height: 40px; }
 .experience .chat-pane::after { content: none; }
 .experience .transcript { padding: 20px 26px 54px; }
 .experience .transcript-line { grid-template-columns: 42px minmax(0, 1fr); gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); scroll-margin: 30px; }
@@ -108,12 +108,49 @@
 .experience .material-toolbar { flex-shrink: 0; margin: 0 26px; padding: 10px 0 14px; background: transparent; border: 0; border-bottom: 1px solid var(--line); gap: 8px; }
 .experience .material-toolbar strong { font-size: 12px; }
 .experience .material-toolbar span { font-size: 10px; color: var(--muted); }
-.experience .material-upload-button { color: var(--signal); font-size: 11px; border-radius: 5px; background: transparent; border-color: var(--line-strong); min-height: 34px; }
+.experience .material-upload-button { display: inline-flex; align-items: center; justify-content: center; color: var(--signal); font-size: 12px; line-height: 1; padding: 0 12px; border-radius: 5px; background: transparent; border-color: var(--line-strong); min-height: 40px; }
 .experience .material-hint { margin: 12px 26px 0; font-size: 11px; color: var(--muted); }
 .experience .footnote { flex-shrink: 0; flex-direction: row; align-items: center; min-height: 34px; padding: 8px 28px; color: var(--muted); font-size: 10px; background: var(--surface); }
 .experience .footnote > a { display: inline-flex; align-items: center; gap: 4px; color: var(--signal); text-decoration: none; white-space: nowrap; }
 .experience .footnote-links > span { display: none; }
 .experience .error-banner, .experience .notice-banner { flex-shrink: 0; }
+.experience .sidebar-desktop-toggle { position: absolute; top: 19px; left: 16px; z-index: 5; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
+.experience .sidebar-desktop-toggle:hover { color: var(--signal); background: var(--tint); }
+.experience .sidebar-desktop-toggle:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.experience .review-summary { margin-left: auto; color: var(--muted); font-size: 11px; }
+.experience .session-wayfinding { gap: 14px; }
+.experience .session-wayfinding > button { margin-left: auto; }
+.experience .view-transcript-button { min-height: 36px; padding: 6px 10px; font-size: 12px; color: var(--signal); background: transparent; border: 1px solid var(--line); border-radius: 5px; }
+.experience .showing-lecture > :not(.transcript-heading):not(.lecture-preview):not(.sr-only) { display: none; }
+.lecture-preview { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 16px 20px; gap: 12px; }
+.lecture-preview-screen { flex: 1; min-height: 0; display: grid; place-items: center; position: relative; background: #171a17; border-radius: 6px; overflow: hidden; }
+.lecture-preview-screen video { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.lecture-preview-screen p { display: grid; justify-items: center; gap: 14px; padding: 24px; text-align: center; color: #e5e9e2; font-size: 14px; }
+.lecture-preview-screen button { position: absolute; padding: 12px 18px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.lecture-preview-caption { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+.lecture-preview-caption button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--signal); }
+@media (min-width: 801px) {
+  .experience .sidebar-brand { margin-left: 48px; }
+  .experience .topbar > .lecture-title-field { grid-column: 1; grid-row: 1; }
+  .experience .topbar > .session-state { grid-column: 2; grid-row: 1; }
+  .experience .topbar > .lecture-controls { grid-column: 3; grid-row: 1; }
+  /* The shell opens up; the reading surface keeps its measure and recenters. */
+  .experience .panes, .experience .lecture-preparation { width: 100%; max-width: 1240px; margin-inline: auto; }
+  .experience .workspace-main { background: var(--paper); }
+  .experience .chat-pane { border-right: 1px solid var(--line); }
+  .experience .messages { padding-inline: max(26px, calc((100% - 560px) / 2)); }
+  .experience .transcript { padding-inline: max(26px, calc((100% - 580px) / 2)); }
+  .workspace.experience.sidebar-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  .experience.sidebar-collapsed > .workspace-sidebar { visibility: hidden; overflow: hidden; padding: 0; border: 0; }
+  .workspace.experience.sidebar-collapsed .topbar { padding-left: 72px; }
+}
+@media (min-width: 801px) and (prefers-reduced-motion: no-preference) {
+  .workspace.experience { transition: grid-template-columns 240ms cubic-bezier(.2,.8,.2,1); }
+}
+@media (max-width: 800px) {
+  .experience .sidebar-desktop-toggle { display: none; }
+  .experience .review-summary { display: none; }
+}
 /* One preparation sheet connects title, language, material and recording. */
 .lecture-preparation { flex: 1; overflow-y: auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 48px; align-content: start; padding: clamp(32px, 6vh, 70px) clamp(26px, 4vw, 70px) 40px; background: var(--paper); }
 .preparation-intro { padding-top: 28px; }
@@ -161,9 +198,13 @@
 .workspace-dialog .settings-row h3 { grid-column: 1; grid-row: 1; margin: 0; font-size: 13px; font-weight: 600; }
 .workspace-dialog .settings-row p { grid-column: 1 / -1; grid-row: 2; font-size: 12px; line-height: 1.7; word-break: keep-all; overflow-wrap: anywhere; }
 .workspace-dialog .segmented, .workspace-dialog .settings-select { grid-column: 2; grid-row: 1; width: 100%; min-width: 0; max-width: none; min-height: 44px; border: 1px solid var(--line); border-radius: 7px; background: var(--soft-blue); }
-.workspace-dialog .segmented { grid-template-columns: repeat(var(--seg-count), minmax(0, 1fr)); gap: 2px; padding: 3px; }
+.workspace-dialog .segmented { grid-template-columns: repeat(var(--seg-count), minmax(0, 1fr)); gap: 0; padding: 3px; }
+.workspace-dialog .segmented-thumb { border-radius: 4px; box-shadow: none; transition: transform 220ms cubic-bezier(.2,.8,.2,1); }
+@media (prefers-reduced-motion: reduce) {
+  .workspace-dialog .segmented-thumb { transition: none; }
+}
 .workspace-dialog .segmented button { min-width: 0; min-height: 36px; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 1.4; white-space: normal; word-break: keep-all; }
-.workspace-dialog .segmented button[aria-checked="true"] { background: var(--surface); border-color: var(--line-strong); font-weight: 600; }
+.workspace-dialog .segmented button[aria-checked="true"] { background: transparent; border-color: transparent; font-weight: 600; }
 .workspace-dialog .segmented button:hover:enabled { color: var(--ink); }
 .workspace-dialog .settings-select { padding: 10px 12px; background: var(--surface); font-size: 13px; }
 .workspace-dialog .settings-body :is(button, select, summary):focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
@@ -251,7 +292,7 @@
   .experience .empty-chat { min-height: 220px; padding: 20px 0; }
   .experience .empty-chat p { font-size: 21px; }
   .experience .empty-chat > span { font-size: 13px; }
-  .experience .question-form { margin: 8px 16px 14px; padding: 10px; }
+  .experience .question-form { margin: 8px 16px 14px; padding: 6px 8px 6px 12px; }
   .experience .question-form textarea { font-size: 16px; }
   .experience .transcript { padding: 10px 20px 62px; }
   .experience .transcript-line { gap: 10px; grid-template-columns: 34px minmax(0, 1fr); }

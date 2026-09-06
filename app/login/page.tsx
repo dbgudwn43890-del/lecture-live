@@ -79,7 +79,7 @@ export default function LoginPage({ locale = "ko" }: { locale?: "ko" | "en" }) {
         <Link className="brand" href={basePath || "/"}>Lecue</Link>
         <nav className="login-nav" aria-label={isEnglish ? "Login navigation" : "로그인 화면 메뉴"}>
           <span>lecue.app</span>
-          <Link href={isEnglish ? "/login" : "/en/login"}>{isEnglish ? "한국어" : "English"}</Link>
+          <a href={`${basePath}/login?next=${encodeURIComponent(nextPath)}&lang=${isEnglish ? "ko" : "en"}`}>{isEnglish ? "Korean" : "English"}</a>
           <Link className="login-home-link" href={basePath || "/"}>{isEnglish ? "Back home" : "홈으로"}</Link>
         </nav>
       </header>

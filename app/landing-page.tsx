@@ -24,7 +24,7 @@ export default function LandingPage({ locale, isAuthenticated = false, profile, 
 <a className="wordmark" href="#home" aria-label={t("Lecue 홈으로")}>{"Lecue"}<span aria-hidden="true">{"."}</span></a>
 <nav aria-label={t("주요 메뉴")}><a href="#experience" data-open-demo>{t("직접 체험")}</a><a href="#how">{t("사용 방법")}</a><Link href={`${base}/billing`}>{locale === "en" ? "Plans" : "플랜"}</Link><a href="#faq">{t("궁금한 점")}</a></nav>
 <div className="header-actions">
-      <a className="language-link" href={`${base || "/"}?lang=${locale === "ko" ? "en" : "ko"}`} aria-label={locale === "ko" ? "Switch to English" : "한국어로 변경"}>{locale === "ko" ? "EN" : "한국어"}</a>
+      <a className="language-link" href={`${base || "/"}?lang=${locale === "ko" ? "en" : "ko"}`} aria-label={locale === "ko" ? "Switch to English" : "Switch to Korean"}>{locale === "ko" ? "English" : "Korean"}</a>
       {isAuthenticated ? <><ProfileMenu locale={locale} basePath={base} classroomPath={classroomPath} profile={profile ?? null} planLabel={getPlanLabel(creditStatus?.planCode, locale)} credits={creditStatus?.credits ?? null} /><Link className="button button-small" href={classroomPath}>{t("내 강의실")}</Link></> : <><Link className="login-link" href={`${base}/login`}>{t("로그인")}</Link><Link className="button button-small" href={startHref}>{t("무료로 시작")}</Link></>}
     </div>
 </div></header>

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getOAuthFallbackNext, localePathFor } from "./app/lib/auth-redirect";
+import { preferredSiteLocale } from "./app/lib/site-locale";
 
 // Matches a path against a route prefix on segment boundaries, so a future
 // /authors or /loginhelp cannot inherit /auth's or /login's public status.
@@ -25,6 +26,7 @@ export async function proxy(request: NextRequest) {
   if (requestedLocale === "ko" || requestedLocale === "en") {
     const cleanUrl = request.nextUrl.clone();
     cleanUrl.searchParams.delete("lang");
+    cleanUrl.pathname = localePathFor(path, requestedLocale === "en") ?? path;
     const redirect = NextResponse.redirect(cleanUrl);
     redirect.cookies.set(LOCALE_COOKIE, requestedLocale, LOCALE_COOKIE_OPTIONS);
     return redirect;
@@ -32,12 +34,8 @@ export async function proxy(request: NextRequest) {
 
   const chosenLocale = request.cookies.get(LOCALE_COOKIE)?.value;
   const country = request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
-  // 직접 고른 선택 > 브라우저 언어 > IP 국가. IP만 믿으면 VPN·해외 라우팅된
-  // 통신사·헤더 없는 환경의 한국어 사용자가 영어 강의실로 들어간다.
-  const acceptsKorean = (request.headers.get("accept-language") ?? "").toLowerCase().includes("ko");
-  const prefersEnglish = chosenLocale
-    ? chosenLocale === "en"
-    : Boolean(country && country !== "KR" && country !== "XX" && !acceptsKorean);
+  // 직접 고른 선택 > 국가 > 브라우저 언어. 해외 기본은 영어이며 직접 선택은 보존한다.
+  const prefersEnglish = preferredSiteLocale(chosenLocale, country, request.headers.get("accept-language") ?? "", path) === "en";
   const usesEnglishHomepage = path === "/" && prefersEnglish;
   const oauthFallbackNext = getOAuthFallbackNext(
     path,

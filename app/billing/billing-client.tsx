@@ -69,7 +69,7 @@ export default function BillingClient({ locale, signedIn, mode, available, accou
   const launchDiscount = Math.max(...PURCHASE_PLANS.map(discountPercent));
   return <div className={styles.page}>
     {signedIn && mode !== "disabled" && <Script src="https://cdn.paddle.com/paddle/v2/paddle.js" onReady={checkout.initializePaddle} onError={checkout.unavailable} />}
-    <header className={styles.header}><Link className={styles.logo} href={base || "/"}>Lecue<span>.</span></Link><nav aria-label={t("페이지 이동", "Navigation")}><a href={`${base}/billing?lang=${en ? "ko" : "en"}`}>{en ? "한국어" : "EN"}</a><Link href={signedIn ? `${base}/classroom` : base || "/"}><ArrowLeft size={15} />{signedIn ? t("내 강의실", "My classroom") : t("홈으로", "Home")}</Link></nav></header>
+    <header className={styles.header}><Link className={styles.logo} href={base || "/"}>Lecue<span>.</span></Link><nav aria-label={t("페이지 이동", "Navigation")}><a href={`${base}/billing?lang=${en ? "ko" : "en"}`}>{en ? "Korean" : "English"}</a><Link href={signedIn ? `${base}/classroom` : base || "/"}><ArrowLeft size={15} />{signedIn ? t("내 강의실", "My classroom") : t("홈으로", "Home")}</Link></nav></header>
     <main className={styles.main}>
       <div className={styles.heading}>
         <p>{t(`출시 기념 최대 ${launchDiscount}% 할인 · 부가세 포함`, `Launch offer · up to ${launchDiscount}% off · tax included`)}</p>

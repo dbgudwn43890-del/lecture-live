@@ -48,7 +48,7 @@ test("leaves a page that is already in the right language alone", () => {
 test("moves only the pages that exist in both languages", () => {
   // The landing page renders either language at "/", so it is never moved.
   assert.equal(localePathFor("/", true), null);
-  assert.equal(localePathFor("/en", false), null);
+  assert.equal(localePathFor("/en", false), "/");
   assert.equal(localePathFor("/stt-lab", true), null);
   assert.equal(localePathFor("/api/ask", true), null);
   // A path that merely starts with the letters "en" is not an English page.
