@@ -1,14 +1,27 @@
-import { PLANS, type PurchasePlan } from "./plans";
+import { PLANS, PURCHASE_PLANS, type PurchasePlan } from "./plans";
+
+const PRICE_ENV: Record<PurchasePlan, string> = {
+  monthly: "PADDLE_MONTHLY_V2_PRICE_ID",
+  semester: "PADDLE_SEMESTER_V2_PRICE_ID",
+  annual: "PADDLE_ANNUAL_V2_PRICE_ID",
+  topup: "PADDLE_TOPUP_V2_PRICE_ID",
+};
 
 // Separate price IDs preserve the entitlements of earlier purchases.
 export function purchasePriceId(plan: PurchasePlan) {
-  return process.env[plan === "monthly" ? "PADDLE_MONTHLY_V2_PRICE_ID" : "PADDLE_SEMESTER_V2_PRICE_ID"];
+  return process.env[PRICE_ENV[plan]];
+}
+
+/** 카탈로그에 price ID가 있는 플랜만. 없는 플랜은 카드에 "준비 중"으로 뜬다. */
+export function availablePlans(): PurchasePlan[] {
+  return PURCHASE_PLANS.filter((plan) => purchasePriceId(plan));
 }
 
 export function billingMode(): "sandbox" | "live" | "disabled" {
   const environment = process.env.PADDLE_ENVIRONMENT;
   if (process.env.BILLING_ENABLED !== "true" || !process.env.PADDLE_API_KEY || !process.env.PADDLE_WEBHOOK_SECRET) return "disabled";
-  if (!Object.keys(PLANS).every(plan => purchasePriceId(plan as PurchasePlan))) return "disabled";
+  // 플랜을 하나씩 추가할 수 있게 전부가 아니라 하나 이상을 요구한다.
+  if (!availablePlans().length) return "disabled";
   if (process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT !== environment) return "disabled";
   const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? "";
   if (environment === "sandbox" && token.startsWith("test_") && process.env.VERCEL_ENV !== "production") return "sandbox";
@@ -20,3 +33,5 @@ export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   return origin === new URL(request.url).origin;
 }
+
+export { PLANS };

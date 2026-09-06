@@ -22,7 +22,9 @@ export async function POST(request: Request) {
   if (!body || !isPurchasePlan(body.plan)) return fail(400, "플랜을 선택해 주세요.", "Choose a plan.");
   const plan = body.plan;
   const offer = PLANS[plan];
-  const priceId = purchasePriceId(plan)!;
+  const priceId = purchasePriceId(plan);
+  // 카탈로그에 아직 없는 플랜. 카드는 "준비 중"으로 막혀 있지만 직접 호출도 막는다.
+  if (!priceId) return fail(503, "이 플랜은 준비 중입니다.", "This plan is not available yet.");
   const admin = createAdminClient();
   if (!admin) return fail(503, "결제를 준비하고 있습니다.", "Payments are not available yet.");
   let reservedId: string | null = null;

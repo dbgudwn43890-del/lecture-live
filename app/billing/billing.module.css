@@ -1,7 +1,7 @@
 .page { min-height:100dvh; background:var(--paper); color:var(--ink); font-family:var(--font-sans),"Pretendard Variable",sans-serif; }
 .page a { color:inherit; text-decoration:none; }
 .page button { font:inherit; }
-.header,.footer { width:min(1100px,calc(100% - 48px)); margin:auto; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.header,.footer { width:min(900px,calc(100% - 48px)); margin:auto; display:flex; align-items:center; justify-content:space-between; gap:24px; }
 .header { min-height:84px; border-bottom:1px solid var(--line); }
 .logo { font-size:29px; font-weight:700; letter-spacing:-1.7px; color:var(--signal)!important; }
 .logo span { color:var(--accent); }
@@ -20,12 +20,22 @@
 .detail { font-size:13px; color:var(--muted); line-height:1.7; }
 .plans { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
 .plan { display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--line-strong); border-radius:10px; padding:30px; }
-.semester { border-color:color-mix(in srgb,var(--signal) 50%,var(--line)); background:color-mix(in srgb,var(--signal) 4%,var(--surface)); }
+.featured { border-color:color-mix(in srgb,var(--signal) 50%,var(--line)); background:color-mix(in srgb,var(--signal) 4%,var(--surface)); }
+/* 플랜 이름 옆 배지. 예전 요금표의 '가장 많이 선택' 문법 그대로. */
+.badge { padding:4px 9px; border-radius:999px; background:var(--accent); color:var(--on-signal); font-size:10.5px; font-weight:650; white-space:nowrap; }
+.priceBlock { margin:22px 0 18px; }
+/* 취소선 예정가 + 할인율 배지. 실제 청구액보다 작게, 위에. */
+.compare { display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin:0 0 4px; font-size:11px; color:var(--muted); }
+.compare>span { flex-basis:100%; }
+.compare del { font-size:13px; font-weight:550; text-decoration-color:var(--accent); text-decoration-thickness:1.5px; }
+.compare b { padding:2px 7px; border-radius:6px; background:color-mix(in srgb,var(--accent) 22%,var(--surface)); color:var(--signal-dark); font-size:11px; font-weight:700; }
+.perMonth { margin:2px 0 0; font-size:12px; color:var(--muted); }
+.promoNote { margin:18px auto 0; max-width:680px; text-align:center; font-size:11px; line-height:1.7; color:var(--muted); }
 .selected { outline:2px solid var(--signal); outline-offset:3px; }
 .planName { display:flex; align-items:baseline; flex-wrap:wrap; gap:12px; }
 .planName h2 { margin:0; font-size:23px; font-weight:600; letter-spacing:-.6px; }
 .planName>span { color:var(--muted); font-size:12px; }
-.price { margin:28px 0 23px; font-size:36px; font-weight:600; letter-spacing:-1.2px; font-variant-numeric:tabular-nums; line-height:1.4; }
+.price { margin:0; font-size:36px; font-weight:600; letter-spacing:-1.2px; font-variant-numeric:tabular-nums; line-height:1.4; }
 .price>span { margin-left:8px; font-size:13px; color:var(--muted); font-weight:400; letter-spacing:0; white-space:nowrap; }
 .allowance { padding:22px 0; border-block:1px solid var(--line); }
 .allowance strong { font-size:22px; font-weight:550; letter-spacing:-.4px; }

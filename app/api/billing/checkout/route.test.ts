@@ -31,3 +31,4 @@ test("an old-price reservation cannot reopen under the new offer",async()=>{
   assert.equal((await request()).status,409);
   assert.equal(calls.some(c=>c.path.startsWith("/transactions")),false);
 });
+test("a plan without a catalog price is refused before any provider call",async()=>{delete process.env.PADDLE_ANNUAL_V2_PRICE_ID;assert.equal((await request({plan:"annual"})).status,503);assert.equal(calls.length,0);});

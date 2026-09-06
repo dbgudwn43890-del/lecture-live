@@ -31,13 +31,15 @@ export default function EnglishTermsPage() {
           <tr><td>Free trial</td><td>{STARTER_DAYS} days</td><td>{STARTER_CREDITS} credits · once per account</td><td>No card or automatic payment</td></tr>
           <tr><td>Monthly</td><td>1 month</td><td>{PLANS.monthly.credits.toLocaleString()} each billing period</td><td>Renews monthly until cancelled</td></tr>
           <tr><td>Semester</td><td>{PLANS.semester.months} months</td><td>{PLANS.semester.credits.toLocaleString()}</td><td>One-time purchase; no renewal</td></tr>
+          <tr><td>Annual</td><td>{PLANS.annual.months} months</td><td>{PLANS.annual.credits.toLocaleString()}</td><td>One-time purchase; no renewal</td></tr>
+          <tr><td>Top-up</td><td>{PLANS.topup.months} months</td><td>{PLANS.topup.credits.toLocaleString()}</td><td>One-time purchase; stacks with any plan</td></tr>
         </tbody></table></div>
         <ul>
           <li>Checkout shows the actual price, tax, promotion, first charge date, and renewal amount.</li>
           <li>The trial ends after {STARTER_DAYS} days or when all {STARTER_CREDITS} credits are used. It does not convert to a paid plan automatically. Previously granted credits and existing purchases keep their original entitlement and expiry.</li>
           <li>One credit is charged for each started recording minute. A partial minute costs one credit, and the same minute in the same lecture is not charged twice.</li>
           <li>Each lecture may record for up to 3 hours. A new lecture may be started while credits remain.</li>
-          <li>Monthly credits do not roll over. Semester credits expire four months after purchase.</li>
+          <li>Monthly credits do not roll over. Semester credits expire four months after purchase; Annual and Top-up credits expire after twelve months.</li>
           <li>Questions, AI answers, and necessary web search use no separate credit while recording.</li>
           <li>A personal AI connection follows the same Lecue credit rule. The external provider may charge the member separately.</li>
           <li>Recording stops when credits are exhausted, but existing records remain available.</li>

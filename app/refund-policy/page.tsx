@@ -4,7 +4,7 @@ import LegalPage from "../legal-page";
 
 export const metadata: Metadata = {
   title: "환불 정책 | Lecue",
-  description: "Lecue Monthly와 Semester의 환불 기준을 안내합니다.",
+  description: "Lecue Monthly와 1회 결제 플랜(Semester·Annual·Top-up)의 환불 기준을 안내합니다.",
 };
 
 export default function RefundPolicyPage() {
@@ -19,7 +19,7 @@ export default function RefundPolicyPage() {
 
       <section><h2>제3조 구독형(월간)</h2><div><p>구독 관리 화면에서 언제든 해지할 수 있으며, 해지하면 다음 결제가 중단됩니다. 이미 결제한 이용 기간은 제1조에 따른 환불 승인 없이 즉시 종료되지 않습니다.</p></div></section>
 
-      <section><h2>제4조 Semester</h2><div><p>Semester는 자동 갱신이 없는 일회성 결제이며, 환불 기준과 사용분 공제는 제1조와 동일하게 적용됩니다. 기존 구매분에는 당시의 지급량과 이용 기간이 적용됩니다.</p></div></section>
+      <section><h2>제4조 Semester·Annual·Top-up</h2><div><p>Semester, Annual, Top-up은 자동 갱신이 없는 일회성 결제이며, 환불 기준과 사용분 공제는 제1조와 동일하게 적용됩니다. 기존 구매분에는 당시의 지급량과 이용 기간이 적용됩니다.</p></div></section>
 
       <section><h2>제5조 운영자 책임</h2><div><p>운영자 책임으로 서비스를 제공하지 못했거나 표시된 내용과 현저히 다르게 제공한 경우, 7일 기준과 무관하게 관계 법령에 따른 환불이나 보상을 제공합니다.</p></div></section>
 
