@@ -1,13 +1,13 @@
 .page { min-height:100dvh; background:var(--paper); color:var(--ink); font-family:var(--font-sans),"Pretendard Variable",sans-serif; }
 .page a { color:inherit; text-decoration:none; }
 .page button { font:inherit; }
-.header,.footer { width:min(900px,calc(100% - 48px)); margin:auto; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.header,.footer { width:min(1140px,calc(100% - 48px)); margin:auto; display:flex; align-items:center; justify-content:space-between; gap:24px; }
 .header { min-height:84px; border-bottom:1px solid var(--line); }
 .logo { font-size:29px; font-weight:700; letter-spacing:-1.7px; color:var(--signal)!important; }
 .logo span { color:var(--accent); }
 .header nav,.footer nav { display:flex; gap:24px; align-items:center; }
 .header nav a { display:flex; align-items:center; gap:7px; font-size:13px; min-height:44px; }
-.main { width:min(900px,calc(100% - 48px)); margin:0 auto; padding:68px 0 64px; }
+.main { width:min(1140px,calc(100% - 48px)); margin:0 auto; padding:68px 0 64px; }
 .heading { text-align:center; margin-bottom:38px; }
 .heading>p:first-child { font-size:13px; color:var(--signal); }
 .heading h1 { margin:15px 0 20px; font-size:clamp(30px,4.5vw,46px); font-weight:650; letter-spacing:-1.6px; line-height:1.3; }
@@ -18,8 +18,8 @@
 .account small { color:var(--muted); font-size:11px; }
 .account button,.trial>a,.feedback a,.feedback button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:44px; padding:8px 0; border:0; background:none; color:var(--signal); font-size:13px; cursor:pointer; }
 .detail { font-size:13px; color:var(--muted); line-height:1.7; }
-.plans { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
-.plan { display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--line-strong); border-radius:10px; padding:30px; }
+.plans { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
+.plan { display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--line-strong); border-radius:10px; padding:26px 22px 22px; }
 .featured { border-color:color-mix(in srgb,var(--signal) 50%,var(--line)); background:color-mix(in srgb,var(--signal) 4%,var(--surface)); }
 /* 플랜 이름 옆 배지. 예전 요금표의 '가장 많이 선택' 문법 그대로. */
 .badge { padding:4px 9px; border-radius:999px; background:var(--accent); color:var(--on-signal); font-size:10.5px; font-weight:650; white-space:nowrap; }
@@ -32,10 +32,11 @@
 .perMonth { margin:2px 0 0; font-size:12px; color:var(--muted); }
 .promoNote { margin:18px auto 0; max-width:680px; text-align:center; font-size:11px; line-height:1.7; color:var(--muted); }
 .selected { outline:2px solid var(--signal); outline-offset:3px; }
-.planName { display:flex; align-items:baseline; flex-wrap:wrap; gap:12px; }
+/* 배지가 둘째 줄로 내려가도 네 카드의 가격이 같은 높이에서 시작한다. */
+.planName { display:flex; align-items:baseline; align-content:flex-start; flex-wrap:wrap; gap:8px 12px; min-height:62px; }
 .planName h2 { margin:0; font-size:23px; font-weight:600; letter-spacing:-.6px; }
 .planName>span { color:var(--muted); font-size:12px; }
-.price { margin:0; font-size:36px; font-weight:600; letter-spacing:-1.2px; font-variant-numeric:tabular-nums; line-height:1.4; }
+.price { margin:0; font-size:31px; font-weight:600; letter-spacing:-1.2px; font-variant-numeric:tabular-nums; line-height:1.4; }
 .price>span { margin-left:8px; font-size:13px; color:var(--muted); font-weight:400; letter-spacing:0; white-space:nowrap; }
 .allowance { padding:22px 0; border-block:1px solid var(--line); }
 .allowance strong { font-size:22px; font-weight:550; letter-spacing:-.4px; }
@@ -68,5 +69,6 @@
 .page :is(h1,h2,p,li) { overflow-wrap:break-word; word-break:normal; }
 .page:lang(ko) :is(h1,h2,p,li) { word-break:keep-all; }
 .page :is(a,button,summary):focus-visible { outline:2px solid var(--signal); outline-offset:4px; }
+@media(max-width:1000px) { .plans { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:620px) { .header,.footer,.main { width:calc(100% - 40px); } .header { min-height:72px; } .main { padding-top:38px; } .heading { text-align:left; margin-bottom:26px; } .heading h1 { letter-spacing:-1px; } .heading p { text-wrap:initial; font-size:14px; } .plans { grid-template-columns:1fr; gap:16px; } .plan { padding:24px; } .price { font-size:33px; } .renewal { min-height:0; } .account { align-items:flex-start; gap:0; } .account small { width:100%; } .included { margin-top:38px; } .included ul { flex-direction:column; } .trial { flex-direction:column; align-items:flex-start; gap:10px; } .header nav,.footer nav { gap:16px; } .paymentNote { justify-content:flex-start; } }
 @media(prefers-reduced-motion:reduce) { .page * { transition:none!important; animation:none!important; } }
