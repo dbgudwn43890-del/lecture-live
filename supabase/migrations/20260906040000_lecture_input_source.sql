@@ -14,3 +14,8 @@ alter table public.lecture_sessions
 create unique index if not exists lecture_sessions_start_request_unique
   on public.lecture_sessions (user_id, start_request_id)
   where start_request_id is not null;
+
+-- 20260902000000 narrowed inserts to an explicit column list, so the two new
+-- columns need their own grant or every start fails with 42501. Both are safe
+-- for the learner to set: a label, and their own dedupe key.
+grant insert (input_source, start_request_id) on public.lecture_sessions to authenticated;
