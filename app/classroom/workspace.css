@@ -16,7 +16,7 @@
 .experience .sidebar-brand-dot { color: var(--accent); }
 .experience .sidebar-header { display: flex; align-items: center; justify-content: space-between; min-width: 0; height: 34px; }
 .experience .sidebar-wordmark { display: inline-block; max-width: 80px; overflow: hidden; vertical-align: bottom; }
-.experience .sidebar-rail-search { display: none; }
+.experience .sidebar-rail-search, .experience .sidebar-toggle-mark { display: none; }
 .experience .sidebar-new-lecture .sidebar-action-label { color: inherit; font-size: inherit; font-weight: inherit; white-space: nowrap; }
 .experience .sidebar-new-lecture { color: var(--signal); background: var(--tint); border-radius: 6px; font-size: 13px; min-height: 38px; }
 .experience .sidebar-section-heading { font-size: 12px; color: var(--muted); }
@@ -146,8 +146,14 @@
   .experience .transcript { padding-inline: max(26px, calc((100% - 580px) / 2)); }
   .workspace.experience.sidebar-collapsed { grid-template-columns: 56px minmax(0, 1fr); }
   .experience.sidebar-collapsed > .workspace-sidebar { padding: 14px 8px 12px; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 8px; }
-  .experience.sidebar-collapsed .sidebar-header { height: auto; flex-direction: column; gap: 12px; }
-  .experience.sidebar-collapsed .sidebar-brand { padding: 0; line-height: 34px; }
+  .experience.sidebar-collapsed .sidebar-header { height: 34px; justify-content: center; }
+  .experience.sidebar-collapsed .sidebar-brand { display: none; }
+  .experience.sidebar-collapsed .sidebar-desktop-toggle { width: 38px; height: 34px; }
+  .experience.sidebar-collapsed .sidebar-toggle-mark { display: block; position: absolute; color: var(--signal); font-size: 23px; font-weight: 800; letter-spacing: -.06em; line-height: 1; }
+  .experience .sidebar-toggle-mark > span { color: var(--accent); }
+  .experience.sidebar-collapsed .sidebar-desktop-toggle > svg { opacity: 0; }
+  .experience.sidebar-collapsed .sidebar-desktop-toggle:is(:hover, :focus-visible) > svg { opacity: 1; }
+  .experience.sidebar-collapsed .sidebar-desktop-toggle:is(:hover, :focus-visible) .sidebar-toggle-mark { opacity: 0; }
   .experience.sidebar-collapsed .sidebar-wordmark { max-width: 0; }
   .experience.sidebar-collapsed .sidebar-new-lecture { padding: 0; justify-content: center; background: transparent; }
   .experience.sidebar-collapsed .sidebar-action-label, .experience.sidebar-collapsed .sidebar-library, .experience.sidebar-collapsed .profile-copy, .experience.sidebar-collapsed .profile-chevron { display: none; }
@@ -162,6 +168,7 @@
 @media (min-width: 801px) and (prefers-reduced-motion: no-preference) {
   .workspace.experience { transition: grid-template-columns 240ms cubic-bezier(.2,.8,.2,1); }
   .experience .sidebar-wordmark { transition: max-width 200ms ease; }
+  .experience .sidebar-desktop-toggle > svg, .experience .sidebar-toggle-mark { transition: opacity 120ms ease; }
 }
 @media (max-width: 800px) {
   .experience .sidebar-desktop-toggle { display: none; }

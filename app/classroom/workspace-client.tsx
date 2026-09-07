@@ -1,7 +1,7 @@
 "use client";
 
 import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, BookOpen, ChevronLeft, ChevronRight, CreditCard, LogOut, Mic, MonitorPlay, MoreHorizontal, MoreVertical, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, ChevronLeft, ChevronRight, CreditCard, LogOut, Mic, MonitorPlay, MoreHorizontal, MoreVertical, PanelLeft, Plus, Search, Settings2, Upload } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import WorkspaceDialog from "./workspace-dialog";
@@ -1626,7 +1626,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         <div className="sidebar-header">
           <Link className="sidebar-brand" href={basePath || "/"} aria-label={isEnglish ? "Lecue home" : "Lecue 홈"}>L<span className="sidebar-wordmark">ecue</span><span className="sidebar-brand-dot" aria-hidden="true">.</span></Link>
       <button className="sidebar-desktop-toggle" type="button" onClick={toggleSidebar} aria-controls="lecture-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? (isEnglish ? "Show lecture list" : "수업 목록 펼치기") : (isEnglish ? "Hide lecture list" : "수업 목록 접기")} title={sidebarCollapsed ? (isEnglish ? "Show lecture list" : "수업 목록 펼치기") : (isEnglish ? "Hide lecture list" : "수업 목록 접기")}>
-        {sidebarCollapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
+        <span className="sidebar-toggle-mark" aria-hidden="true">L<span>.</span></span>
+        <PanelLeft size={16} strokeWidth={1.7} aria-hidden="true" />
       </button>
         </div>
 
