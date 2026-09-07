@@ -6,6 +6,7 @@ import type { DeepgramFinal, DeepgramLanguage } from "../lib/deepgram";
 import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
 import { acquireLectureInput, LectureInputError, type LectureInput, type LectureInputSource } from "../lib/lecture-input";
 import { adaptSonioxMessages, type SonioxMessage } from "../lib/soniox";
+import { PendingLectureSaves } from "../lib/pending-lecture-saves";
 
 export type Status = "idle" | "connecting" | "recording" | "paused" | "ended" | "error";
 /** connecting 안의 세부: 공유 선택창이 열려 있는지, 서버·STT를 여는 중인지. */
@@ -154,7 +155,7 @@ export function useLectureRecorder(options: RecorderOptions) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   // 종료 저장이 실패한 강의. 연결이 돌아오면 자동으로 다시 보낸다.
-  const pendingFinishRef = useRef<{ sessionId: string; durationMs: number } | null>(null);
+  const pendingFinishRef = useRef(new PendingLectureSaves());
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
@@ -222,7 +223,6 @@ export function useLectureRecorder(options: RecorderOptions) {
         body: JSON.stringify({ sessionId, durationMs, segments: segmentList }),
       });
       if (!response.ok) throw new Error();
-      pendingFinishRef.current = null;
       try { window.localStorage.removeItem(`lecue-unsaved-finish-${sessionId}`); } catch { /* 미러는 최선노력 */ }
       return true;
     } catch {
@@ -265,27 +265,30 @@ export function useLectureRecorder(options: RecorderOptions) {
       // 공유가 끝난 뒤 오프라인이었다면 서버는 아직 recording이다. 연결이 돌아오는
       // 즉시 닫아야 그 사이 시간이 다음 세그먼트 과금에 섞이지 않는다(BILL-02).
       if (pendingPauseRef.current) void submitPause(pendingPauseRef.current);
-      const pending = pendingFinishRef.current;
-      if (!pending) return;
-      void submitFinishSave(pending.sessionId, pending.durationMs, segmentsRef.current).then((saved) => {
-        if (!saved) return;
-        options.setError("");
-        options.setNotice(isEnglish ? "The lecture is now fully saved." : "강의 저장을 마쳤습니다.");
-        void options.loadClassrooms();
-        void options.loadCredits();
+      for (const sessionId of pendingFinishRef.current.ids()) {
+        void pendingFinishRef.current.save(sessionId, (pending) => submitFinishSave(pending.sessionId, pending.durationMs, pending.segments)).then((saved) => {
+          if (!saved) return;
+          options.setError("");
+          options.setNotice(isEnglish ? "The lecture is now fully saved." : "강의 저장을 마쳤습니다.");
+          void options.loadClassrooms();
+          void options.loadCredits();
       });
+      }
     };
     try {
       for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
         const key = window.localStorage.key(i);
         if (!key?.startsWith("lecue-unsaved-finish-")) continue;
         const sessionId = key.slice("lecue-unsaved-finish-".length);
-        const stored = JSON.parse(window.localStorage.getItem(key) ?? "") as { durationMs: number; segments: Segment[] };
-        void submitFinishSave(sessionId, stored.durationMs, stored.segments).then((saved) => {
-          if (saved) void options.loadClassrooms();
-        });
+        try {
+          const stored = JSON.parse(window.localStorage.getItem(key) ?? "") as { durationMs: number; segments: Segment[] };
+          if (Number.isFinite(stored.durationMs) && Array.isArray(stored.segments)) {
+            pendingFinishRef.current.add({ sessionId, durationMs: stored.durationMs, segments: stored.segments });
+          }
+        } catch { /* One damaged entry must not block other lectures. */ }
       }
     } catch { /* 깨진 미러는 버린다 */ }
+    retry();
     window.addEventListener("online", retry);
     const timer = window.setInterval(retry, 30_000);
     return () => {
@@ -1123,7 +1126,12 @@ export function useLectureRecorder(options: RecorderOptions) {
     pendingPauseRef.current = null;
     const sessionId = activeSessionIdRef.current;
     if (sessionId) {
-      const saved = await submitFinishSave(sessionId, durationMs, segmentsRef.current);
+      const snapshot = { sessionId, durationMs, segments: structuredClone(segmentsRef.current) };
+      pendingFinishRef.current.add(snapshot);
+      try {
+        window.localStorage.setItem(`lecue-unsaved-finish-${sessionId}`, JSON.stringify(snapshot));
+      } catch { /* If storage is full, the in-memory queue still retries. */ }
+      const saved = await pendingFinishRef.current.save(sessionId, (pending) => submitFinishSave(pending.sessionId, pending.durationMs, pending.segments));
       if (saved) {
         await options.loadClassrooms(activeClassroomId);
         await options.loadCredits();
@@ -1134,11 +1142,6 @@ export function useLectureRecorder(options: RecorderOptions) {
         }
       } else {
         // 유일하게 작업물이 영구 소실되던 경로였다: 미러 + 자동 재시도.
-        pendingFinishRef.current = { sessionId, durationMs };
-        try {
-          window.localStorage.setItem(`lecue-unsaved-finish-${sessionId}`,
-            JSON.stringify({ durationMs, segments: segmentsRef.current }));
-        } catch { /* 저장소가 꽉 차면 자동 재시도에만 의존한다 */ }
         options.setError(isEnglish
           ? "The lecture ended, but saving did not finish. It will retry automatically when the connection returns — keep this tab open."
           : "강의는 종료됐지만 저장을 마치지 못했습니다. 연결이 돌아오면 자동으로 다시 저장합니다 — 탭을 닫지 말고 두세요.");

@@ -36,6 +36,7 @@ const LOCALIZABLE_PATHS = ["/", "/login", "/classroom", "/billing", "/privacy", 
  * from /en/classroom set the cookie and left the visitor on the English page.
  */
 export function localePathFor(path: string, prefersEnglish: boolean) {
+  if (path === "/ko") return prefersEnglish ? "/en" : null;
   const isEnglishPath = path === "/en" || path.startsWith("/en/");
   const koreanPath = isEnglishPath ? (path === "/en" ? "/" : path.slice(3)) : path;
   if (!LOCALIZABLE_PATHS.includes(koreanPath)) return null;

@@ -632,7 +632,10 @@ export async function PATCH(request: Request) {
         text: segment.text.trim(),
       })), { onConflict: "session_id,client_id" })
       : { error: { code: "NO_ADMIN_CLIENT" } };
-    if (error) console.error("Final transcript save failed", error.code);
+    if (error) {
+      console.error("Final transcript save failed", error.code);
+      return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture. Please retry." : "강의 기록을 저장하지 못했습니다. 다시 시도해 주세요." }, { status: 503 });
+    }
   }
 
   // Derived from the session's accumulated active time, not from the client. A client

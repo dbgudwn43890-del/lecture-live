@@ -2,7 +2,7 @@
 // checkout route already enforces (CATALOG_MISMATCH). Idempotent: a price is
 // reused when its custom_data.lecue_key matches the plan's current
 // price/cycle; anything else gets a fresh price so earlier purchases keep
-// their entitlements. Also ensures the transaction.completed webhook.
+// their entitlements. Also ensures payment, subscription and refund webhooks.
 //
 //   node --experimental-strip-types scripts/paddle-catalog.mjs --env sandbox|live \
 //     [--webhook https://www.lecue.app/api/billing/webhook]
@@ -78,18 +78,28 @@ for (const plan of PURCHASE_PLANS) {
 }
 
 const settings = await paddle("/notification-settings");
+const requiredEvents = ["transaction.completed", "subscription.created", "subscription.updated",
+  "subscription.activated", "subscription.canceled", "subscription.paused", "subscription.resumed",
+  "subscription.past_due", "subscription.trialing", "adjustment.created", "adjustment.updated"];
 let setting = settings.find((s) => s.destination === webhookUrl);
 if (!setting) {
   setting = await paddle("/notification-settings", { method: "POST", body: JSON.stringify({
     description: "Lecue billing webhook",
     destination: webhookUrl,
     type: "url",
-    subscribed_events: ["transaction.completed"],
+    subscribed_events: requiredEvents,
     api_version: 1,
     traffic_source: environment === "live" ? "platform" : "all",
   }) });
   console.error(`created webhook ${setting.id}`);
 } else {
+  const existingEvents = setting.subscribed_events.map((event) => typeof event === "string" ? event : event.name);
+  if (!setting.active || requiredEvents.some((event) => !existingEvents.includes(event))) {
+    setting = await paddle(`/notification-settings/${setting.id}`, { method: "PATCH", body: JSON.stringify({
+      active: true,
+      subscribed_events: [...new Set([...existingEvents, ...requiredEvents])],
+    }) });
+  }
   console.error(`reusing webhook ${setting.id} (${setting.subscribed_events.length} events)`);
 }
 

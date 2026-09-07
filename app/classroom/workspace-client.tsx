@@ -1622,21 +1622,26 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
 
   return (
     <main className={`workspace experience${preparing ? " is-preparing" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
-      <button className="sidebar-desktop-toggle" type="button" onClick={toggleSidebar} aria-controls="lecture-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? (isEnglish ? "Show lecture list" : "수업 목록 펼치기") : (isEnglish ? "Hide lecture list" : "수업 목록 접기")} title={sidebarCollapsed ? (isEnglish ? "Show lecture list" : "수업 목록 펼치기") : (isEnglish ? "Hide lecture list" : "수업 목록 접기")}>
-        {sidebarCollapsed ? <PanelLeftOpen size={19} aria-hidden="true" /> : <PanelLeftClose size={19} aria-hidden="true" />}
-      </button>
       <aside id="lecture-sidebar" className={`workspace-sidebar${mobileSidebarOpen ? " is-mobile-open" : ""}`}>
-        <Link className="sidebar-brand" href={basePath || "/"} aria-label={isEnglish ? "Lecue home" : "Lecue 홈"}>Lecue<span aria-hidden="true">.</span></Link>
+        <div className="sidebar-header">
+          <Link className="sidebar-brand" href={basePath || "/"} aria-label={isEnglish ? "Lecue home" : "Lecue 홈"}>L<span className="sidebar-wordmark">ecue</span><span className="sidebar-brand-dot" aria-hidden="true">.</span></Link>
+      <button className="sidebar-desktop-toggle" type="button" onClick={toggleSidebar} aria-controls="lecture-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? (isEnglish ? "Show lecture list" : "수업 목록 펼치기") : (isEnglish ? "Hide lecture list" : "수업 목록 접기")} title={sidebarCollapsed ? (isEnglish ? "Show lecture list" : "수업 목록 펼치기") : (isEnglish ? "Hide lecture list" : "수업 목록 접기")}>
+        {sidebarCollapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
+      </button>
+        </div>
 
         <button
           type="button"
           className="sidebar-new-lecture"
           onClick={prepareNewLecture}
           disabled={sidebarLocked}
+          aria-label={isEnglish ? "New lecture" : "새 수업"}
+          title={isEnglish ? "New lecture" : "새 수업"}
         >
           <Plus size={16} aria-hidden="true" />
-          {isEnglish ? "New lecture" : "새 수업"}
+          <span className="sidebar-action-label">{isEnglish ? "New lecture" : "새 수업"}</span>
         </button>
+        <button className="sidebar-rail-search" type="button" aria-label={isEnglish ? "Search lectures" : "수업 검색"} title={isEnglish ? "Search lectures" : "수업 검색"} onClick={() => { toggleSidebar(); setSidebarSearchOpen(true); }}><Search size={16} aria-hidden="true" /></button>
 
         <button
           type="button"
@@ -1732,7 +1737,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             event.currentTarget.open = false;
             event.currentTarget.querySelector("summary")?.focus();
           }}>
-            <summary className="sidebar-profile">
+            <summary className="sidebar-profile" aria-label={isEnglish ? "My account" : "내 계정"} title={isEnglish ? "My account" : "내 계정"}>
               <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
               <span className="profile-copy">
                 <strong>{profile?.displayName || (isEnglish ? "My account" : "내 계정")}</strong>

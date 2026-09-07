@@ -588,3 +588,16 @@ test("a start request id that is not a uuid is rejected", async () => {
   }));
   assert.equal(response?.status, 400);
 });
+
+test("failed final transcript write leaves the lecture retryable", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = { data: { id: sessionId, classroom_id: null, status: "recording", started_at: new Date().toISOString() }, error: null };
+  outcomes["transcript_segments.upsert"] = { data: null, error: { code: "DB_UNAVAILABLE" } };
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
+    method: "PATCH", body: JSON.stringify({ sessionId, durationMs: 1000, segments: [{ id: "tail", startMs: 0, endMs: 1000, text: "unsaved tail" }] }),
+  }));
+  assert.equal(response?.status, 503);
+  assert.equal(calls.filter(call => call.table === "lecture_sessions" && call.op === "update").length, 0);
+  assert.equal(calls.filter(call => call.table === "rpc:consume_lecture_credits").length, 0);
+  assert.equal(embeddingsCalls.length, 0);
+});

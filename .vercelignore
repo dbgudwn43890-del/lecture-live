@@ -1,0 +1,21 @@
+# Local analysis, credentials and development artifacts are not deployment inputs.
+.env*
+.git
+.next
+.vercel
+node_modules
+graphify-out
+docs
+.agents
+.codex
+*.log
+*.tsbuildinfo
+.DS_Store
+**/.DS_Store
+.claude
+.github
+supabase/.temp
+scripts
+/supabase
+remote-schema.sql
+*.md

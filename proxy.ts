@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getOAuthFallbackNext, localePathFor } from "./app/lib/auth-redirect";
 import { preferredSiteLocale } from "./app/lib/site-locale";
+import { publicPagePair } from "./app/lib/site-seo";
 
 // Matches a path against a route prefix on segment boundaries, so a future
 // /authors or /loginhelp cannot inherit /auth's or /login's public status.
@@ -18,6 +19,7 @@ const LOCALE_COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite:
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  if (path === "/robots.txt" || path === "/sitemap.xml") return NextResponse.next();
 
   // The language toggle appends ?lang=. Remember the choice in a cookie and
   // strip the param, so a Korean speaker abroad is not sent back to /en by the
@@ -60,7 +62,8 @@ export async function proxy(request: NextRequest) {
   // Both directions: into /en when English is preferred, back out of it when
   // Korean is. Only the first was enforced, so the language switch could set
   // the cookie and leave the visitor sitting on the English page.
-  const localeTarget = localePathFor(path, prefersEnglish);
+  // Public language URLs must remain crawlable regardless of country/cookie.
+  const localeTarget = publicPagePair(path) ? null : localePathFor(path, prefersEnglish);
   if (localeTarget) {
     const localeUrl = request.nextUrl.clone();
     localeUrl.pathname = localeTarget;
@@ -68,8 +71,11 @@ export async function proxy(request: NextRequest) {
   }
 
   const requestHeaders = new Headers(request.headers);
-  const explicitlyEnglish = request.headers.get("x-site-locale") === "en";
-  requestHeaders.set("x-site-locale", explicitlyEnglish || usesEnglishHomepage || path === "/en" || path.startsWith("/en/") ? "en" : "ko");
+  requestHeaders.set("x-site-path", path);
+  const apiLocale = isUnder(path, "/api") ? request.headers.get("x-site-locale") : null;
+  requestHeaders.set("x-site-locale", apiLocale === "en" || apiLocale === "ko"
+    ? apiLocale
+    : usesEnglishHomepage || path === "/en" || path.startsWith("/en/") ? "en" : "ko");
   let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   // /auth routes (signout, OAuth callback) manage their own Supabase session
@@ -102,7 +108,7 @@ export async function proxy(request: NextRequest) {
   );
 
   const { data } = await supabase.auth.getClaims();
-  const isPublic = path === "/" || path === "/en" || [
+  const isPublic = Boolean(publicPagePair(path)) || [
     "/login", "/api", "/privacy", "/terms", "/billing", "/refund-policy",
     "/en/login", "/en/privacy", "/en/terms", "/en/billing", "/en/refund-policy",
   ].some((prefix) => isUnder(path, prefix));

@@ -11,10 +11,14 @@
   --signal: #bfd2a6; --signal-dark: #d3e2c0; --focus: #bfd2a6; --accent: #c4b078;
   --soft-blue: #29362a; --tint: #303d2b; --line: #374435; --line-strong: #56624e;
 }
-.experience .workspace-sidebar { background: var(--paper); padding: 24px 14px 16px; gap: 22px; border-color: var(--line); }
-.experience .sidebar-brand { color: var(--signal); font-size: 30px; letter-spacing: -.07em; line-height: 1.1; }
-.experience .sidebar-brand span { color: var(--accent); }
-.experience .sidebar-new-lecture { color: var(--signal); background: var(--tint); border-radius: 6px; font-size: 14px; min-height: 44px; }
+.experience .workspace-sidebar { background: var(--paper); padding: 14px 10px 12px; gap: 16px; border-color: var(--line); }
+.experience .sidebar-brand { color: var(--signal); font-size: 23px; letter-spacing: -.06em; line-height: 1.1; }
+.experience .sidebar-brand-dot { color: var(--accent); }
+.experience .sidebar-header { display: flex; align-items: center; justify-content: space-between; min-width: 0; height: 34px; }
+.experience .sidebar-wordmark { display: inline-block; max-width: 80px; overflow: hidden; vertical-align: bottom; }
+.experience .sidebar-rail-search { display: none; }
+.experience .sidebar-new-lecture .sidebar-action-label { color: inherit; font-size: inherit; font-weight: inherit; white-space: nowrap; }
+.experience .sidebar-new-lecture { color: var(--signal); background: var(--tint); border-radius: 6px; font-size: 13px; min-height: 38px; }
 .experience .sidebar-section-heading { font-size: 12px; color: var(--muted); }
 .experience .sidebar-classroom { font-size: 13px; min-height: 38px; }
 .experience .sidebar-classroom.active, .experience .sidebar-session.is-active { background: var(--tint); }
@@ -114,7 +118,7 @@
 .experience .footnote > a { display: inline-flex; align-items: center; gap: 4px; color: var(--signal); text-decoration: none; white-space: nowrap; }
 .experience .footnote-links > span { display: none; }
 .experience .error-banner, .experience .notice-banner { flex-shrink: 0; }
-.experience .sidebar-desktop-toggle { position: absolute; top: 19px; left: 16px; z-index: 5; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
+.experience .sidebar-desktop-toggle { position: relative; flex-shrink: 0; z-index: 5; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
 .experience .sidebar-desktop-toggle:hover { color: var(--signal); background: var(--tint); }
 .experience .sidebar-desktop-toggle:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .experience .review-summary { margin-left: auto; color: var(--muted); font-size: 11px; }
@@ -130,7 +134,7 @@
 .lecture-preview-caption { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
 .lecture-preview-caption button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--signal); }
 @media (min-width: 801px) {
-  .experience .sidebar-brand { margin-left: 48px; }
+  .experience .sidebar-brand { margin-left: 0; }
   .experience .topbar > .lecture-title-field { grid-column: 1; grid-row: 1; }
   .experience .topbar > .session-state { grid-column: 2; grid-row: 1; }
   .experience .topbar > .lecture-controls { grid-column: 3; grid-row: 1; }
@@ -140,12 +144,24 @@
   .experience .chat-pane { border-right: 1px solid var(--line); }
   .experience .messages { padding-inline: max(26px, calc((100% - 560px) / 2)); }
   .experience .transcript { padding-inline: max(26px, calc((100% - 580px) / 2)); }
-  .workspace.experience.sidebar-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
-  .experience.sidebar-collapsed > .workspace-sidebar { visibility: hidden; overflow: hidden; padding: 0; border: 0; }
-  .workspace.experience.sidebar-collapsed .topbar { padding-left: 72px; }
+  .workspace.experience.sidebar-collapsed { grid-template-columns: 56px minmax(0, 1fr); }
+  .experience.sidebar-collapsed > .workspace-sidebar { padding: 14px 8px 12px; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 8px; }
+  .experience.sidebar-collapsed .sidebar-header { height: auto; flex-direction: column; gap: 12px; }
+  .experience.sidebar-collapsed .sidebar-brand { padding: 0; line-height: 34px; }
+  .experience.sidebar-collapsed .sidebar-wordmark { max-width: 0; }
+  .experience.sidebar-collapsed .sidebar-new-lecture { padding: 0; justify-content: center; background: transparent; }
+  .experience.sidebar-collapsed .sidebar-action-label, .experience.sidebar-collapsed .sidebar-library, .experience.sidebar-collapsed .profile-copy, .experience.sidebar-collapsed .profile-chevron { display: none; }
+  .experience.sidebar-collapsed .sidebar-rail-search { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; }
+  .experience.sidebar-collapsed :is(.sidebar-rail-search, .sidebar-new-lecture):hover { background: var(--tint); }
+  .experience.sidebar-collapsed .sidebar-account { grid-row: 5; padding: 0; border: 0; }
+  .experience.sidebar-collapsed .sidebar-profile { display: flex; justify-content: center; padding: 5px; }
+  .experience.sidebar-collapsed .sidebar-profile > .profile-avatar { width: 28px; height: 28px; font-size: 11px; }
+  .experience.sidebar-collapsed .profile-menu-panel { left: 48px; bottom: 0; }
+
 }
 @media (min-width: 801px) and (prefers-reduced-motion: no-preference) {
   .workspace.experience { transition: grid-template-columns 240ms cubic-bezier(.2,.8,.2,1); }
+  .experience .sidebar-wordmark { transition: max-width 200ms ease; }
 }
 @media (max-width: 800px) {
   .experience .sidebar-desktop-toggle { display: none; }
