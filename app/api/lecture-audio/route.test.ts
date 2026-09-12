@@ -25,22 +25,35 @@ let decoderInstalled = true;
 let recordingConsents = true;
 let authenticated = true;
 let verifiedFiles = 0;
+let afterCallbacks: (() => Promise<void>)[] = [];
+let expiredUploads: { id: string; object_key: string }[] = [];
+let cleanupFilters: { operation: string; filters: Record<string, unknown> }[] = [];
+let deletionJobs: Record<string, unknown>[] = [];
+let drainCalls: Record<string, unknown>[] = [];
+let cleanupFailure: "enqueue" | "drain" | null = null;
 
 function queryBuilder(table: string) {
   let operation = "select";
+  let columns = "";
+  const filters: Record<string, unknown> = {};
   const settle = () => {
     let data: unknown = null;
+    if (table === "uploads" && columns === "id,object_key") {
+      cleanupFilters.push({ operation, filters });
+      data = expiredUploads;
+    }
     if (table === "lecture_sessions" && operation === "insert") data = { id: sessionId };
     if (table === "uploads" && operation !== "select") data = { id: uploadId, session_id: sessionId, status: "processing" };
+    if (table === "uploads" && operation === "update") cleanupFilters.push({ operation, filters });
     if (table === "classrooms") data = { id: "classroom", glossary: "Fourier transform, Lecue" };
     return Promise.resolve({ data, error: null });
   };
   const api = {
-    select() { return api; },
+    select(value: string) { columns = value; return api; },
     insert() { operation = "insert"; mutations.push(`${table}.insert`); return api; },
     update() { operation = "update"; mutations.push(`${table}.update`); return api; },
     delete() { operation = "delete"; mutations.push(`${table}.delete`); return api; },
-    eq() { return api; },
+    eq(key: string, value: unknown) { filters[key] = value; return api; },
     is() { return api; },
     lt() { return api; },
     order() { return api; },
@@ -89,6 +102,10 @@ registerHooks({
   },
 });
 
+mock.module("next/server.js", { namedExports: {
+  NextResponse: Response,
+  after: (callback: () => Promise<void>) => { afterCallbacks.push(callback); },
+} });
 mock.module(pathToFileURL("app/lib/supabase/server.ts").href, {
   namedExports: { createClient: async () => supabaseStub },
 });
@@ -110,7 +127,17 @@ mock.module(pathToFileURL("app/lib/verified-audio.ts").href, {
   namedExports: { verifyAudio: async () => { verifiedFiles += 1; return { bytes: new Uint8Array([1, 2, 3]), durationMs }; }, verifyAudioStream: async () => { throw new Error("unused"); }, AudioVerificationError: class extends Error {} },
 });
 mock.module(pathToFileURL("app/lib/storage-cleanup.ts").href, {
-  namedExports: { enqueueStorageDeletion: async () => {}, drainStorageDeletions: async () => ({}) },
+  namedExports: {
+    enqueueStorageDeletion: async (_admin: unknown, job: Record<string, unknown>) => {
+      deletionJobs.push(job);
+      if (cleanupFailure === "enqueue") throw new Error("private cleanup detail");
+    },
+    drainStorageDeletions: async (_admin: unknown, options: Record<string, unknown>) => {
+      drainCalls.push(options);
+      if (cleanupFailure === "drain") throw new Error("private cleanup detail");
+      return {};
+    },
+  },
 });
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: RequestInfo | URL) => {
@@ -140,6 +167,7 @@ function uploadRequest(language: string | null, locale = "ko") {
 test.beforeEach(() => {
   providerUrls = []; mutations = []; credits = 180; durationMs = 1000; providerStatus = 200; throwProvider = false; settlementCharges = []; reservations = [];
   adminConfigured = true; decoderInstalled = true; recordingConsents = true; authenticated = true; verifiedFiles = 0;
+  afterCallbacks = []; expiredUploads = []; cleanupFilters = []; deletionJobs = []; drainCalls = []; cleanupFailure = null;
   process.env.DEEPGRAM_API_KEY = "dg-test";
   process.env.SITE_URL = "https://lecue.test";
   process.env.LECTURE_AUDIO_CALLBACK_SECRET = "test-secret";
@@ -156,6 +184,46 @@ test("upload readiness is available before a file is selected and contains no se
   assert.equal(verifiedFiles, 0);
   assert.deepEqual(providerUrls, []);
   assert.deepEqual(mutations, []);
+});
+
+test("upload status responds before cleanup and keeps deletions scoped to its owner", async () => {
+  expiredUploads = [{ id: uploadId, object_key: `${userId}/expired.flac` }];
+  const response = await GET(new Request(`https://lecue.test/api/lecture-audio?sessionId=${sessionId}`));
+  assert.equal(response?.status, 200);
+  assert.deepEqual((await response?.json()).uploads, []);
+  assert.equal(afterCallbacks.length, 1);
+  assert.deepEqual(cleanupFilters, []);
+  assert.deepEqual(deletionJobs, []);
+  assert.deepEqual(drainCalls, []);
+  assert.deepEqual(mutations, []);
+
+  await afterCallbacks[0]();
+  assert.deepEqual(deletionJobs, [{ bucket: "lecture-audio", objectKey: `${userId}/expired.flac`, userId, reason: "upload_expired" }]);
+  assert.deepEqual(cleanupFilters, [
+    { operation: "select", filters: { user_id: userId } },
+    { operation: "update", filters: { id: uploadId, user_id: userId } },
+  ]);
+  assert.deepEqual(drainCalls, [{ limit: 20, userId }]);
+});
+
+for (const stage of ["enqueue", "drain"] as const) test(`a cleanup ${stage} failure leaves status available and is retried on the next poll`, async t => {
+  expiredUploads = [{ id: uploadId, object_key: `${userId}/expired.flac` }];
+  cleanupFailure = stage;
+  const logged = t.mock.method(console, "error", () => {});
+  const response = await GET(new Request("https://lecue.test/api/lecture-audio"));
+  assert.equal(response?.status, 200);
+  assert.deepEqual((await response?.json()).uploads, []);
+  await assert.doesNotReject(afterCallbacks[0]);
+  assert.deepEqual(logged.mock.calls.map(call => call.arguments), [["Upload cleanup failed"]]);
+  if (stage === "enqueue") assert.deepEqual(mutations, [], "the row stays retryable until its deletion is queued");
+
+  cleanupFailure = null;
+  const retry = await GET(new Request("https://lecue.test/api/lecture-audio"));
+  assert.equal(retry?.status, 200);
+  await afterCallbacks[1]();
+  assert.equal(deletionJobs.length, 2);
+  assert.deepEqual(deletionJobs[1], deletionJobs[0]);
+  assert.deepEqual(drainCalls.at(-1), { limit: 20, userId });
 });
 
 for (const missing of ["DEEPGRAM_API_KEY", "SITE_URL", "LECTURE_AUDIO_CALLBACK_SECRET", "admin", "decoder"]) {

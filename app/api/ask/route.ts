@@ -362,10 +362,7 @@ function isUuid(value: unknown): value is string {
 const EMPTY_CLASSROOM_CONTEXT = {
   text: "",
   sources: [] as LectureSource[],
-  materialOverview: "",
-  materialOverviewSources: [] as MaterialSource[],
   materialText: "",
-  screenText: "",
   requestedPageText: "",
   materialSources: [] as MaterialSource[],
 };
@@ -1074,16 +1071,6 @@ export async function POST(request: Request) {
       ? `\n\nRelevant excerpts from materials attached to this lecture:\n${earlier.materialText}`
       : `\n\n이 수업에 넣은 강의 자료 중 관련 내용:\n${earlier.materialText}`
     : "";
-  const materialOverviewBlock = earlier.materialOverview
-    ? locale === "en"
-      ? `\n\nMaterials attached to this lecture (always available context):\n${earlier.materialOverview}`
-      : `\n\n이 수업에 넣은 강의 자료 개요(항상 참고할 맥락):\n${earlier.materialOverview}`
-    : "";
-  const screenBlock = earlier.screenText
-    ? locale === "en"
-      ? `\n\nMaterial the lecture is most likely on screen right now:\n${earlier.screenText}`
-      : `\n\n지금 화면에 떠 있을 가능성이 높은 강의 자료:\n${earlier.screenText}`
-    : "";
   const requestedPageBlock = earlier.requestedPageText
     ? locale === "en"
       ? `\n\nRequested material page results (prioritize these exact pages; follow each availability status):\n${earlier.requestedPageText}`
@@ -1097,8 +1084,8 @@ export async function POST(request: Request) {
       : "(음성 기록 없음. 아래에 읽을 수 있는 강의 자료 본문이 제공됨.)"
     : locale === "en" ? "(No finalized transcript yet)" : "(아직 확정된 스크립트 없음)");
   const input = locale === "en"
-    ? `Lecture transcript:\n${transcriptContext}${requestedPageBlock}${conceptBlock}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}${historyBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
-    : `강의 스크립트:\n${transcriptContext}${requestedPageBlock}${conceptBlock}${earlierBlock}${screenBlock}${materialOverviewBlock}${materialBlock}${historyBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
+    ? `Lecture transcript:\n${transcriptContext}${requestedPageBlock}${conceptBlock}${earlierBlock}${materialBlock}${historyBlock}\n\nQuestion time: ${formatTime(questionAtMs)}\n\nLearner's question:\n${question}`
+    : `강의 스크립트:\n${transcriptContext}${requestedPageBlock}${conceptBlock}${earlierBlock}${materialBlock}${historyBlock}\n\n질문 시점: ${formatTime(questionAtMs)}\n\n사용자 질문:\n${question}`;
 
   // Everything above this line is validation (auth, rate limit, credits, body
   // shape); only once all of it has passed does the response start streaming.

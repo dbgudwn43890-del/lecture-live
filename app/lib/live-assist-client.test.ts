@@ -281,6 +281,61 @@ test("enabling consumes the existing transcript baseline and only new speech sch
   h.controller.dispose();
 });
 
+test("disabled clock and speech updates do no processing or publication, then enabling uses the latest baseline", async () => {
+  const h = harness();
+  h.update({ enabled: false });
+  const off = h.controller.getSnapshot();
+  let publications = 0;
+  let textReads = 0;
+  let historyReads = 0;
+  h.controller.subscribe(() => publications++);
+  const segments = [{ get text() { textReads++; return "꺼진 동안 저장된 발화입니다."; } }];
+  const conversation = [{ role: "user" as const, get content() { historyReads++; return "꺼진 동안 입력한 질문입니다."; } }];
+  for (let tick = 1; tick <= 60; tick++) {
+    h.update({ elapsedMs: tick * 1_000, segments, conversation, interim: `꺼진 동안 말한 내용 ${tick}`, materialRevision: `material-${tick}` });
+  }
+  await h.advance(60_000);
+  assert.deepEqual({ publications, textReads, historyReads }, { publications: 0, textReads: 0, historyReads: 0 });
+  assert.equal(h.controller.getSnapshot(), off);
+  assert.equal(h.calls.length, 0);
+
+  h.update({ enabled: true });
+  assert.ok(textReads > 0 && historyReads > 0, "enabling builds the current context, including changes made while off");
+  await h.advance(10_000);
+  assert.equal(h.calls.length, 0, "speech accumulated while off must not be replayed");
+  h.update({ interim: "이제 새롭게 답변해 줄 질문입니다." });
+  await h.advance(600);
+  assert.equal(h.calls.length, 1);
+  assert.match(String(h.calls[0].body.transcript), /꺼진 동안 저장된 발화/);
+  assert.deepEqual(h.calls[0].body.conversation, [{ role: "user", content: "꺼진 동안 입력한 질문입니다." }]);
+  h.controller.dispose();
+});
+
+test("turning off finalizes a partial answer once and a disabled session change still clears it", async () => {
+  const stream = controlledStream();
+  const h = harness(() => stream.response);
+  h.update({ interim: "새로 설명해 줄 질문입니다." });
+  await h.advance(600);
+  stream.send({ decision: "answer" }); stream.send({ delta: "이미 받은 설명은 보존합니다." });
+  await flush();
+  h.update({ enabled: false });
+  await flush();
+  const off = h.controller.getSnapshot();
+  assert.equal(h.calls[0].signal.aborted, true);
+  assert.equal(off.answers.length, 1);
+  assert.equal(off.answers[0].text, "이미 받은 설명은 보존합니다.");
+  assert.equal(off.answers[0].pending, false);
+  h.update({ status: "paused", interim: "나중 발화" });
+  h.update({ status: "ended", elapsedMs: 50_000 });
+  assert.equal(h.controller.getSnapshot(), off);
+  h.update({ sessionId: "session-b", segments: [], interim: "" });
+  assert.deepEqual(h.controller.getSnapshot().answers, []);
+  assert.equal(h.controller.getSnapshot().phase, "off");
+  await h.advance(60_000);
+  assert.equal(h.calls.length, 1);
+  h.controller.dispose();
+});
+
 test("short complete Korean and English questions do not wait for another sentence", async () => {
   for (const question of ["왜요?", "왜?", "예시는?", "Why?", "Why"]) {
     const h = harness();

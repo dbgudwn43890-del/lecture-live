@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { hasVerifiedEmail } from "../../lib/verified-email";
 
 import { AudioVerificationError, verifyAudio } from "../../lib/verified-audio";
@@ -56,10 +56,10 @@ async function context(request: Request) {
 
 async function sweepExpired(supabase: Awaited<ReturnType<typeof createClient>>, admin: NonNullable<ReturnType<typeof createAdminClient>>, userId: string) {
   const { data: expired } = await supabase.from("uploads").select("id,object_key")
-    .is("deleted_at", null).lt("delete_at", new Date().toISOString()).limit(20);
+    .eq("user_id", userId).is("deleted_at", null).lt("delete_at", new Date().toISOString()).limit(20);
   for (const upload of expired ?? []) {
     if (upload.object_key) await enqueueStorageDeletion(admin, { bucket: "lecture-audio", objectKey: upload.object_key, userId, reason: "upload_expired" });
-    await admin.from("uploads").update({ status: "deleted", updated_at: new Date().toISOString() }).eq("id", upload.id);
+    await admin.from("uploads").update({ status: "deleted", updated_at: new Date().toISOString() }).eq("id", upload.id).eq("user_id", userId);
   }
   await drainStorageDeletions(admin, { limit: 20, userId });
 }
@@ -69,7 +69,15 @@ export async function GET(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
   const availability = await getAudioUploadAvailability(Boolean(current.admin));
-  if (current.admin) await sweepExpired(current.supabase, current.admin, current.userId);
+  const { admin, supabase, userId } = current;
+  if (admin) after(async () => {
+    try {
+      await sweepExpired(supabase, admin, userId);
+    } catch {
+      // The persisted queue and subsequent polls retain failed deletions.
+      console.error("Upload cleanup failed");
+    }
+  });
 
   const sessionId = new URL(request.url).searchParams.get("sessionId");
   const query = current.supabase

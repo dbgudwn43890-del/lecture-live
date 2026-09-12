@@ -17,6 +17,7 @@ import type { NoteLanguage, NoteLanguagePreference } from "../lib/note-language"
 
 import type { LectureNote, NoteBlock } from "../lib/lecture-note";
 import { safeNoteDiagram } from "../lib/mermaid-safety";
+import { renderMaterialPdfPage } from "./material-pdf";
 
 /** The workspace owns generation state, so closing the dialog does not reset it. */
 export default function LectureNotePanel({
@@ -297,54 +298,14 @@ function Formula({ block }: { block: NoteBlock }) {
   );
 }
 
-/**
- * 자료 PDF를 문서 단위로 한 번만 내려받아 여러 material 블록이 나눠 쓴다.
- * ponytail: 모듈 수명 캐시. 서명 URL(15분)이 지나도 이미 연 문서는 계속 그려진다.
- */
-const materialPdfCache = new Map<string, Promise<import("pdfjs-dist").PDFDocumentProxy>>();
-
-async function openMaterialPdf(documentId: string) {
-  let cached = materialPdfCache.get(documentId);
-  if (!cached) {
-    cached = (async () => {
-      const response = await fetch(`/api/materials?documentId=${encodeURIComponent(documentId)}`);
-      const data = await response.json() as { url?: string; error?: string };
-      if (!response.ok || !data.url) throw new Error(data.error);
-      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      pdfjs.GlobalWorkerOptions.workerSrc =
-        `/pdfjs/${pdfjs.version}/pdf.worker.min.mjs`;
-      return pdfjs.getDocument({ url: data.url }).promise;
-    })();
-    materialPdfCache.set(documentId, cached);
-    cached.catch(() => materialPdfCache.delete(documentId));
-  }
-  return cached;
-}
-
 function MaterialPage({ block, isEnglish, sourceCaption }: { block: NoteBlock; isEnglish: boolean; sourceCaption?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
   const caption = sourceCaption ?? `${block.label} · p.${block.page}`;
 
   useEffect(() => {
-    if (!block.documentId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const pdf = await openMaterialPdf(block.documentId!);
-        const page = await pdf.getPage(block.page);
-        const viewport = page.getViewport({ scale: 2 });
-        const canvas = canvasRef.current;
-        if (!canvas || cancelled) return;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvas, canvasContext: canvas.getContext("2d")!, viewport }).promise;
-      } catch {
-        // 원본 미보관·서명 만료·렌더 실패. 이미지만 접고 캡션은 남긴다.
-        if (!cancelled) setFailed(true);
-      }
-    })();
-    return () => { cancelled = true; };
+    if (!block.documentId || !canvasRef.current) return;
+    return renderMaterialPdfPage(block.documentId, block.page, canvasRef.current, () => setFailed(true));
   }, [block.documentId, block.page]);
 
   if (!block.documentId) return block.text ? <AnswerMarkdown text={block.text} /> : null;
@@ -362,7 +323,6 @@ let diagramSequence = 0;
 function Diagram({ block, isEnglish }: { block: NoteBlock; isEnglish: boolean }) {
   const [svg, setSvg] = useState("");
   const [broken, setBroken] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -389,7 +349,7 @@ function Diagram({ block, isEnglish }: { block: NoteBlock; isEnglish: boolean })
       {block.text && <figcaption><AnswerMarkdown text={block.text} /></figcaption>}
       <details className="note-diagram-details">
         <summary>{isEnglish ? "Diagram" : "도식 보기"}<ChevronDown size={14} aria-hidden="true" /></summary>
-        <div ref={containerRef} dangerouslySetInnerHTML={{ __html: svg }} />
+        <div dangerouslySetInnerHTML={{ __html: svg }} />
       </details>
     </figure>
   );

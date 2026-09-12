@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -14,7 +15,9 @@ const sourceUrl = `https://ffmpeg.org/releases/ffmpeg-${VERSION}.tar.xz`;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const destination = join(root, '.ffmpeg');
 const binary = join(destination, 'ffmpeg');
-const identity = `${VERSION}:${SHA256}:${process.platform}:${process.arch}:audio-v1`;
+// Invalidate restored binaries whenever the build recipe (including codec flags) changes.
+const recipe = createHash('sha256').update(await readFile(fileURLToPath(import.meta.url))).digest('hex');
+const identity = `${VERSION}:${SHA256}:${process.platform}:${process.arch}:${recipe}`;
 if (!['darwin', 'linux'].includes(process.platform)) throw new Error('The verified audio decoder currently requires macOS or Linux.');
 
 try {

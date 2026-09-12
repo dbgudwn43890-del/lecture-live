@@ -17,6 +17,7 @@ type NoteResponse = {
 };
 
 const POLL_INTERVAL = 3_000;
+const READ_TIMEOUT = 15_000;
 const REQUEST_CONFIRMATION_WINDOW = 30_000;
 
 /** One session's controller outlives its dialog; the server is the source of job state. */
@@ -33,6 +34,7 @@ export function createLectureNoteController(
   let readVersion = 0;
   let mutationVersion = 0;
   let reading: AbortController | null = null;
+  let readPromise: Promise<void> | null = null;
   let posting = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let lastUpdatedAt: string | null = null;
@@ -97,33 +99,50 @@ export function createLectureNoteController(
     }
   }
 
-  async function reload() {
-    if (!active || !sessionId || posting) { schedulePoll(); return; }
+  function reload(): Promise<void> {
+    if (!active || !sessionId || posting) { schedulePoll(); return Promise.resolve(); }
+    // Focus, visibility and polling can arrive together. Share their read;
+    // generation and disposal still abort it and invalidate its version.
+    if (reading && !reading.signal.aborted && readPromise) return readPromise;
     const owner = lifetime;
     const read = ++readVersion;
     const mutation = mutationVersion;
-    reading?.abort();
     const request = new AbortController();
     reading = request;
     const isCurrent = () => active && owner === lifetime && read === readVersion && mutation === mutationVersion;
-    try {
-      const response = await fetcher(`/api/lecture-notes?sessionId=${encodeURIComponent(sessionId)}`, {
-        headers: { "X-Site-Locale": isEnglish ? "en" : "ko" },
-        cache: "no-store", signal: request.signal,
-      });
-      const data = await response.json() as NoteResponse;
-      if (!isCurrent()) return;
-      if (!response.ok) throw new Error(data.error || loadError);
-      accept(data);
-    } catch (error) {
-      if (!isCurrent() || request.signal.aborted) return;
-      const message = error instanceof Error && !(error instanceof TypeError) && error.message ? error.message : loadError;
-      // A temporary read failure says nothing about the background job's outcome.
-      publish({ ...state, phase: state.phase === "generating" ? "generating" : "error", message });
-    } finally {
-      if (reading === request) reading = null;
-      if (isCurrent()) schedulePoll();
-    }
+    let timedOut = false;
+    let onAbort!: () => void;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(new DOMException("Aborted", "AbortError"));
+      request.signal.addEventListener("abort", onAbort, { once: true });
+    });
+    const deadline = setTimeout(() => { timedOut = true; request.abort(); }, READ_TIMEOUT);
+    readPromise = (async () => {
+      try {
+        const data = await Promise.race([(async () => {
+          const response = await fetcher(`/api/lecture-notes?sessionId=${encodeURIComponent(sessionId)}`, {
+            headers: { "X-Site-Locale": isEnglish ? "en" : "ko" },
+            cache: "no-store", signal: request.signal,
+          });
+          const data = await response.json() as NoteResponse;
+          if (!response.ok) throw new Error(data.error || loadError);
+          return data;
+        })(), aborted]);
+        if (!isCurrent()) return;
+        accept(data);
+      } catch (error) {
+        if (!isCurrent() || (request.signal.aborted && !timedOut)) return;
+        const message = !timedOut && error instanceof Error && !(error instanceof TypeError) && error.message ? error.message : loadError;
+        // A temporary read failure says nothing about the background job's outcome.
+        publish({ ...state, phase: state.phase === "generating" ? "generating" : "error", message });
+      } finally {
+        clearTimeout(deadline);
+        request.signal.removeEventListener("abort", onAbort);
+        if (reading === request) { reading = null; readPromise = null; }
+        if (isCurrent()) schedulePoll();
+      }
+    })();
+    return readPromise;
   }
 
   async function generate(force: boolean, language?: NoteLanguage) {
@@ -194,6 +213,7 @@ export function createLectureNoteController(
       ++mutationVersion;
       reading?.abort();
       reading = null;
+      readPromise = null;
       posting = false;
       if (timer) clearTimeout(timer);
       timer = null;

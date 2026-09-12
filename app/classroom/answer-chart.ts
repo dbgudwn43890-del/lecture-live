@@ -43,12 +43,10 @@ export function parseAnswerChart(source: string): AnswerChartData | null {
   }
 }
 
-function formatValue(value: number, isEnglish: boolean) {
-  return new Intl.NumberFormat(isEnglish ? "en-US" : "ko-KR", {
-    maximumSignificantDigits: 21,
-    notation: value !== 0 && (value < 0.0001 || value >= 1e9) ? "scientific" : "standard",
-  }).format(value);
-}
+const numberFormats = ["ko-KR", "en-US"].map(locale => ({
+  standard: new Intl.NumberFormat(locale, { maximumSignificantDigits: 21, notation: "standard" }),
+  scientific: new Intl.NumberFormat(locale, { maximumSignificantDigits: 21, notation: "scientific" }),
+}));
 
 export function AnswerChart({ data, pending = false, isEnglish = false }: { data: AnswerChartData | null; pending?: boolean; isEnglish?: boolean }) {
   if (!data) return createElement("p", { className: "answer-chart-status", role: pending ? "status" : undefined }, pending
@@ -57,7 +55,8 @@ export function AnswerChart({ data, pending = false, isEnglish = false }: { data
 
   const stacked = data.type === "stacked-bar";
   const maximum = Math.max(...data.rows.map(row => row.values[0]));
-  const number = (value: number) => formatValue(value, isEnglish);
+  const formats = numberFormats[isEnglish ? 1 : 0];
+  const number = (value: number) => formats[value !== 0 && (value < 0.0001 || value >= 1e9) ? "scientific" : "standard"].format(value);
   const valueWithUnit = (value: number) => `${number(value)}${data.unit ? ` ${data.unit}` : ""}`;
   return createElement("figure", { className: "answer-chart", "data-chart-type": data.type, "aria-label": data.title },
     createElement("figcaption", { className: "answer-chart-caption" },

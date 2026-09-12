@@ -279,19 +279,11 @@ export async function POST(request: Request) {
  * 이전 카드를 대체한다. 실패해도 노트는 이미 저장됐다 — 다음 재생성이 채운다.
  */
 async function saveConcepts(supabase: Supabase, userId: string, classroomId: string | null, sessionId: string, note: LectureNote) {
-  const concepts = (note.concepts ?? [])
-    .filter((concept) => concept.name.trim() && concept.definition.trim())
-    .slice(0, 20);
+  const concepts = note.concepts ?? [];
   try {
     await supabase.from("lecture_concepts").delete().eq("session_id", sessionId);
     if (!concepts.length) return;
-    const seen = new Set<string>();
-    const rows = concepts.filter((concept) => {
-      const key = concept.name.trim();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).map((concept) => {
+    const rows = concepts.map((concept) => {
       const spoken = concept.sources?.find(source => source.startMs !== undefined);
       return {
         user_id: userId,

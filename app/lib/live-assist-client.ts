@@ -325,6 +325,9 @@ export function createLiveAssistController(dependencies: ClientDependencies = {}
       const previousKey = latest.key;
       const previousContextKey = latest.contextKey;
       input = next;
+      // While off, keep only the latest input. Enabling rebuilds its baseline;
+      // clock ticks and incoming speech need no parsing or React publication.
+      if (!next.enabled && previous?.enabled === false && previous.sessionId === next.sessionId) return;
       const transcript = buildLiveTranscript(next.segments, next.interim);
       const conversation = buildLiveConversation((next.conversation ?? []).map((message) => ({ role: message.role, text: message.content })));
       latest = { transcript, key: speechKey(transcript), conversation, contextKey: JSON.stringify([conversation, next.materialRevision ?? ""]) };

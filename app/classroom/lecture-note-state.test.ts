@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setImmediate } from "node:timers/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { createLectureNoteController } from "./lecture-note-state.ts";
 
 const oldNote = { title: "Previous note", summary: "Previous summary", sections: [] };
@@ -410,7 +412,7 @@ test("an unchanged failed row keeps confirmation until expiry, then requests a s
   assert.equal(posts, 1);
 });
 
-test("an earlier GET cannot overwrite a newer focus refresh, even when abort is ignored", async t => {
+test("an earlier GET cannot overwrite a restarted controller, even when abort is ignored", async t => {
   const stale = deferred<Response>();
   let reads = 0;
   const controller = createLectureNoteController("lecture-a", false, async () => {
@@ -419,10 +421,188 @@ test("an earlier GET cannot overwrite a newer focus refresh, even when abort is 
   });
   t.after(() => controller.dispose());
   controller.start();
+  controller.dispose();
+  controller.start();
   await controller.reload();
   stale.resolve(json(ready()));
   await setImmediate();
   assert.deepEqual(controller.getSnapshot().note, newNote);
+});
+
+test("focus, visibility and polling share an in-flight note read and await the same result", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const result = deferred<Response>();
+  let reads = 0;
+  let signal: AbortSignal | null | undefined;
+  const controller = createLectureNoteController("lecture-a", false, async (_url, init) => {
+    reads++;
+    if (reads === 1) return json(waiting());
+    signal = init?.signal;
+    return result.promise;
+  });
+  t.after(() => controller.dispose());
+  controller.start();
+  await setImmediate();
+  const focused = controller.reload();
+  const visible = controller.reload();
+  assert.equal(focused, visible);
+  t.mock.timers.tick(3_000);
+  await setImmediate();
+  assert.equal(reads, 2, "the initial read plus one shared refresh");
+  assert.equal(signal?.aborted, false);
+  result.resolve(json(ready(newNote, doneTime)));
+  await Promise.all([focused, visible]);
+  assert.deepEqual(controller.getSnapshot().note, newNote);
+  t.mock.timers.tick(9_000);
+  await setImmediate();
+  assert.equal(reads, 2, "ready notes stop polling");
+});
+
+test("a failed shared read releases the slot for the next explicit retry", async t => {
+  const failed = deferred<Response>();
+  let reads = 0;
+  const controller = createLectureNoteController("lecture-a", true, async () => {
+    reads++;
+    return reads === 1 ? failed.promise : json(ready(newNote, doneTime));
+  });
+  t.after(() => controller.dispose());
+  controller.start();
+  const first = controller.reload();
+  assert.equal(first, controller.reload());
+  failed.resolve(json({ error: "Could not load the note." }, 503));
+  await first;
+  assert.equal(controller.getSnapshot().phase, "error");
+  await controller.reload();
+  assert.equal(reads, 2);
+  assert.deepEqual(controller.getSnapshot().note, newNote);
+});
+
+test("generation replaces a shared read and its late result cannot release the newer read", async t => {
+  const stale = deferred<Response>();
+  const fresh = deferred<Response>();
+  let reads = 0;
+  let staleSignal: AbortSignal | null | undefined;
+  const controller = createLectureNoteController("lecture-a", false, async (_url, init) => {
+    if (init?.method === "POST") return json(waiting(oldNote), 202);
+    reads++;
+    if (reads === 1) return json(ready());
+    if (reads === 2) { staleSignal = init?.signal; return stale.promise; }
+    return fresh.promise;
+  });
+  t.after(() => controller.dispose());
+  controller.start();
+  await setImmediate();
+  const oldRead = controller.reload();
+  assert.equal(oldRead, controller.reload());
+  await controller.generate(true);
+  assert.equal(staleSignal?.aborted, true);
+  assert.equal(reads, 3, "generation starts its own read instead of joining the aborted one");
+  const currentRead = controller.reload();
+  stale.resolve(json(ready()));
+  await oldRead;
+  assert.equal(controller.getSnapshot().phase, "generating");
+  assert.equal(controller.getSnapshot().message, "", "generation cancellation is not a load failure");
+  assert.equal(controller.reload(), currentRead, "late cleanup belongs only to its own request");
+  assert.equal(reads, 3);
+  fresh.resolve(json(ready(newNote, doneTime)));
+  await currentRead;
+  assert.deepEqual(controller.getSnapshot().note, newNote);
+});
+
+for (const stalled of ["response", "body"] as const) {
+  test(`the 15-second note deadline aborts an actual fetch with a stalled ${stalled} and allows retry`, { timeout: 5_000 }, async t => {
+    const received = deferred<void>();
+    const headersReceived = deferred<void>();
+    const disconnected = deferred<void>();
+    let requests = 0;
+    const server = createServer((_request, response) => {
+      requests++;
+      response.setHeader("Content-Type", "application/json");
+      if (requests === 1) {
+        response.on("close", () => disconnected.resolve());
+        if (stalled === "body") response.write('{"note":');
+        received.resolve();
+      } else response.end(JSON.stringify(ready(newNote, doneTime)));
+    });
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    t.after(() => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }));
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/note`;
+    let signal: AbortSignal | null | undefined;
+    const controller = createLectureNoteController("lecture-a", true, (_url, init) => {
+      signal = init?.signal;
+      return fetch(url, init).then(response => { headersReceived.resolve(); return response; });
+    });
+    t.after(() => controller.dispose());
+    controller.start();
+    await received.promise;
+    if (stalled === "body") { await headersReceived.promise; await setImmediate(); }
+    const reading = controller.reload();
+    assert.equal(reading, controller.reload());
+    t.mock.timers.tick(14_999);
+    assert.equal(signal?.aborted, false);
+    t.mock.timers.tick(1);
+    await reading;
+    assert.equal(signal?.aborted, true);
+    assert.equal(controller.getSnapshot().phase, "error");
+    assert.equal(controller.getSnapshot().message, "Could not load the note. Please try again.");
+    await disconnected.promise;
+    await controller.reload();
+    assert.equal(requests, 2);
+    assert.deepEqual(controller.getSnapshot().note, newNote);
+    assert.equal(controller.getSnapshot().message, "");
+  });
+}
+
+test("a body that ignores abort cannot hold the note read slot or stop generation polling", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const headers = deferred<Response>();
+  const body = deferred<unknown>();
+  const stalled = json({});
+  stalled.json = () => body.promise;
+  let reads = 0;
+  const controller = createLectureNoteController("lecture-a", false, async () => {
+    reads++;
+    return reads === 1 ? json(waiting(oldNote)) : reads === 2 ? headers.promise : json(ready(newNote, doneTime));
+  });
+  t.after(() => controller.dispose());
+  controller.start();
+  await setImmediate();
+  t.mock.timers.tick(3_000);
+  await setImmediate();
+  const pending = controller.reload();
+  t.mock.timers.tick(12_000);
+  headers.resolve(stalled);
+  await setImmediate();
+  t.mock.timers.tick(2_999);
+  assert.equal(controller.getSnapshot().message, "");
+  t.mock.timers.tick(1); // One deadline covers both waiting for headers and reading the body.
+  await pending;
+  assert.equal(reads, 2);
+  assert.equal(controller.getSnapshot().phase, "generating");
+  assert.equal(controller.getSnapshot().startedAt, startedAt);
+  assert.deepEqual(controller.getSnapshot().note, oldNote);
+  assert.equal(controller.getSnapshot().message, "노트를 불러오지 못했습니다. 다시 확인해 주세요.");
+  t.mock.timers.tick(3_000);
+  await setImmediate();
+  assert.equal(reads, 3);
+  assert.deepEqual(controller.getSnapshot().note, newNote);
+  body.resolve(ready(oldNote));
+  await setImmediate();
+  assert.deepEqual(controller.getSnapshot().note, newNote, "a late body cannot overwrite the successful retry");
+});
+
+test("disposing a stalled read releases its callers without publishing a timeout error", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const controller = createLectureNoteController("lecture-a", true, async () => new Promise<Response>(() => {}));
+  controller.start();
+  const pending = controller.reload();
+  const snapshot = controller.getSnapshot();
+  controller.dispose();
+  await pending;
+  t.mock.timers.tick(15_000);
+  assert.equal(controller.getSnapshot(), snapshot);
+  assert.equal(snapshot.message, "");
 });
 
 test("an inactive or live session never fetches or submits a note", async () => {

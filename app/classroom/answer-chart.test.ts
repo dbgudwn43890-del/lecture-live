@@ -64,3 +64,24 @@ test("tiny finite values stay finite, legible and correctly scaled without round
   assert.match(html, /1E-200/);
   assert.doesNotMatch(html, /NaN|Infinity/);
 });
+
+test("both locales preserve numeric formatting at notation boundaries and reuse formatters across renders", () => {
+  const values = [0, -0, 1e-200, 0.0000999999, 0.0001, 1234567.89, 999999999.99, 1e9];
+  const Original = Intl.NumberFormat;
+  let constructions = 0;
+  Intl.NumberFormat = new Proxy(Original, { construct(target, argumentsList) { constructions++; return Reflect.construct(target, argumentsList); } });
+  try {
+    for (const isEnglish of [false, true]) {
+      const data: AnswerChartData = { type: "stacked-bar", title: "Numbers", unit: "", series: ["a", "b", "c", "d"],
+        rows: values.map((value, index) => ({ label: `row${index}`, values: [value, 1, 2, 3] })) };
+      const html = renderToStaticMarkup(createElement(AnswerChart, { data, isEnglish }));
+      for (const [index, value] of values.entries()) {
+        const expected = new Original(isEnglish ? "en-US" : "ko-KR", { maximumSignificantDigits: 21,
+          notation: value !== 0 && (value < 0.0001 || value >= 1e9) ? "scientific" : "standard" }).format(value);
+        assert.ok(html.includes(`row${index}: a ${expected}, b 1, c 2, d 3`));
+      }
+      assert.equal(renderToStaticMarkup(createElement(AnswerChart, { data, isEnglish })), html);
+    }
+    assert.equal(constructions, 0, "formatters are shared even when both full-size charts render twice");
+  } finally { Intl.NumberFormat = Original; }
+});

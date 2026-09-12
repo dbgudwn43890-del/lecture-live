@@ -41,7 +41,7 @@ try {
         }
       }
     } finally {
-      await reader.cancel().catch(() => {});
+      await reader.cancel(new Error("Material text extraction stopped")).catch(() => {});
       page.cleanup();
     }
     if (pieces.length) pages.push({ page: pageNumber, text: pieces.join(" ") });
