@@ -5,6 +5,7 @@
 .vercel
 node_modules
 graphify-out
+/output
 docs
 .agents
 .codex

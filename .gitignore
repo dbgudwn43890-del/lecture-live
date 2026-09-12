@@ -23,3 +23,7 @@ graphify-out/
 # Local Python bytecode caches.
 __pycache__/
 *.py[cod]
+
+# Generated advertising projects and exports.
+/output/lecue-fable-assets*
+/output/lecue-youtube-ad*
