@@ -1,0 +1,19 @@
+1
+00:00:00,200 --> 00:00:02,200
+Lecue listens with you.
+
+2
+00:00:02,650 --> 00:00:05,350
+Ask about what you just heard.
+
+3
+00:00:06,300 --> 00:00:08,100
+It heard that, too.
+
+4
+00:00:11,050 --> 00:00:12,600
+Stay with the lecture.
+
+5
+00:00:13,200 --> 00:00:14,100
+Lecue.

@@ -1,0 +1,998 @@
+{
+  "checked_at": "2026-09-08T01:34:41.196104+00:00",
+  "scope": "Read-only production metadata, passive HTTP checks, and isolated synthetic local tests; no production writes or paid provider requests.",
+  "deployment": {
+    "name": "lecue",
+    "framework": "nextjs",
+    "nodeVersion": "24.x",
+    "ssoProtection": {
+      "deploymentType": "all_except_custom_domains"
+    },
+    "passwordProtection": null,
+    "trustedIps": null,
+    "gitForkProtection": true,
+    "gitComments": {
+      "onCommit": false,
+      "onPullRequest": true
+    },
+    "previewDeploymentSuffix": null,
+    "autoExposeSystemEnvs": true,
+    "sourceFilesOutsideRootDirectory": true,
+    "publicSource": null,
+    "resourceConfig": {
+      "fluid": true,
+      "functionDefaultRegions": [
+        "iad1"
+      ],
+      "buildMachineType": "basic",
+      "buildMachineSelection": "fixed"
+    },
+    "productionDeploymentsFastLane": true,
+    "crons": {
+      "enabledAt": 1787417961324,
+      "disabledAt": null,
+      "updatedAt": 1788829575455,
+      "deploymentId": "dpl_EcfaYkMQ2vQmJt5Ruc68vtoBT45F",
+      "definitions": []
+    },
+    "production": {
+      "id": "dpl_EcfaYkMQ2vQmJt5Ruc68vtoBT45F",
+      "url": "lecue-ph8dbsay3-dbgudwn43890-dels-projects.vercel.app",
+      "readyState": "READY",
+      "createdAt": 1788829553204
+    }
+  },
+  "supabase": {
+    "policies": [
+      {
+        "schemaname": "public",
+        "tablename": "credit_grants",
+        "policyname": "credit_grants_owner_read",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "SELECT",
+        "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check": null
+      },
+      {
+        "schemaname": "public",
+        "tablename": "lecture_chunks",
+        "policyname": "lecture_chunks_owner",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "ALL",
+        "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "lecture_notes",
+        "policyname": "lecture_notes_owner",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "ALL",
+        "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "material_chunks",
+        "policyname": "material_chunks_owner_insert",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "(( SELECT auth.uid() AS uid) = user_id)"
+      },
+      {
+        "schemaname": "public",
+        "tablename": "material_chunks",
+        "policyname": "material_chunks_owner_read",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "SELECT",
+        "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check": null
+      },
+      {
+        "schemaname": "public",
+        "tablename": "uploads",
+        "policyname": "uploads_owner_read",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "SELECT",
+        "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+        "with_check": null
+      },
+      {
+        "schemaname": "storage",
+        "tablename": "objects",
+        "policyname": "lecture_audio_owner",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "ALL",
+        "qual": "((bucket_id = 'lecture-audio'::text) AND ((( SELECT auth.uid() AS uid))::text = (storage.foldername(name))[1]))",
+        "with_check": "((bucket_id = 'lecture-audio'::text) AND ((( SELECT auth.uid() AS uid))::text = (storage.foldername(name))[1]))"
+      },
+      {
+        "schemaname": "storage",
+        "tablename": "objects",
+        "policyname": "materials_owner",
+        "roles": [
+          "authenticated"
+        ],
+        "cmd": "ALL",
+        "qual": "((bucket_id = 'materials'::text) AND ((( SELECT auth.uid() AS uid))::text = (storage.foldername(name))[1]))",
+        "with_check": "((bucket_id = 'materials'::text) AND ((( SELECT auth.uid() AS uid))::text = (storage.foldername(name))[1]))"
+      }
+    ],
+    "rls": [
+      {
+        "relname": "billing_accounts",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "billing_adjustments",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "billing_orders",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "billing_webhook_events",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "classrooms",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "consents",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "credit_grants",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "generation_leases",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_chunks",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_concepts",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_credit_usage",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_notes",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_questions",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_reports",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_sessions",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "lecture_summaries",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "material_chunks",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "material_documents",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "rate_limit_counters",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "transcript_segments",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "uploads",
+        "relrowsecurity": true
+      },
+      {
+        "relname": "user_llm_credentials",
+        "relrowsecurity": true
+      }
+    ],
+    "buckets": [
+      {
+        "id": "materials",
+        "public": false,
+        "file_size_limit": 20000000,
+        "allowed_mime_types": [
+          "application/pdf"
+        ]
+      },
+      {
+        "id": "lecture-audio",
+        "public": false,
+        "file_size_limit": 1073741824,
+        "allowed_mime_types": [
+          "audio/mpeg",
+          "audio/mp3",
+          "audio/mp4",
+          "audio/m4a",
+          "audio/x-m4a",
+          "audio/wav",
+          "audio/x-wav",
+          "audio/webm",
+          "video/mp4",
+          "video/webm"
+        ]
+      }
+    ],
+    "grant_permissions": [
+      {
+        "grantee": "authenticated",
+        "table_name": "credit_grants",
+        "privilege_type": "SELECT"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_chunks",
+        "privilege_type": "DELETE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_chunks",
+        "privilege_type": "INSERT"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_chunks",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_chunks",
+        "privilege_type": "SELECT"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_chunks",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_chunks",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_chunks",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_chunks",
+        "privilege_type": "DELETE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_chunks",
+        "privilege_type": "INSERT"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_chunks",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_chunks",
+        "privilege_type": "SELECT"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_chunks",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_chunks",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_chunks",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_notes",
+        "privilege_type": "DELETE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_notes",
+        "privilege_type": "INSERT"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_notes",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_notes",
+        "privilege_type": "SELECT"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_notes",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_notes",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "lecture_notes",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_notes",
+        "privilege_type": "DELETE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_notes",
+        "privilege_type": "INSERT"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_notes",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_notes",
+        "privilege_type": "SELECT"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_notes",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_notes",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "lecture_notes",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "material_chunks",
+        "privilege_type": "DELETE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "material_chunks",
+        "privilege_type": "INSERT"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "material_chunks",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "material_chunks",
+        "privilege_type": "SELECT"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "material_chunks",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "material_chunks",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "grantee": "anon",
+        "table_name": "material_chunks",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "material_chunks",
+        "privilege_type": "DELETE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "material_chunks",
+        "privilege_type": "INSERT"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "material_chunks",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "material_chunks",
+        "privilege_type": "SELECT"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "material_chunks",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "material_chunks",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "grantee": "authenticated",
+        "table_name": "material_chunks",
+        "privilege_type": "UPDATE"
+      }
+    ],
+    "parent_mismatch_counts": [
+      {
+        "table_name": "lecture_notes",
+        "mismatches": 0
+      },
+      {
+        "table_name": "lecture_chunks",
+        "mismatches": 0
+      },
+      {
+        "table_name": "material_chunks",
+        "mismatches": 0
+      }
+    ],
+    "orphan_counts": [
+      {
+        "bucket": "lecture-audio",
+        "objects_without_tracking": 0
+      },
+      {
+        "bucket": "materials",
+        "objects_without_tracking": 0
+      }
+    ],
+    "expired_audio": [
+      {
+        "tracked_audio_past_delete_at": 0
+      }
+    ],
+    "cron_extension": [],
+    "function_acl": [
+      {
+        "proname": "admin_abuse_signals",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "apply_billing_event",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "can_ask_with_credits",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "claim_generation_lease",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "consume_lecture_credits",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "consume_lecture_credits_elapsed",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "consume_lecture_credits_service",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "consume_rate_limit",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "delete_user_llm_credential",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "delete_user_llm_secret",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "get_credit_status",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "get_user_llm_credential",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "list_user_llm_credentials",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "match_lecture_chunks",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "match_material_chunks",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "move_lecture_session",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "pause_lecture_session",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "peek_rate_limit",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "reconcile_finished_lecture_credits",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "release_generation_lease",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "reserve_billing_order",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "resume_lecture_session",
+        "anon_execute": false,
+        "authenticated_execute": true,
+        "service_execute": true
+      },
+      {
+        "proname": "save_user_llm_credential",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      },
+      {
+        "proname": "sync_billing_account",
+        "anon_execute": false,
+        "authenticated_execute": false,
+        "service_execute": true
+      }
+    ],
+    "schema_create": [
+      {
+        "role_name": "anon",
+        "nspname": "extensions",
+        "can_create": false
+      },
+      {
+        "role_name": "authenticated",
+        "nspname": "extensions",
+        "can_create": false
+      },
+      {
+        "role_name": "anon",
+        "nspname": "public",
+        "can_create": false
+      },
+      {
+        "role_name": "authenticated",
+        "nspname": "public",
+        "can_create": false
+      }
+    ]
+  },
+  "supabase_dashboard": {
+    "plan": "Free",
+    "automatic_project_backups": false,
+    "security_advisor": {
+      "errors": 0,
+      "warnings": 10,
+      "info": 6,
+      "authenticated_definer_warnings_reviewed": 9,
+      "additional_privilege_escalation_found": false
+    },
+    "auth": {
+      "confirm_email": true,
+      "anonymous_signins": false,
+      "manual_linking": false,
+      "captcha": false,
+      "leaked_password_protection": false,
+      "secure_email_change": true,
+      "secure_password_change": false,
+      "require_current_password_on_update": false,
+      "signin_signup_per_ip_per_5_min": 30,
+      "token_verification_per_ip_per_5_min": 30,
+      "refresh_per_ip_per_5_min": 150,
+      "email_otp_expiry_seconds": 3600,
+      "email_otp_digits": 8,
+      "minimum_password_length": "empty UI field; effective default not verified"
+    }
+  },
+  "paddle_dashboard": {
+    "environment": "live",
+    "webhook_url": "https://www.lecue.app/api/billing/webhook",
+    "webhook_active": true,
+    "subscribed_event_count": 11,
+    "observed_transaction_completed_delivery": "Delivered",
+    "observed_delivery_attempts": 1,
+    "new_event_or_payment_created": false
+  },
+  "openai_key_rotation": {
+    "status": "user-confirmed completed",
+    "date": "2026-09-08",
+    "provider_revocation_log_checked": false
+  },
+  "waf_custom_config_read": "404 Config not found; does not imply absence of Vercel platform protection",
+  "passive_http": {
+    "scope": "Small passive unauthenticated production sample; no credentials, payload exploits, paid calls, or changes.",
+    "createdAt": "2026-09-08T01:17:33.089Z",
+    "requestCount": 10,
+    "observations": [
+      {
+        "url": "http://lecue.app/",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:30.739Z",
+        "status": 308,
+        "headers": {
+          "location": "https://lecue.app/",
+          "server": "Vercel",
+          "content-type": "text/plain"
+        },
+        "bodyBytes": 14
+      },
+      {
+        "url": "http://www.lecue.app/",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:30.929Z",
+        "status": 308,
+        "headers": {
+          "location": "https://www.lecue.app/",
+          "server": "Vercel",
+          "content-type": "text/plain"
+        },
+        "bodyBytes": 14
+      },
+      {
+        "url": "https://lecue.app/",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:30.961Z",
+        "status": 308,
+        "headers": {
+          "location": "https://www.lecue.app/",
+          "server": "Vercel",
+          "x-vercel-id": "icn1::gbx7r-1788830251014-408de66da3b4",
+          "content-type": "text/plain",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=63072000"
+        },
+        "bodyBytes": 15
+      },
+      {
+        "url": "https://www.lecue.app/",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:31.021Z",
+        "status": 200,
+        "headers": {
+          "server": "Vercel",
+          "x-vercel-id": "icn1::iad1::cz25x-1788830251068-136fe22d230f",
+          "x-vercel-cache": "MISS",
+          "x-powered-by": "Next.js",
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+          "age": "0",
+          "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+          "strict-transport-security": "max-age=63072000; includeSubDomains",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)"
+        },
+        "bodyBytes": 56051
+      },
+      {
+        "url": "https://www.lecue.app/.env",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:31.399Z",
+        "status": 307,
+        "headers": {
+          "location": "/login?next=%2F.env",
+          "server": "Vercel",
+          "x-vercel-id": "icn1::cz25x-1788830251417-9470296a3bf5",
+          "content-type": "text/plain",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=63072000; includeSubDomains",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)"
+        },
+        "bodyBytes": 15,
+        "possibleEnvironmentFile": false,
+        "possibleGitHead": false,
+        "bodyRetained": false
+      },
+      {
+        "url": "https://www.lecue.app/.git/HEAD",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:31.502Z",
+        "status": 307,
+        "headers": {
+          "location": "/login?next=%2F.git%2FHEAD",
+          "server": "Vercel",
+          "x-vercel-id": "icn1::5pxt4-1788830251576-86dc7f7d1000",
+          "content-type": "text/plain",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=63072000; includeSubDomains",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)"
+        },
+        "bodyBytes": 15,
+        "possibleEnvironmentFile": false,
+        "possibleGitHead": false,
+        "bodyRetained": false
+      },
+      {
+        "url": "https://www.lecue.app/_next/static/immutable/chunks/0els3_nqhq2fo.js",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:31.701Z",
+        "status": 200,
+        "headers": {
+          "server": "Vercel",
+          "x-vercel-id": "icn1::qhrwf-1788830251719-77fb518ce44a",
+          "x-vercel-cache": "HIT",
+          "content-type": "application/javascript; charset=utf-8",
+          "cache-control": "public,max-age=31536000,immutable",
+          "age": "2807",
+          "strict-transport-security": "max-age=63072000; includeSubDomains",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)",
+          "access-control-allow-origin": "*",
+          "etag": "W/\"_next/static/immutable/chunks/0els3_nqhq2fo.js\""
+        },
+        "bodyBytes": 32824
+      },
+      {
+        "url": "https://www.lecue.app/_next/static/immutable/chunks/0els3_nqhq2fo.js.map",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:31.727Z",
+        "status": 403,
+        "headers": {
+          "server": "Vercel",
+          "x-vercel-id": "icn1::qhrwf-1788830251746-631298fa3307",
+          "content-type": "text/plain",
+          "cache-control": "no-store",
+          "strict-transport-security": "max-age=63072000; includeSubDomains",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)"
+        },
+        "bodyBytes": 1,
+        "validSourceMap": false,
+        "hasEmbeddedSources": false,
+        "bodyRetained": false
+      },
+      {
+        "url": "https://www.lecue.app/api/classrooms",
+        "method": "OPTIONS",
+        "observedAt": "2026-09-08T01:17:31.743Z",
+        "status": 204,
+        "headers": {
+          "server": "Vercel",
+          "x-vercel-id": "icn1::iad1::qhrwf-1788830251760-df32c39d6806",
+          "x-vercel-cache": "MISS",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "strict-transport-security": "max-age=63072000; includeSubDomains",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)",
+          "allow": "GET, HEAD, OPTIONS, PATCH, POST"
+        },
+        "bodyBytes": 0
+      },
+      {
+        "url": "https://www.lecue.app/api/classrooms",
+        "method": "GET",
+        "observedAt": "2026-09-08T01:17:32.762Z",
+        "status": 401,
+        "headers": {
+          "server": "Vercel",
+          "x-vercel-id": "icn1::iad1::5pxt4-1788830252782-ba5676f6938b",
+          "x-vercel-cache": "MISS",
+          "content-type": "application/json",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "age": "0",
+          "strict-transport-security": "max-age=63072000; includeSubDomains",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "permissions-policy": "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)"
+        },
+        "bodyBytes": 41
+      }
+    ],
+    "limitations": [
+      "No authenticated response or tenant data inspected.",
+      "One discovered static script and one source-map URL sampled; no exhaustive source-map scan.",
+      "No vulnerability exploit or WAF-bypass test performed.",
+      "Response bodies are not included in this artifact."
+    ],
+    "summary": {
+      "httpsAndCanonicalRedirects": "Both HTTP hostnames returned 308 to HTTPS; HTTPS apex returned 308 to https://www.lecue.app/.",
+      "securityHeaders": "Canonical homepage returned HSTS including subdomains, X-Frame-Options DENY, nosniff, Referrer-Policy, and Permissions-Policy. No CSP or CSP-Report-Only observed.",
+      "publicFileExposure": "/.env and /.git/HEAD returned 307 login redirects; no public sensitive file detected. Existence or authenticated accessibility not established.",
+      "sourceMaps": "One .js from canonical homepage returned 200. Its .js.map returned 403 with no-store; no exposed map observed in this sample.",
+      "cors": "Anonymous API GET 401 and preflight OPTIONS 204 returned no Access-Control-Allow-Origin or Access-Control-Allow-Credentials. The public static script returned ACAO *, appropriate for a public asset.",
+      "cache": "Homepage private/no-cache/no-store; static script public immutable for one year; anonymous API error public max-age=0 must-revalidate with Vercel MISS. Authenticated response caching was not tested."
+    },
+    "officialPlatformMitigation": {
+      "url": "https://vercel.com/changelog/nextjs-august-2026-security-release",
+      "published": "2026-08-25",
+      "verified": "2026-09-08",
+      "advisories": [
+        "GHSA-2xp9-vwfh-vxw4",
+        "GHSA-p293-qw3h-jr36"
+      ],
+      "summary": "Vercel states its managed Image Optimization service bypasses AVIF processing and its Linux Next.js runtime is not affected by the Windows issue. It states Vercel-hosted applications require no upgrade, configuration change, or redeployment for these two advisories.",
+      "appAssessment": "Responses identify Vercel; assuming the standard Vercel managed Next.js deployment, do not classify the local 16.3.2 package version alone as exploitable production RCE. Root is independently checking deployment settings.",
+      "recommendation": "Treat version update as dependency maintenance and required remediation for affected self-hosted deployments, not a demonstrated urgent exploit on this Vercel site."
+    }
+  },
+  "billing_copy_smoke": [
+    {
+      "locale": "ko",
+      "width": 390,
+      "currency": "live Paddle preview",
+      "comparisonPrices": [
+        "₩55,600",
+        "₩83,400",
+        "₩166,800"
+      ],
+      "errors": []
+    },
+    {
+      "locale": "en",
+      "width": 1440,
+      "currency": "USD (mock preview)",
+      "comparisonPrices": [
+        "$39.96",
+        "$59.94",
+        "$119.88"
+      ],
+      "errors": []
+    },
+    {
+      "locale": "en",
+      "width": 390,
+      "currency": "USD (mock preview)",
+      "comparisonPrices": [
+        "$39.96",
+        "$59.94",
+        "$119.88"
+      ],
+      "errors": []
+    }
+  ],
+  "local_tests": {
+    "targeted_existing_security_tests_passed": 56,
+    "audio_duration_reproduction": {
+      "actual_seconds": 180,
+      "claimed_seconds": 1,
+      "available_credits": 1,
+      "response_status": 202,
+      "provider_request_intercepted": true,
+      "real_provider_requests": 0
+    },
+    "mermaid": {
+      "validator_accepted": true,
+      "details_open": false,
+      "external_image_request_intercepted": true,
+      "real_external_image_requests": 0
+    },
+    "rls": {
+      "synthetic_users_only": true,
+      "cross_owner_note_insert_allowed": true,
+      "victim_note_upsert_blocked": true,
+      "cross_owner_joined_session_title_returned": true,
+      "storage_insert_without_upload_tracking_allowed": true
+    }
+  },
+  "unverified": [
+    "Provider spending hard limits and key scopes",
+    "Cloudflare account and administrative MFA controls",
+    "Independent externally configured backups/schedulers",
+    "Full lifecycle production refunds and subscription changes",
+    "Authenticated API cache responses",
+    "All private files/source maps and full penetration/load testing"
+  ]
+}

@@ -1,3 +1,5 @@
+import { isSpeechLanguage, type SpeechLanguage } from "./speech-languages.ts";
+
 export type DeepgramWord = { start: number; end: number; word: string; punctuated_word?: string };
 export type DeepgramFinal = {
   start?: number;
@@ -5,7 +7,7 @@ export type DeepgramFinal = {
   channel?: { alternatives?: Array<{ transcript?: string; words?: DeepgramWord[] }> };
 };
 
-export type DeepgramLanguage = "default" | "ko" | "en" | "multi";
+export type DeepgramLanguage = "default" | SpeechLanguage;
 
 export type ListenOptions = {
   language: DeepgramLanguage;
@@ -36,7 +38,7 @@ export const MAX_KEYTERMS = 50;
 export const KEYTERM_CHARACTER_BUDGET = 400;
 
 export function deepgramLanguage(value: unknown, fallback: DeepgramLanguage): DeepgramLanguage {
-  return value === "default" || value === "ko" || value === "en" || value === "multi" ? value : fallback;
+  return value === "default" || isSpeechLanguage(value) ? value : fallback;
 }
 
 export function keytermBudget(terms: string[]): string[] {

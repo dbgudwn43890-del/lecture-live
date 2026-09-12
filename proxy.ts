@@ -20,6 +20,19 @@ const LOCALE_COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite:
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (path === "/robots.txt" || path === "/sitemap.xml") return NextResponse.next();
+  // A paired phone has a short-lived capability, not the laptop's login.
+  // Only this exact read-only UI is public; its API validates each capability.
+  if (path === "/phone-mic" && (request.method === "GET" || request.method === "HEAD")) {
+    const headers = new Headers(request.headers);
+    headers.set("x-site-path", path);
+    headers.set("x-site-locale", request.nextUrl.searchParams.get("locale") === "ko" ? "ko" : "en");
+    return NextResponse.next({ request: { headers } });
+  }
+  // The bundled PDF.js worker is a public script, not an uploaded document.
+  // Keep this exception to read requests for the versioned worker filename;
+  // neither the rest of /pdfjs nor user material routes become public.
+  if ((request.method === "GET" || request.method === "HEAD")
+    && /^\/pdfjs\/\d+\.\d+\.\d+\/pdf\.worker\.min\.mjs$/.test(path)) return NextResponse.next();
 
   // The language toggle appends ?lang=. Remember the choice in a cookie and
   // strip the param, so a Korean speaker abroad is not sent back to /en by the

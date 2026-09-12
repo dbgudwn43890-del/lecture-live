@@ -1,5 +1,5 @@
-import BillingPage from "../../billing/page";
+import BillingContent from "../../billing/billing-content";
 
 export default function EnglishBillingPage() {
-  return <BillingPage locale="en" />;
+  return <BillingContent locale="en" />;
 }

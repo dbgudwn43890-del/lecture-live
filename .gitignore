@@ -11,3 +11,15 @@ supabase/.temp/
 
 # graphify 지식 그래프 산출물 — 캐시와 그래프는 로컬에서 다시 만든다.
 graphify-out/
+
+# Platform-specific decoder compiled from pinned, signed FFmpeg source.
+.ffmpeg/
+
+# Generated from the installed PDF.js package before dev/build.
+/public/pdfjs/
+# Generated, bounded server PDF worker (rebuilt before dev/build).
+.pdfjs/
+
+# Local Python bytecode caches.
+__pycache__/
+*.py[cod]

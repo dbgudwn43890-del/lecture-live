@@ -1,0 +1,275 @@
+{
+  "review_date": "2026-09-11",
+  "production_deployment": "dpl_JCAU4C11cd9ZcaJwzhVoMVkJEUYm",
+  "production_url": "lecue-hw10os5du-dbgudwn43890-dels-projects.vercel.app",
+  "app_function_region": "iad1",
+  "database_connection_region": "ap-northeast-2",
+  "database_statistics": {
+    "read_only": "on",
+    "database": {
+      "total_bytes": 21572755,
+      "cache_hit_pct": 99.991,
+      "deadlocks": 0,
+      "temp_bytes": 274931712,
+      "stats_reset": "2026-07-24T08:28:18.170248+00:00"
+    },
+    "stat_columns": [
+      "userid",
+      "dbid",
+      "toplevel",
+      "queryid",
+      "query",
+      "plans",
+      "total_plan_time",
+      "min_plan_time",
+      "max_plan_time",
+      "mean_plan_time",
+      "stddev_plan_time",
+      "calls",
+      "total_exec_time",
+      "min_exec_time",
+      "max_exec_time",
+      "mean_exec_time",
+      "stddev_exec_time",
+      "rows",
+      "shared_blks_hit",
+      "shared_blks_read",
+      "shared_blks_dirtied",
+      "shared_blks_written",
+      "local_blks_hit",
+      "local_blks_read",
+      "local_blks_dirtied",
+      "local_blks_written",
+      "temp_blks_read",
+      "temp_blks_written",
+      "shared_blk_read_time",
+      "shared_blk_write_time",
+      "local_blk_read_time",
+      "local_blk_write_time",
+      "temp_blk_read_time",
+      "temp_blk_write_time",
+      "wal_records",
+      "wal_fpi",
+      "wal_bytes",
+      "jit_functions",
+      "jit_generation_time",
+      "jit_inlining_count",
+      "jit_inlining_time",
+      "jit_optimization_count",
+      "jit_optimization_time",
+      "jit_emission_count",
+      "jit_emission_time",
+      "jit_deform_count",
+      "jit_deform_time",
+      "stats_since",
+      "minmax_stats_since"
+    ],
+    "schema_names": [
+      "extensions"
+    ],
+    "cleanup_pending": 0
+  },
+  "query_statistics": {
+    "read_only": "on",
+    "groups": [
+      {
+        "category": "rate_limit_rpc",
+        "calls": 8448,
+        "weighted_mean_ms": 1.149,
+        "worst_ms": 209.459
+      },
+      {
+        "category": "transcript_segments",
+        "calls": 4117,
+        "weighted_mean_ms": 1.451,
+        "worst_ms": 58.462
+      },
+      {
+        "category": "credit_status_rpc",
+        "calls": 992,
+        "weighted_mean_ms": 5.483,
+        "worst_ms": 62.63
+      },
+      {
+        "category": "lecture_sessions",
+        "calls": 6198,
+        "weighted_mean_ms": 0.249,
+        "worst_ms": 43.399
+      },
+      {
+        "category": "lecture_questions",
+        "calls": 934,
+        "weighted_mean_ms": 1.539,
+        "worst_ms": 21.127
+      },
+      {
+        "category": "material_chunks",
+        "calls": 592,
+        "weighted_mean_ms": 1.038,
+        "worst_ms": 100.015
+      },
+      {
+        "category": "classrooms",
+        "calls": 565,
+        "weighted_mean_ms": 0.429,
+        "worst_ms": 4.152
+      }
+    ],
+    "slowest_statements": [
+      {
+        "category": "material_chunks",
+        "queryid": -2548530739309673431,
+        "calls": 11,
+        "mean_ms": 20.816,
+        "max_ms": 57.641
+      },
+      {
+        "category": "transcript_segments",
+        "queryid": -2394421788850846068,
+        "calls": 19,
+        "mean_ms": 13.071,
+        "max_ms": 42.5
+      },
+      {
+        "category": "material_chunks",
+        "queryid": -4770406665838822901,
+        "calls": 33,
+        "mean_ms": 9.472,
+        "max_ms": 100.015
+      },
+      {
+        "category": "credit_status_rpc",
+        "queryid": -1034448418739690069,
+        "calls": 298,
+        "mean_ms": 8.511,
+        "max_ms": 62.63
+      },
+      {
+        "category": "lecture_sessions",
+        "queryid": 2664611139054192868,
+        "calls": 29,
+        "mean_ms": 7.526,
+        "max_ms": 43.399
+      },
+      {
+        "category": "lecture_sessions",
+        "queryid": -4700568169188114458,
+        "calls": 36,
+        "mean_ms": 5.423,
+        "max_ms": 24.812
+      },
+      {
+        "category": "lecture_sessions",
+        "queryid": -2206665486658117454,
+        "calls": 12,
+        "mean_ms": 5.22,
+        "max_ms": 10.896
+      },
+      {
+        "category": "lecture_questions",
+        "queryid": -4857417755249670777,
+        "calls": 10,
+        "mean_ms": 4.423,
+        "max_ms": 11.477
+      }
+    ]
+  },
+  "pause_function": {
+    "read_only": "on",
+    "pause_function": {
+      "security_definer": true,
+      "owner_check": true,
+      "active_relay_check": false,
+      "signature": "p_session_id uuid"
+    },
+    "statement_stats_since": "2026-08-25T07:56:09.941247+00:00"
+  },
+  "http_read_probes": [
+    {
+      "path": "/api/classrooms",
+      "status_ttfb_total": "401 0.442243 0.442567",
+      "region_request_id": "icn1::iad1::4x8qb-1789096585818-168f547e0ecd"
+    },
+    {
+      "path": "/api/lecture-sessions",
+      "status_ttfb_total": "401 0.352862 0.353259",
+      "region_request_id": "icn1::iad1::bs6kn-1789096586274-378609722957"
+    },
+    {
+      "path": "/api/materials",
+      "status_ttfb_total": "401 1.303660 1.304132",
+      "region_request_id": "icn1::iad1::8zmql-1789096586759-be1706a6118d"
+    },
+    {
+      "path": "/api/admin",
+      "status_ttfb_total": "403 0.391837 0.392059",
+      "region_request_id": "icn1::iad1::2lsdz-1789096587969-50bc070b78d4"
+    },
+    {
+      "path": "/api/live-assist",
+      "status_ttfb_total": "405 1.138571 1.138813",
+      "region_request_id": "icn1::iad1::2lsdz-1789096588367-ab13d14923e9"
+    },
+    {
+      "path": "/api/phone-mic",
+      "status_ttfb_total": "405 1.037282 1.037749",
+      "region_request_id": "icn1::iad1::4x8qb-1789096589520-2cfb4065320e"
+    }
+  ],
+  "post_unauthenticated_probes": [
+    {
+      "method": "POST",
+      "path": "/api/live-assist",
+      "status": "401"
+    },
+    {
+      "method": "POST",
+      "path": "/api/phone-mic",
+      "status": "403"
+    },
+    {
+      "method": "POST",
+      "path": "/api/lecture-summaries",
+      "status": "401"
+    }
+  ],
+  "dependency_audit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "dependencies": {
+      "prod": 327,
+      "dev": 27,
+      "optional": 72,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 405
+    }
+  },
+  "local_pdf_result": {
+    "pdf_bytes": 1109,
+    "page_count": 1,
+    "extracted_characters": 500001,
+    "text_limit": 500000,
+    "local_chunks": 278,
+    "provider_calls": 0
+  },
+  "related_tests": {
+    "count": 75,
+    "passed": 75,
+    "failed": 0,
+    "mocked_database_and_providers": true
+  },
+  "limits": [
+    "No authenticated create/save timing benchmark",
+    "No production writes or paid provider calls",
+    "No real microphone test",
+    "No demonstrated cross-account content leak",
+    "Historical SQL averages are not API response latency"
+  ]
+}

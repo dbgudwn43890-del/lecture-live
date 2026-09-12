@@ -1,0 +1,56 @@
+.phone-mic-page {
+  --phone-paper: #f7f8f2;
+  --phone-surface: #fffffc;
+  --phone-ink: #29372b;
+  --phone-muted: #65705f;
+  --phone-line: #d8decf;
+  --phone-signal: #405e42;
+  --phone-accent: #ad9557;
+  --phone-error: #9e352c;
+  min-height: 100svh;
+  background: var(--phone-paper);
+  color: var(--phone-ink);
+  display: flex;
+  flex-direction: column;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  font-family: var(--font-sans), Pretendard, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-theme="dark"] .phone-mic-page {
+  --phone-paper: var(--paper);
+  --phone-surface: var(--surface);
+  --phone-ink: var(--ink);
+  --phone-muted: var(--muted);
+  --phone-line: var(--line);
+  --phone-signal: var(--signal);
+  --phone-accent: var(--accent);
+  --phone-error: var(--danger);
+}
+.phone-mic-page ::selection { background: var(--phone-line); color: var(--phone-ink); }
+.phone-mic-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: min(100%, 600px); margin-inline: auto; }
+.phone-mic-header > span:last-child { color: var(--phone-muted); font-size: 13px; font-weight: 500; }
+.phone-mic-wordmark { font-size: 27px; font-weight: 750; letter-spacing: -.035em; line-height: 1.1; }
+.phone-mic-wordmark > span { color: var(--phone-accent); margin-left: 1px; }
+.phone-mic-main { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; width: min(100%, 420px); margin: 0 auto; padding: 48px 0 24px; text-align: center; }
+.phone-mic-symbol { color: var(--phone-muted); display: grid; place-items: center; min-height: 76px; margin-bottom: 24px; }
+.phone-mic-symbol.is-recording { color: var(--phone-signal); }
+.phone-mic-copy { min-height: 110px; }
+.phone-mic-copy h1 { margin: 0; font-size: clamp(25px, 6.5vw, 31px); line-height: 1.3; letter-spacing: -.035em; font-weight: 650; text-wrap: balance; word-break: keep-all; }
+.phone-mic-copy p { margin: 14px 0 0; color: var(--phone-muted); font-size: 15px; line-height: 1.7; text-wrap: balance; word-break: keep-all; }
+.phone-mic-signal { display: flex; flex-direction: column; align-items: center; margin-top: 20px; gap: 15px; }
+.phone-mic-level { display: flex; gap: 4px; height: 24px; align-items: center; }
+.phone-mic-level > span { width: 5px; height: 18px; border-radius: 2px; background: var(--phone-line); transition: background-color 100ms ease-out; }
+.phone-mic-level > span.is-lit { background: var(--phone-signal); }
+.phone-mic-timer { min-height: 24px; color: var(--phone-muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.phone-mic-error { color: var(--phone-error); font-size: 14px; line-height: 1.65; margin: 16px 0 0; word-break: keep-all; overflow-wrap: anywhere; }
+.phone-mic-actions { width: min(100%, 420px); min-height: 116px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+.phone-mic-actions button { font: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; border-radius: 8px; padding: 12px 20px; font-size: 15px; font-weight: 550; }
+.phone-mic-actions button:focus-visible { outline: 2px solid var(--phone-signal); outline-offset: 4px; }
+.phone-mic-primary { color: var(--phone-paper); background: var(--phone-signal); border: 0; }
+.phone-mic-primary:hover:enabled { filter: brightness(.93); }
+.phone-mic-actions button:disabled { cursor: wait; opacity: .65; }
+.phone-mic-disconnect { color: var(--phone-muted); background: transparent; border: 1px solid var(--phone-line); }
+.phone-mic-disconnect:hover { color: var(--phone-ink); background: var(--phone-surface); }
+.phone-mic-screen-hint { margin: 3px 0 0; color: var(--phone-muted); font-size: 12px; text-align: center; line-height: 1.65; word-break: keep-all; }
+@media (min-width: 600px) { .phone-mic-page { padding-block: 36px; } .phone-mic-actions { padding-bottom: 20px; } }
+@media (prefers-reduced-motion: reduce) { .phone-mic-level > span { transition: none; } }

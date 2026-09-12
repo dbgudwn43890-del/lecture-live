@@ -19,3 +19,12 @@ scripts
 /supabase
 remote-schema.sql
 *.md
+
+# Rebuild the native audio decoder for the Linux deployment.
+.ffmpeg
+
+# Recreate the browser worker from the deployment's locked PDF.js version.
+/public/pdfjs
+
+# Rebuild the pinned and resource-bounded server parser in the deployment.
+/.pdfjs

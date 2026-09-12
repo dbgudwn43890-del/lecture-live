@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasVerifiedEmail } from "../../lib/verified-email";
 
 import { getCreditStatus } from "../../lib/credit-status";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
@@ -12,8 +13,8 @@ function message(request: Request, korean: string, english: string) {
 
 async function current(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !hasVerifiedEmail(user)) {
     return { response: NextResponse.json({ error: message(request, "로그인이 필요합니다.", "Sign-in is required.") }, { status: 401 }) };
   }
   // The workspace reads this after each lecture boundary and on load.

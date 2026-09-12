@@ -1,0 +1,41 @@
+.lecture-material-list { min-width: 0; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.lecture-material-list > summary { min-height: 40px; padding: 8px 0; cursor: pointer; font-weight: 600; }
+.lecture-material-list > summary small { margin-left: 12px; color: var(--muted); font-weight: 400; }
+.lecture-material-list summary:focus-visible,
+.lecture-material-list button:focus-visible,
+.lecture-material-list .material-replace:focus-within { outline: 2px solid var(--focus); outline-offset: 3px; }
+.material-list-content { padding: 0 0 8px; }
+.lecture-material-list ul { max-height: 340px; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; scrollbar-color: var(--line-strong) transparent; }
+.material-entry { min-width: 0; padding: 12px 0; border-top: 1px solid var(--line); }
+.material-entry-heading { display: flex; flex-direction: column; gap: 2px; }
+.material-entry-heading strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.material-entry-heading > span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.material-text-preview { margin-top: 4px; }
+.material-text-preview > summary { min-height: 36px; padding-block: 6px; color: var(--ink); cursor: pointer; }
+.material-preview-body { padding: 4px 0 8px; }
+.material-preview-body p { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.material-preview-text { white-space: pre-wrap; }
+.material-preview-body small { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.material-entry-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.lecture-material-list button,
+.lecture-material-list .material-replace { position: relative; display: inline-flex; align-items: center; min-height: 36px; padding: 6px 0; border: 0; border-radius: 0; color: var(--ink); background: transparent; box-shadow: none; font: inherit; font-size: 12px; line-height: 1.5; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.lecture-material-list button:hover:not(:disabled),
+.lecture-material-list .material-replace:hover:not([aria-disabled="true"]) { color: var(--signal); }
+.lecture-material-list button:disabled,
+.lecture-material-list .material-replace[aria-disabled="true"] { color: var(--muted); cursor: not-allowed; text-decoration: none; }
+.material-replace input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: inherit; }
+.material-upload-state { display: grid; gap: 4px; margin: 4px 0 12px; padding-block: 8px; overflow-wrap: anywhere; }
+.material-upload-state strong { font-size: 13px; font-weight: 600; }
+.material-upload-state span { color: var(--ink); }
+.material-upload-state small,
+.material-replacement-note,
+.material-list-empty { color: var(--muted); font-size: 12px; }
+.material-replacement-note { margin: 8px 0 0; line-height: 1.6; }
+.material-list-empty { margin: 4px 0 8px; }
+.material-action-error { margin: 4px 0; color: var(--ink); font-size: 12px; }
+@media (pointer: coarse) {
+  .lecture-material-list > summary,
+  .material-text-preview > summary,
+  .lecture-material-list button,
+  .lecture-material-list .material-replace { min-height: 44px; }
+}

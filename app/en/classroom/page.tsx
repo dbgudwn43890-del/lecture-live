@@ -1,13 +1,20 @@
+import { getSiteRegion } from "../../lib/site-region";
+import { redirect } from "next/navigation";
+
 import LectureWorkspace from "../../classroom/workspace-client";
 import { getClassroomData } from "../../lib/classroom-data";
 import { getCreditStatus } from "../../lib/credit-status";
 import { ensureFreePilotGrant } from "../../lib/free-pilot";
 import { createClient } from "../../lib/supabase/server";
+import { hasVerifiedEmail } from "../../lib/verified-email";
+import { canUseLiveAssist } from "../../lib/live-assist-access";
 
 export default async function EnglishClassroomPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return <LectureWorkspace locale="en" />;
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !hasVerifiedEmail(user)) {
+    redirect(`/en/login?${user && !authError ? "error=unverified&" : ""}next=%2Fen%2Fclassroom`);
+  }
 
   let [data, creditStatus] = await Promise.all([
     getClassroomData(supabase, user),
@@ -22,7 +29,9 @@ export default async function EnglishClassroomPage() {
 
   return (
     <LectureWorkspace
+      region={await getSiteRegion()}
       locale="en"
+      liveAssistAvailable={canUseLiveAssist(user)}
       initial={{
         profile: "error" in data ? null : data.profile,
         classrooms: "error" in data ? [] : data.classrooms,

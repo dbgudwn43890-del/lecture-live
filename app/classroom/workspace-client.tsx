@@ -1,17 +1,44 @@
 "use client";
 
-import { CSSProperties, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, BookOpen, ChevronLeft, ChevronRight, CreditCard, LogOut, Mic, MonitorPlay, MoreHorizontal, MoreVertical, PanelLeft, Plus, Search, Settings2, Upload } from "lucide-react";
+import { CSSProperties, FormEvent, ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, BookOpen, ChevronLeft, ChevronRight, CreditCard, LogOut, Mic, MonitorPlay, MoreHorizontal, MoreVertical, PanelLeft, Paperclip, Plus, Search, Settings2, Smartphone, Upload, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import WorkspaceDialog from "./workspace-dialog";
+import ListeningIndicator from "./listening-indicator";
+import MicrophoneSwitch from "./microphone-switch";
+import type { DesktopPhoneMic } from "../lib/phone-mic-client";
+import LanguageChoices from "./language-choices";
+import CreditUsage, { type UsageStatus } from "../credit-usage";
+import { initialSpeechLanguage, lectureLanguageChoices } from "../lib/lecture-language-ui";
+import { isSpeechLanguage } from "../lib/speech-languages";
 import LecturePreview from "./lecture-preview";
+import { useOnlineLayout } from "./use-online-layout";
+import { useConversationScroll } from "./use-conversation-scroll";
+import { audioUploadKey, createTitleSaveQueue, hasReadyMaterials, preparationTitle } from "./lecture-preparation";
+import type { AudioUploadAvailability } from "../lib/lecture-audio-availability";
+import { useLectureNote } from "./use-lecture-note";
+import { useNoteLanguage } from "./use-note-language";
+import NoteLanguagePicker from "./note-language-picker";
+import { useLiveAssist } from "./use-live-assist";
+import { useLiveScript } from "./use-live-script";
+import { buildLiveConversation, buildLiveMaterialRevision } from "../lib/live-assist-client";
+import { NoteGenerationIcon } from "./note-generation";
+import RecordingPreparation from "./recording-preparation";
+import MaterialList, { type MaterialUploadState } from "./material-list";
+import { AudioTransferError, transferRecording } from "./audio-transfer";
+import type { AudioUploadTransfer } from "../lib/lecture-audio-transfer";
 import { languageSwitchUrl } from "../lib/site-locale";
+import { usePaymentReturn } from "../lib/use-payment-return";
 import "./workspace.css";
 import { DragDropProvider, useDraggable, useDroppable } from "@dnd-kit/react";
 
 // KaTeX·Mermaid를 노트를 열 때만 내려받는다. 평소 강의 화면 번들에서 제외.
 const LectureNotePanel = dynamic(() => import("./lecture-note"), { ssr: false });
+const PhoneMicDialog = dynamic(() => import("./phone-mic-dialog"), { ssr: false });
+const LearningAnswer = dynamic(() => import("./learning-answer"), {
+  loading: () => <span className="answer-loading" aria-hidden="true">…</span>,
+});
 
 /** 같은 폭의 선택지와 방향키 이동을 제공하는 설정 컨트롤. */
 function SegmentedControl<T extends string>({ label, value, options, onChange, disabled }: {
@@ -53,8 +80,8 @@ function SegmentedControl<T extends string>({ label, value, options, onChange, d
   );
 }
 
-import { cleanAnswerText, cleanSources } from "../lib/answer-format";
-import { countTranscriptSentences, groupTranscriptParagraphs } from "../lib/chunk-transcript";
+import { mergeListedSession, patchListedSession } from "../lib/classroom-session-list";
+import { cleanAnswerMarkdown, cleanSources } from "../lib/answer-format";
 import { CONSENT_COPY } from "../lib/consent";
 import type { DeepgramLanguage } from "../lib/deepgram";
 import { FREE_PILOT } from "../lib/free-pilot";
@@ -72,7 +99,7 @@ import {
 type Source = { title: string; url: string };
 type LectureSource = { sessionId: string; title: string; startMs: number; endMs: number };
 type MaterialSource = { documentId: string; filename: string; startPage: number; endPage: number };
-type MaterialDocument = { id: string; classroom_id: string | null; session_id: string; filename: string; page_count: number };
+type MaterialDocument = { id: string; classroom_id: string | null; session_id: string; filename: string; page_count: number; created_at?: string };
 type Classroom = { id: string; title: string; locale: "ko" | "en"; glossary?: string; sessions: SessionSummary[] };
 type AudioUpload = {
   id: string;
@@ -85,9 +112,10 @@ type AudioUpload = {
 type UserProfile = { displayName: string; email: string };
 type AiProvider = "lecture-live" | PersonalProvider;
 type SavedCredential = { provider: PersonalProvider; model: string; updated_at: string };
-type CreditStatus = { credits: number; nextExpiry: string | null; latestGrantAt: string | null; subscriptionStatus: string | null; trialUsed: boolean; planCode: string | null };
+type CreditStatus = UsageStatus & { credits: number; nextExpiry: string | null; latestGrantAt: string | null; subscriptionStatus: string | null; trialUsed: boolean; planCode: string | null; nextGrantAt?: string | null; nextGrantCredits?: number };
 type Message = {
   id: string;
+  kind?: "live-assist";
   role: "user" | "assistant";
   text: string;
   pending?: boolean;
@@ -187,7 +215,7 @@ type InitialData = {
   creditStatus: CreditStatus | null;
 };
 
-export default function LectureWorkspace({ locale = "ko", initial, restoreSessionId }: { locale?: "ko" | "en"; initial?: InitialData; restoreSessionId?: string }) {
+export default function LectureWorkspace({ locale = "ko", region = locale === "ko" ? "kr" : "global", initial, restoreSessionId, liveAssistAvailable = false }: { locale?: "ko" | "en"; region?: "kr" | "global"; initial?: InitialData; restoreSessionId?: string; liveAssistAvailable?: boolean }) {
   const isEnglish = locale === "en";
   const basePath = isEnglish ? "/en" : "";
   const statusCopy: Record<Status, string> = isEnglish
@@ -198,26 +226,21 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   const [questionFocused, setQuestionFocused] = useState(false);
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
   // 시간대 인사·질문 예시는 클라이언트 시계 기준이라 마운트 후에 채운다(SSR 불일치 방지).
-  const [greeting, setGreeting] = useState("");
   const [askHint, setAskHint] = useState("");
   useEffect(() => {
     const hour = new Date().getHours();
     const slot = hour < 5 ? 3 : hour < 11 ? 0 : hour < 17 ? 1 : hour < 22 ? 2 : 3;
-    setGreeting((isEnglish
-      ? ["Good morning — let's learn something today.", "Good afternoon — ready when you are.", "Good evening — one more lecture to go.", "Studying late? Let's make it count."]
-      : ["좋은 아침이에요, 오늘도 공부해 볼까요?", "좋은 오후예요, 준비되면 시작해요.", "좋은 저녁이에요, 오늘 마지막 강의까지 힘내요.", "늦은 시간까지 대단해요, 알차게 남겨드릴게요."])[slot]);
     setAskHint((isEnglish
       ? ["e.g. Explain that with an example", "e.g. How might this show up on the exam?", "e.g. Summarize the key points so far", "e.g. What did that term mean?"]
       : ["예: 방금 내용 예시 들어서 설명해줘", "예: 이 개념 시험에 어떻게 나올까?", "예: 지금까지 핵심만 요약해줘", "예: 방금 그 용어 무슨 뜻이야?"])[slot]);
   }, [isEnglish]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [mobilePane, setMobilePane] = useState<"chat" | "transcript">("chat");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [displayLocale, setDisplayLocale] = useState<"ko" | "en">(locale);
   const localeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [onlineTranscriptOpen, setOnlineTranscriptOpen] = useState(false);
+  const [onlineAspectRatio, setOnlineAspectRatio] = useState(16 / 9);
   // null until the first check answers; the gate never flashes on a returning
   // account that already agreed.
   const [consentSatisfied, setConsentSatisfied] = useState<boolean | null>(null);
@@ -225,36 +248,81 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   const [consentAge, setConsentAge] = useState(false);
   const [consentRecording, setConsentRecording] = useState(false);
   const [consentPending, setConsentPending] = useState(false);
-  const [lectureTitle, setLectureTitle] = useState("");
+  const [consentAction, setConsentAction] = useState<"microphone" | "browser-tab" | "phone" | "upload" | null>(null);
+  const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
+  const phonePairRef = useRef<DesktopPhoneMic | null>(null);
+  const phoneResumeRef = useRef(false);
+  const phoneSwitchRef = useRef(false);
+  const phonePauseRef = useRef<() => void>(() => {});
+  const phonePause = useMemo(() => () => phonePauseRef.current(), []);
+  const consentSaveRef = useRef<Promise<void> | null>(null);
+  const consentAbortRef = useRef<AbortController | null>(null);
+  const consentConfirmedRef = useRef(false);
+  const audioUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const microphoneCheckStopRef = useRef<() => void>(() => {});
+  const [lectureTitle, setLectureTitleState] = useState("");
+  const lectureTitleRef = useRef("");
+  const [titleSaveStatus, setTitleSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const titleSaveQueueRef = useRef(createTitleSaveQueue());
+  const titleNavigationRef = useRef(false);
+  const [titleNavigationPending, setTitleNavigationPending] = useState(false);
+  function setLectureTitle(title: string) {
+    lectureTitleRef.current = title;
+    setLectureTitleState(title);
+  }
   const [aiProvider, setAiProvider] = useState<AiProvider>("lecture-live");
   const [aiModel, setAiModel] = useState<string>(personalModelOptions.openai[0].id);
-  // 첫 방문 기본값은 한·영 혼용. 명시적으로 저장한 ko/en 선택도 보존한다.
-  // 업로드 인식은 현재 Deepgram ko/en 경로다.
-  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>("multi");
+  const [speechLanguage, setSpeechLanguage] = useState<DeepgramLanguage>(() => initialSpeechLanguage(null, region));
   const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
   const [micDeviceId, setMicDeviceId] = useState("");
   const [personalApiKey, setPersonalApiKey] = useState("");
   const [savedCredentials, setSavedCredentials] = useState<SavedCredential[]>([]);
   const [credentialPending, setCredentialPending] = useState(false);
-  const [classrooms, setClassrooms] = useState<Classroom[]>(initial?.classrooms ?? []);
-  const [unassignedSessions, setUnassignedSessions] = useState<SessionSummary[]>(initial?.unassignedSessions ?? []);
+  const [classroomLists, setClassroomLists] = useState({
+    classrooms: initial?.classrooms ?? [] as Classroom[],
+    unassignedSessions: initial?.unassignedSessions ?? [] as SessionSummary[],
+  });
+  const { classrooms, unassignedSessions } = classroomLists;
+  function setClassrooms(value: SetStateAction<Classroom[]>) {
+    setClassroomLists((current) => ({ ...current, classrooms: typeof value === "function" ? value(current.classrooms) : value }));
+  }
+  function setUnassignedSessions(value: SetStateAction<SessionSummary[]>) {
+    setClassroomLists((current) => ({ ...current, unassignedSessions: typeof value === "function" ? value(current.unassignedSessions) : value }));
+  }
   const [activeClassroomId, setActiveClassroomId] = useState("");
   const [activeSessionId, setActiveSessionId] = useState("");
+  const [remoteRecording, setRemoteRecording] = useState(false);
+  const classroomRevisionRef = useRef(0);
+  const classroomLoadRef = useRef(0);
+  // Opt-in for this browser session only. API authorization is checked separately.
+  const [liveAssistEnabled, setLiveAssistEnabled] = useState(false);
   const [classroomPending, setClassroomPending] = useState(false);
   const [newClassroomTitle, setNewClassroomTitle] = useState("");
   const [sidebarSearchOpen, setSidebarSearchOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [classroomCreateError, setClassroomCreateError] = useState("");
+  const classroomCreateToggleRef = useRef<HTMLButtonElement>(null);
+  const mobileSidebarToggleRef = useRef<HTMLButtonElement>(null);
   const [editingClassroomId, setEditingClassroomId] = useState("");
   const [editingClassroomTitle, setEditingClassroomTitle] = useState("");
   const [editingGlossary, setEditingGlossary] = useState("");
   const [renamingSessionId, setRenamingSessionId] = useState("");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(initial?.profile ?? null);
   const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(initial?.creditStatus ?? null);
+  usePaymentReturn(locale, loadCredits, setNotice);
   const [reportedKeys, setReportedKeys] = useState<string[]>([]);
   const [materials, setMaterials] = useState<MaterialDocument[]>([]);
   const [materialPending, setMaterialPending] = useState(false);
+  const [materialUploadState, setMaterialUploadState] = useState<MaterialUploadState>();
+  const [materialsOpen, setMaterialsOpen] = useState(false);
+  const audioTransferRef = useRef<AbortController | null>(null);
+  const audioRequestPendingRef = useRef(false);
+  useEffect(() => () => audioTransferRef.current?.abort(), []);
   // UPL-03. The upload being watched right now, if any.
   const [audioUpload, setAudioUpload] = useState<AudioUpload | null>(null);
+  const [audioAvailability, setAudioAvailability] = useState<AudioUploadAvailability | null>(null);
+  const [audioAvailabilityChecking, setAudioAvailabilityChecking] = useState(true);
   const [materialDragOver, setMaterialDragOver] = useState(false);
   const [sessionQuery, setSessionQuery] = useState("");
   const [theme, setThemeState] = useState<"system" | "light" | "dark">("system");
@@ -270,29 +338,107 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     lectureTitle,
     setError,
     setNotice,
-    setMobilePane,
-    clearMessages: () => setMessages([]),
+    clearMessages: () => { if (status !== "idle" || !activeSessionId) setMessages([]); },
     setActiveSessionId,
-    setLectureTitle,
+    setLectureTitle: (serverTitle) => {
+      // Starting a draft may return its older persisted title. Keep edits made
+      // while microphone permission or the session request was in flight.
+      const current = lectureTitleRef.current.trim();
+      if (!current) setLectureTitle(serverTitle);
+      else if (current !== serverTitle) void renameSession(activeSessionIdRef.current, current);
+    },
     onCredits: (credits) => setCreditStatus((current) => (current ? { ...current, credits } : current)),
     loadClassrooms,
-    loadCredits,
+    onSessionSaved: upsertListedSession,
+    loadCredits: async () => { await loadCredits(); },
   });
   const {
     status, setStatus, elapsedMs, setElapsedMs, segments, setSegments, interim, showInterim,
-    connectingPhase, pauseReason, inputSource, restoreInputSource, previewStream,
+    connectingPhase, pauseReason, inputSource, phoneInput, restoreInputSource, previewStream, waitingForAudio, isFinalizing, isPausing,
+    isSwitchingMicrophone, switchMicrophone, isCurrentPhoneSource,
     meterRef, segmentsRef, segmentIdsRef, confirmedSegmentIdsRef, activeSessionIdRef,
     finishingRef, saveFailuresRef, elapsedBaseMsRef, startedAtRef, streamOffsetMsRef,
     flushUtterance, startLecture, pauseLecture, resumeLecture, finishLecture, stopLecture,
   } = recorder;
+  // Final speech is condensed independently of capture and the Jarvis popover.
+  const liveScript = useLiveScript({ sessionId: activeSessionId, segments, status, locale });
+  phonePauseRef.current = () => { if (status === "recording" && phoneInput && !isSwitchingMicrophone) void pauseLecture(); };
+  useEffect(() => {
+    if (!phonePairRef.current || !phoneInput) return;
+    phonePairRef.current.status(status, elapsedMs);
+    // The capability is never persisted here. A reload asks for a new QR,
+    // rather than silently switching the lecture to the laptop microphone.
+    if (activeSessionId && ["connecting", "recording", "paused"].includes(status)) {
+      try { sessionStorage.setItem(`lecue-phone-session:${activeSessionId}`, "1"); } catch { /* session-only hint */ }
+    }
+  }, [phoneInput, status, elapsedMs, activeSessionId]);
+  useEffect(() => {
+    if (status !== "ended" || !activeSessionId) return;
+    try { sessionStorage.removeItem(`lecue-phone-session:${activeSessionId}`); } catch { /* best effort */ }
+  }, [status, activeSessionId]);
+  useEffect(() => () => { phonePairRef.current?.dispose(); }, []);
+  const liveConversation = useMemo(() => buildLiveConversation(messages), [messages]);
+  const liveMaterialRevision = useMemo(() => buildLiveMaterialRevision(materials, activeSessionId), [materials, activeSessionId]);
+  const manualQuestionPending = messages.some((message) => message.pending && message.kind !== "live-assist");
+  const liveAssist = useLiveAssist({
+    enabled: liveAssistAvailable && liveAssistEnabled,
+    sessionId: activeSessionId, status, segments, interim, locale, elapsedMs,
+    conversation: liveConversation, materialRevision: liveMaterialRevision, manualQuestionPending,
+  });
+  useEffect(() => {
+    const answers = liveAssist.answers.filter((answer) => answer.sessionId === activeSessionId);
+    setMessages((current) => {
+      let changed = false;
+      const next = current.flatMap((message) => {
+        if (message.kind !== "live-assist" || !message.pending || answers.some((answer) => answer.id === message.id)) return [message];
+        changed = true;
+        return message.text ? [{ ...message, pending: false }] : [];
+      });
+      for (const answer of answers) {
+        const index = next.findIndex((message) => message.id === answer.id);
+        const previous = index < 0 ? null : next[index];
+        if (previous?.text === answer.text && previous.pending === answer.pending) continue;
+        const message: Message = {
+          id: answer.id, role: "assistant", kind: "live-assist",
+          text: answer.text, pending: answer.pending,
+          assistantLabel: isEnglish ? "Live assist · AI" : "실시간 답변 · AI",
+        };
+        if (index < 0) next.push(message);
+        else next[index] = message;
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [liveAssist.answers, activeSessionId, isEnglish]);
   const onlineLecture = inputSource === "browser-tab";
   const onlineViewing = onlineLecture && ["connecting", "recording", "paused"].includes(status);
-  useEffect(() => { setOnlineTranscriptOpen(false); }, [activeSessionId, inputSource]);
+  const onlineLayout = useOnlineLayout(onlineViewing, onlineAspectRatio);
+  const sidebarBeforeOnline = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (onlineViewing && sidebarBeforeOnline.current === null) {
+      sidebarBeforeOnline.current = sidebarCollapsed;
+      setSidebarCollapsed(true);
+    } else if (!onlineViewing && sidebarBeforeOnline.current !== null) {
+      setSidebarCollapsed(sidebarBeforeOnline.current);
+      sidebarBeforeOnline.current = null;
+    }
+  }, [onlineViewing, sidebarCollapsed]);
   useEffect(() => {
     const input = questionInputRef.current;
     if (!input) return;
-    input.style.height = "auto";
-    input.style.height = `${Math.min(144, Math.max(40, input.scrollHeight))}px`;
+    const resize = () => {
+      input.style.height = "40px";
+      if (input.value) input.style.height = `${Math.min(144, Math.max(40, input.scrollHeight))}px`;
+    };
+    resize();
+    let width = input.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (input.clientWidth === width) return;
+      width = input.clientWidth;
+      resize();
+    });
+    observer.observe(input);
+    return () => observer.disconnect();
   }, [question]);
   useEffect(() => {
     setSidebarCollapsed(window.localStorage.getItem("lecue-sidebar-collapsed") === "true");
@@ -314,82 +460,126 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   // 온라인 시작만 배포 설정으로 끌 수 있다. 기존 세션 열기·현장 강의는 막지 않는다.
   const onlineLectureEnabled = process.env.NEXT_PUBLIC_ONLINE_LECTURE !== "off";
   // 온라인 강의는 준비/기록 상태 문구가 다르다. 처음부터 "소리가 들린다"고 말하지 않는다.
-  const statusLabel = onlineLecture
+  const statusLabel = remoteRecording ? (isEnglish ? "Recording connection in use" : "녹음 연결 사용 중") : isSwitchingMicrophone ? (isEnglish ? "Switching microphone…" : "마이크 전환 중…") : isPausing ? (isEnglish ? "Paused" : "일시정지") : isFinalizing ? (isEnglish ? "Saving…" : "저장 중…") : onlineLecture
     ? status === "connecting"
       ? connectingPhase === "selecting"
         ? (isEnglish ? "Choose your lecture tab" : "강의 탭을 선택해 주세요")
         : (isEnglish ? "Connecting your lecture audio…" : "강의 소리를 연결하고 있어요…")
       : status === "recording" ? (isEnglish ? "Online lecture · Recording" : "온라인 강의 · 기록 중")
       : statusCopy[status]
-    : statusCopy[status];
+    : phoneInput && status === "recording" ? (isEnglish ? "Phone mic · Recording" : "휴대폰 마이크 · 기록 중") : statusCopy[status];
   const resumeLabel = pauseReason === "capture-ended" && onlineLecture
     ? (isEnglish ? "Choose lecture tab" : "강의 다시 선택")
     : onlineLecture ? (isEnglish ? "Resume" : "이어 듣기") : (isEnglish ? "Resume" : "이어하기");
 
-  /** 두 시작 동작. 사용 방식 선택 뒤 시작을 다시 누르는 구성은 없다 — 클릭이 곧 시작이다. */
+  function requestLectureStart(source: "microphone" | "browser-tab") {
+    if (consentSaveRef.current || titleNavigationRef.current || !canStart || materialPending) return;
+    microphoneCheckStopRef.current();
+    if (consentSatisfied !== true) { openConsentGate(source); return; }
+    // Open the picker in the click's activation, without a network wait first.
+    void startLecture(source);
+  }
+
+  function requestPhoneStart(resume = false, switchInput = false) {
+    if (consentSaveRef.current || titleNavigationRef.current || (!resume && !switchInput && (!canStart || materialPending))) return;
+    microphoneCheckStopRef.current();
+    phoneResumeRef.current = resume;
+    phoneSwitchRef.current = switchInput;
+    if (consentSatisfied !== true) { openConsentGate("phone"); return; }
+    setPhoneDialogOpen(true);
+  }
+
+  async function acceptPhone(controller: DesktopPhoneMic) {
+    if (phoneSwitchRef.current) {
+      phoneSwitchRef.current = false;
+      setPhoneDialogOpen(false);
+      const previous = phonePairRef.current;
+      const sessionId = activeSessionIdRef.current;
+      const resumed = await switchMicrophone("phone", controller.source);
+      if (isCurrentPhoneSource(controller.source)) {
+        phonePairRef.current = controller;
+        if (previous !== controller) previous?.dispose();
+        controller.status(resumed ? "recording" : "paused", elapsedMs);
+        try { sessionStorage.setItem(`lecue-phone-session:${sessionId}`, "1"); } catch { /* no capability persisted */ }
+      } else controller.dispose();
+      return;
+    }
+    phonePairRef.current?.dispose();
+    phonePairRef.current = controller;
+    setPhoneDialogOpen(false);
+    if (phoneResumeRef.current) void resumeLecture(controller.source);
+    else void startLecture("microphone", undefined, controller.source);
+  }
+
+  function requestResume() {
+    if (remoteRecording || isSwitchingMicrophone) return;
+    let usedPhone = phoneInput;
+    try { usedPhone ||= sessionStorage.getItem(`lecue-phone-session:${activeSessionId}`) === "1"; } catch { /* current state remains authoritative */ }
+    if (usedPhone && !phonePairRef.current?.source.isLive()) { requestPhoneStart(true); return; }
+    void resumeLecture(usedPhone ? phonePairRef.current?.source : undefined);
+  }
+
+  async function changeMicrophone(target: "computer" | "phone") {
+    if (remoteRecording || isSwitchingMicrophone || isFinalizing || inputSource !== "microphone") return;
+    if (target === "phone") { requestPhoneStart(true, true); return; }
+    const previous = phonePairRef.current;
+    await switchMicrophone("computer");
+    if (!previous || !isCurrentPhoneSource(previous.source)) {
+      previous?.dispose();
+      phonePairRef.current = null;
+      try { sessionStorage.removeItem(`lecue-phone-session:${activeSessionId}`); } catch { /* optional restoration hint */ }
+    }
+  }
+
+  function openConsentGate(action: "microphone" | "browser-tab" | "phone" | "upload") {
+    setConsentAction(action);
+    setError("");
+    setNotice("");
+    setConsentGate(true);
+  }
+
+  function dismissConsentGate() {
+    if (consentSaveRef.current) return;
+    setConsentAction(null);
+    setConsentGate(false);
+    setError("");
+  }
+
+  /** 두 시작 동작. 동의한 계정은 클릭이 곧 시작이다. */
   function renderStartButtons(disabled: boolean, className = "", icons = false) {
     return (
       <div className={`start-choice${className ? ` ${className}` : ""}`}>
-        <button type="button" className="start-button" onClick={() => void startLecture("microphone")} disabled={disabled}>
-          {icons && <Mic size={17} aria-hidden="true" />}{isEnglish ? "In-person lecture" : "현장 강의 듣기"}
+        <button type="button" className="start-button" onClick={() => requestLectureStart("microphone")} disabled={disabled || consentPending}>
+          {icons && <Mic size={17} aria-hidden="true" />}{status === "connecting" && inputSource === "microphone" ? (isEnglish ? "Connecting…" : "연결 중…") : (isEnglish ? "In-person lecture" : "현장 강의 듣기")}
         </button>
         {onlineLectureEnabled && (
-          <button type="button" className="start-button start-online" onClick={() => void startLecture("browser-tab")} disabled={disabled}>
+          <button type="button" className="start-button start-online" onClick={() => requestLectureStart("browser-tab")} disabled={disabled || consentPending}>
             {icons && <MonitorPlay size={17} aria-hidden="true" />}{isEnglish ? "Online lecture" : "온라인 강의 듣기"}
           </button>
         )}
+        <button type="button" className="phone-mic-choice" onClick={() => requestPhoneStart()} disabled={disabled || consentPending}>
+          <Smartphone size={16} aria-hidden="true" />{isEnglish ? "Use phone as microphone" : "휴대폰을 마이크로 사용"}
+        </button>
       </div>
     );
   }
   const onlineHint = isEnglish ? "Choose your lecture tab to start." : "강의가 재생되는 탭을 선택하면 바로 시작해요.";
 
-  const transcriptParagraphs = useMemo(() => groupTranscriptParagraphs(segments), [segments]);
-  const sentenceCount = useMemo(() => countTranscriptSentences(segments), [segments]);
   const sessionsById = useMemo(
     () => new Map([...unassignedSessions, ...classrooms.flatMap((classroom) => classroom.sessions)].map((session) => [session.id, session])),
     [unassignedSessions, classrooms],
   );
 
-  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
-  const messagesFollowRef = useRef(true);
-  const previousMessageCountRef = useRef(0);
-  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
-  // 지난 부분을 다시 읽는 중에는 새 문장이 와도 바닥으로 끌어내리지 않는다.
-  const transcriptFollowRef = useRef(true);
+  const { messagesScrollRef, isFollowingLatest, jumpToLatest } = useConversationScroll(messages, activeSessionId);
   const initialRouteRef = useRef(false);
-  const [followingTranscript, setFollowingTranscript] = useState(true);
-  const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
-  function showTranscriptAt(atMs: number) {
-    setOnlineTranscriptOpen(true);
-    setMobilePane("transcript");
-    transcriptFollowRef.current = false;
-    setFollowingTranscript(false);
-    const paragraph = transcriptParagraphs.find((item) => item.startMs <= atMs && item.endMs >= atMs)
-      ?? [...transcriptParagraphs].reverse().find((item) => item.startMs <= atMs);
-    if (!paragraph) return;
-    setHighlightedTime(paragraph.startMs);
-    requestAnimationFrame(() => {
-      const node = document.getElementById(`transcript-${paragraph.startMs}`);
-      node?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-      node?.focus({ preventScroll: true });
-    });
-  }
-  function followTranscript() {
-    transcriptFollowRef.current = true;
-    setFollowingTranscript(true);
-    setHighlightedTime(null);
-    const node = transcriptScrollRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }
   const consentDialogRef = useRef<HTMLDialogElement | null>(null);
   const deleteDialogRef = useRef<HTMLDialogElement | null>(null);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("lecue-speech-language");
-    // Preserve an explicit Korean-focused choice; mixed Korean/English remains the first-visit default.
-    const language = saved === "en" || saved === "ko" ? saved : "multi";
+    // Keep saved choices across regions; only first-time defaults depend on location.
+    const language = initialSpeechLanguage(saved, region);
     setSpeechLanguage(language);
-    window.localStorage.setItem("lecue-speech-language", language);
     const storedTheme = window.localStorage.getItem("lecue-theme");
     if (storedTheme === "dark" || storedTheme === "light") setThemeState(storedTheme);
     const storedMic = window.localStorage.getItem("lecue-mic-device");
@@ -423,23 +613,13 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     return () => window.clearInterval(timer);
   }, [status, locale]);
 
+  // Once the session has finished saving, its last (possibly short) section can
+  // be summarized too. Opening the flow itself never starts a model request.
   useEffect(() => {
-    messagesFollowRef.current = true;
-    transcriptFollowRef.current = true;
-    setFollowingTranscript(true);
-    setHighlightedTime(null);
-  }, [activeSessionId]);
-  useEffect(() => {
-    const scroller = messagesScrollRef.current;
-    const countChanged = previousMessageCountRef.current !== messages.length;
-    previousMessageCountRef.current = messages.length;
-    if (!scroller || !messagesFollowRef.current) return;
-    if (countChanged && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
-    } else {
-      scroller.scrollTop = scroller.scrollHeight;
-    }
-  }, [messages]);
+    if (status === "ended" && !isFinalizing && activeSessionId) void foldSummaries(activeSessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, isFinalizing, activeSessionId]);
+
   useEffect(() => {
     if (!initialRouteRef.current) return;
     const url = new URL(window.location.href);
@@ -457,14 +637,29 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   // Uploading or transcribing: the control is occupied either way.
   const audioBusy = audioUpload?.status === "uploading" || audioUpload?.status === "processing" || audioUpload?.status === "queued";
 
+  async function checkAudioAvailability() {
+    setAudioAvailabilityChecking(true);
+    try {
+      const response = await fetch("/api/lecture-audio", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
+      if (!response.ok) { setAudioAvailability(null); return null; }
+      const data = await response.json() as { uploads?: AudioUpload[]; availability?: AudioUploadAvailability };
+      setAudioAvailability(data.availability ?? null);
+      return data;
+    } catch {
+      setAudioAvailability(null);
+      return null;
+    } finally {
+      setAudioAvailabilityChecking(false);
+    }
+  }
+
   // "떠나도 된다"고 안내한 업로드의 뒷일: 탭을 닫았다 돌아와도 진행 중이면
   // 폴링을 다시 붙이고, 최근 실패는 여기서라도 알려준다.
   useEffect(() => {
     void (async () => {
       try {
-        const response = await fetch("/api/lecture-audio", { headers: { "X-Site-Locale": locale } });
-        if (!response.ok) return;
-        const data = await response.json() as { uploads?: AudioUpload[] };
+        const data = await checkAudioAvailability();
+        if (!data) return;
         const rows = data.uploads ?? [];
         const inFlight = rows.find((row) => row.status === "processing" || row.status === "queued");
         if (inFlight) {
@@ -516,8 +711,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   // Materials stay available to answers; the workspace does not render the
   // original files.
   useEffect(() => {
+    setMaterials([]);
     if (!activeSessionId) {
-      setMaterials([]);
       return;
     }
     let cancelled = false;
@@ -531,7 +726,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         const data = await response.json() as { documents?: MaterialDocument[] };
         const documents = data.documents ?? [];
         if (!cancelled) {
-          setMaterials(documents);
+          // Do not erase an upload that finished after this GET started.
+          setMaterials((current) => [...new Map([...documents, ...current.filter((item) => item.session_id === activeSessionId)].map((item) => [item.id, item])).values()]);
         }
       } catch {
         // 자료 유무 확인 실패는 강의 진행을 막지 않는다.
@@ -540,19 +736,24 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     return () => { cancelled = true; };
   }, [activeSessionId, locale]);
 
-  /**
-   * UPL-01. Reads the length in the browser first: a file past the three-hour
-   * ceiling is refused here rather than after a 1GB upload, and the estimate
-   * lets the server turn away an account with no credits before it pays
-   * Deepgram to transcribe anything. The charge itself uses Deepgram\'s own
-   * measurement, so this number cannot buy a cheaper lecture.
-   */
+  // This optional metadata check catches long recordings early. The server
+  // measures the actual audio before reserving credits or transcribing it.
   async function readDurationMs(file: File): Promise<number> {
     return new Promise((resolve) => {
       const url = URL.createObjectURL(file);
       const probe = document.createElement("audio");
       probe.preload = "metadata";
-      const done = (value: number) => { URL.revokeObjectURL(url); resolve(value); };
+      let settled = false;
+      const done = (value: number) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        probe.onloadedmetadata = null;
+        probe.onerror = null;
+        URL.revokeObjectURL(url);
+        resolve(value);
+      };
+      const timeout = setTimeout(() => done(0), 5_000);
       probe.onloadedmetadata = () => done(Number.isFinite(probe.duration) ? Math.round(probe.duration * 1_000) : 0);
       // A container the browser cannot read is not necessarily one Deepgram
       // cannot: send 0 and let the server decide.
@@ -561,64 +762,80 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     });
   }
 
-  async function uploadLectureAudio(file: File) {
-    if (audioUpload && (audioUpload.status === "processing" || audioUpload.status === "uploading")) return;
-    const durationMs = await readDurationMs(file);
-    if (durationMs > MAX_LECTURE_MS) {
-      setError(isEnglish ? "A lecture can be up to 3 hours long." : "한 수업은 최대 3시간까지 변환할 수 있습니다.");
+  async function uploadLectureAudio(file: File, consentReady = consentSaveRef.current) {
+    if (!audioAvailability?.available || audioAvailabilityChecking) return;
+    if (consentReady) {
+      try { await consentReady; } catch { return; }
+    }
+    if (finishingRef.current) return;
+    if (consentSatisfied !== true && !consentConfirmedRef.current) { openConsentGate("upload"); return; }
+    if (audioBusy || audioRequestPendingRef.current) return;
+    if (file.size > audioAvailability.maxFileBytes) {
+      setError(isEnglish ? `Choose a recording up to ${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))} MB.` : `${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))}MB 이하의 녹음 파일을 선택해 주세요.`);
       return;
     }
-
+    audioRequestPendingRef.current = true;
     setError("");
     setNotice(isEnglish ? "Uploading the recording…" : "녹음 파일을 올리는 중입니다…");
     setAudioUpload({ id: "", session_id: "", status: "uploading", filename: file.name });
     try {
-      const formData = new FormData();
-      formData.set("file", file);
-      formData.set("title", file.name.replace(/\.[^.]+$/, "").slice(0, 80) || (isEnglish ? "Uploaded lecture" : "올린 수업"));
-      formData.set("language", speechLanguage);
-      formData.set("durationMs", String(durationMs));
-      if (activeClassroomId) formData.set("classroomId", activeClassroomId);
-      // UPL-04. Stable for this file, so a retry after a dropped connection
-      // rejoins the job already running instead of paying for it twice.
-      formData.set("idempotencyKey", `${file.name}:${file.size}:${file.lastModified}`);
-
-      // fetch는 업로드 진행률을 주지 않는다. 1GB짜리 파일을 침묵 속에 올리게
-      // 하지 않으려고 이 요청만 XHR로 보낸다.
-      const data = await new Promise<{ upload?: AudioUpload; error?: string }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/lecture-audio");
-        xhr.setRequestHeader("X-Site-Locale", locale);
-        xhr.responseType = "json";
-        xhr.upload.onprogress = (event) => {
-          if (!event.lengthComputable) return;
-          const percent = Math.round((event.loaded / event.total) * 100);
-          setNotice(isEnglish
-            ? `Uploading the recording… ${percent}%`
-            : `녹음 파일을 올리는 중입니다… ${percent}%`);
-        };
-        xhr.onload = () => resolve((xhr.response ?? {}) as { upload?: AudioUpload; error?: string });
-        xhr.onerror = () => reject(new Error());
-        xhr.send(formData);
-      });
-      if (!data.upload) throw new Error(data.error);
-      setAudioUpload(data.upload);
-      setNotice(isEnglish
+      const durationMs = await readDurationMs(file);
+      if (durationMs > MAX_LECTURE_MS) throw new Error(isEnglish ? "A lecture can be up to 3 hours long." : "한 수업은 최대 3시간까지 변환할 수 있습니다.");
+      const control = async (body: object) => {
+        const response = await fetch("/api/lecture-audio", { method: "POST", headers: { "Content-Type": "application/json", "X-Site-Locale": locale }, body: JSON.stringify(body) });
+        const data = await response.json().catch(() => ({})) as { upload?: AudioUpload; session?: SessionSummary; transfer?: AudioUploadTransfer; readyToComplete?: boolean; pending?: boolean; error?: string; code?: string };
+        if (data.code === "AUDIO_UPLOAD_UNAVAILABLE") void checkAudioAvailability();
+        if (!response.ok || !data.upload) throw new Error(data.error || (isEnglish ? "The recording upload failed. Try again shortly." : "녹음 파일 업로드에 실패했습니다. 잠시 뒤 다시 시도해 주세요."));
+        return data;
+      };
+      let data = await control({ action: "prepare", filename: file.name, byteSize: file.size,
+        title: lectureTitleRef.current.trim() || file.name.replace(/\.[^.]+$/, "").slice(0, 80) || (isEnglish ? "Uploaded lecture" : "올린 수업"),
+        language: speechLanguage, classroomId: activeClassroomId || null, idempotencyKey: await audioUploadKey(file) });
+      setAudioUpload({ ...data.upload!, filename: file.name });
+      if (data.transfer) {
+        const controller = new AbortController();
+        audioTransferRef.current = controller;
+        await transferRecording(file, data.transfer, percent => setNotice(isEnglish ? `Uploading the recording… ${percent}%` : `녹음 파일을 올리는 중입니다… ${percent}%`), controller.signal);
+        audioTransferRef.current = null;
+        setNotice(isEnglish ? "Checking the audio and preparing transcription…" : "오디오를 확인하고 받아쓰기를 준비하고 있어요…");
+        data.readyToComplete = true;
+      }
+      if (data.readyToComplete) {
+        const uploadId = data.upload!.id;
+        const deadline = Date.now() + 10 * 60_000;
+        do {
+          data = await control({ action: "complete", uploadId });
+          if (!data.pending) break;
+          if (Date.now() >= deadline) throw new Error(isEnglish ? "Audio verification is taking longer than expected. Choose the same file to retry." : "오디오 확인이 예상보다 오래 걸립니다. 같은 파일을 다시 선택해 이어서 처리해 주세요.");
+          await new Promise(resolve => setTimeout(resolve, 5_000));
+        } while (data.pending);
+      }
+      setAudioUpload(data.upload!);
+      setNotice(data.upload!.status === "completed" ? (isEnglish ? "This recording is already transcribed. Open it from your lecture list." : "이미 변환된 녹음 파일입니다. 수업 목록에서 열어 보세요.") : isEnglish
         ? "Transcribing. You can leave this page — the lecture appears in the sidebar when it is done."
         : "받아쓰는 중입니다. 이 화면을 떠나도 되며, 끝나면 왼쪽 목록에 수업이 나타납니다.");
       await loadClassrooms();
     } catch (caught) {
       setNotice("");
       setAudioUpload(null);
-      setError(caught instanceof Error && caught.message
+      setError(caught instanceof AudioTransferError ? caught.code === "expired"
+        ? (isEnglish ? "Upload authorization expired. Choose the same file again to resume." : "업로드 인증 시간이 지났습니다. 같은 파일을 다시 선택해 이어서 올려 주세요.")
+        : caught.code === "too_large" ? (isEnglish ? "This file exceeds the storage upload limit. Choose a smaller recording." : "저장소 업로드 한도를 넘었습니다. 더 작은 녹음 파일을 선택해 주세요.")
+        : (isEnglish ? "The file transfer did not finish. Choose the same file to retry and resume." : "파일 전송을 완료하지 못했습니다. 같은 파일을 다시 선택해 이어서 올려 주세요.")
+        : caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not upload this recording." : "녹음 파일을 올리지 못했습니다.");
+    } finally {
+      audioRequestPendingRef.current = false;
+      audioTransferRef.current = null;
     }
   }
 
-  async function uploadMaterial(file: File) {
-    if (materialPending) return;
+  async function uploadMaterial(file: File, replacingId?: string) {
+    if (materialPending) return false;
     setMaterialPending(true);
+    setMaterialsOpen(true);
+    setMaterialUploadState({ filename: file.name, status: "pending", replacingId });
     setError("");
     setNotice(isEnglish ? "Reading the material…" : "자료를 읽는 중입니다…");
     try {
@@ -630,7 +847,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           body: JSON.stringify({
             action: "draft",
             classroomId: activeClassroomId || null,
-            title: isEnglish ? `Lecture ${new Date().toLocaleDateString("en-US")}` : `${new Date().toLocaleDateString("ko-KR")} 수업`,
+            title: preparationTitle(lectureTitleRef.current, isEnglish),
           }),
         });
         const data = await response.json() as { session?: SessionSummary; error?: string };
@@ -638,8 +855,9 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         sessionId = data.session.id;
         activeSessionIdRef.current = sessionId;
         setActiveSessionId(sessionId);
-        setLectureTitle(data.session.title);
-        await loadClassrooms(activeClassroomId);
+        upsertListedSession(data.session);
+        if (!lectureTitleRef.current.trim()) setLectureTitle(data.session.title);
+        else if (lectureTitleRef.current.trim() !== data.session.title) await renameSession(sessionId, lectureTitleRef.current);
       }
       const formData = new FormData();
       formData.set("sessionId", sessionId);
@@ -651,14 +869,33 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       });
       const data = await response.json() as { document?: MaterialDocument; error?: string };
       if (!response.ok || !data.document) throw new Error(data.error);
-      const next = [data.document!, ...materials];
-      setMaterials(next);
-      setNotice(isEnglish ? "The material is ready." : "강의 자료를 준비했습니다.");
+      if (activeSessionIdRef.current === sessionId) {
+        setMaterials((current) => [data.document!, ...current.filter((item) => item.session_id === sessionId && item.id !== data.document!.id)]);
+        setNotice(isEnglish ? "The material is ready. You can ask questions now." : "자료를 읽었습니다. 바로 질문할 수 있어요.");
+      }
+      if (replacingId) {
+        let removed = false;
+        try {
+          const removal = await fetch(`/api/materials?documentId=${encodeURIComponent(replacingId)}`, { method: "DELETE", headers: { "X-Site-Locale": locale } });
+          removed = removal.ok;
+        } catch { /* The new document is already ready; retain both on a missed delete. */ }
+        if (!removed) {
+          setError(isEnglish ? "The new material is ready, but the previous file could not be removed. Both files are kept; remove the previous file when you are ready." : "새 자료는 읽었지만 이전 파일을 삭제하지 못했습니다. 두 파일 모두 유지했으니 이전 파일을 확인하고 삭제해 주세요.");
+        } else if (activeSessionIdRef.current === sessionId) {
+          setMaterials(current => current.filter(item => item.id !== replacingId));
+          setNotice(isEnglish ? "The material has been replaced. Check the text preview." : "자료를 교체했습니다. 읽은 내용 미리보기로 확인해 보세요.");
+        }
+      }
+      setMaterialUploadState(undefined);
+      return true;
     } catch (caught) {
       setNotice("");
-      setError(caught instanceof Error && caught.message
+      const message = caught instanceof Error && caught.message
         ? caught.message
-        : isEnglish ? "Could not upload this material." : "강의 자료를 올리지 못했습니다.");
+        : isEnglish ? "Could not upload this material." : "강의 자료를 올리지 못했습니다.";
+      setError(message);
+      setMaterialUploadState({ filename: file.name, status: "failed", error: message, replacingId });
+      return false;
     } finally {
       setMaterialPending(false);
     }
@@ -689,7 +926,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   // Every temporary <details> menu closes on an outside click or Escape.
   useEffect(() => {
     function openMenus() {
-      return document.querySelectorAll<HTMLDetailsElement>("details.session-menu[open], details.session-submenu[open], details.profile-menu[open], details.material-list[open]");
+      return document.querySelectorAll<HTMLDetailsElement>("details.session-menu[open], details.session-submenu[open], details.profile-menu[open], details.material-list[open], details.conversation-materials[open]");
     }
     function closeIfOutside(event: PointerEvent) {
       for (const menu of openMenus()) {
@@ -719,12 +956,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       window.removeEventListener("resize", closeOnLayoutChange);
     };
   }, []);
-
-  useEffect(() => {
-    if (!segments.length && !interim) return;
-    const transcript = transcriptScrollRef.current;
-    if (transcript && transcriptFollowRef.current) transcript.scrollTop = transcript.scrollHeight;
-  }, [segments, interim]);
 
   useEffect(() => {
     let cancelled = false;
@@ -762,11 +993,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         const classroomId = params.get("classroom");
         if (sessionId) await openSession(sessionId);
         else if (classroomId && classrooms.some((classroom) => classroom.id === classroomId)) setActiveClassroomId(classroomId);
-        if (params.get("payment") === "success") {
-          setNotice(isEnglish
-            ? "Payment complete. Your credits have been added."
-            : "결제가 완료됐습니다. 크레딧이 추가되었습니다.");
-        }
       }
       hydratedRef.current = false;
       try {
@@ -796,23 +1022,56 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   async function renameSession(sessionId: string, raw: string) {
     const title = raw.trim();
     const stored = sessionsById.get(sessionId)?.title;
-    // The topbar field is controlled state, so every path that does not rename
-    // has to put the stored title back or it keeps showing a name nothing has.
-    const revert = () => {
-      if (sessionId === activeSessionIdRef.current) setLectureTitle(stored ?? "");
-    };
-    if (!sessionId || !title || title === stored) return revert();
+    if (!sessionId) return true;
+    if (!title) {
+      if (sessionId === activeSessionIdRef.current && lectureTitleRef.current === raw) setLectureTitle(stored ?? "");
+      return true;
+    }
+    const isCurrentEdit = () => sessionId === activeSessionIdRef.current && lectureTitleRef.current.trim() === title;
+    if (isCurrentEdit()) setTitleSaveStatus("saving");
     try {
-      const response = await fetch("/api/lecture-sessions", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-        body: JSON.stringify({ action: "rename", sessionId, title }),
+      await titleSaveQueueRef.current(sessionId, title, async () => {
+        const response = await fetch("/api/lecture-sessions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ action: "rename", sessionId, title }),
+        });
+        if (!response.ok) throw new Error("title-save-failed");
+        classroomRevisionRef.current += 1;
+        setClassroomLists((current) => patchListedSession(current, sessionId, { title }));
       });
-      if (!response.ok) return revert();
-      if (sessionId === activeSessionIdRef.current) setLectureTitle(title);
-      await loadClassrooms();
+      if (isCurrentEdit()) { setLectureTitle(title); setTitleSaveStatus("saved"); }
+      return true;
     } catch {
-      revert();
+      if (isCurrentEdit()) setTitleSaveStatus("error");
+      setError(isEnglish ? "The lecture name was not saved. Your text is still here; try saving again." : "수업 이름을 저장하지 못했습니다. 입력한 이름은 유지했으니 다시 저장해 주세요.");
+      return false;
+    }
+  }
+
+  useEffect(() => {
+    if (!activeSessionId || !lectureTitle.trim() || lectureTitle.trim() === sessionsById.get(activeSessionId)?.title) return;
+    const timer = setTimeout(() => { void renameSession(activeSessionId, lectureTitle); }, 600);
+    return () => clearTimeout(timer);
+    // The editable draft and its lecture define this save, not sidebar refreshes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId, lectureTitle]);
+
+  async function flushLectureTitle() {
+    if (titleNavigationRef.current) return false;
+    titleNavigationRef.current = true;
+    setTitleNavigationPending(true);
+    try {
+      const sessionId = activeSessionIdRef.current;
+      if (!sessionId) return true;
+      for (;;) {
+        const title = lectureTitleRef.current;
+        if (!(await renameSession(sessionId, title))) return false;
+        if (lectureTitleRef.current.trim() === title.trim() || !title.trim()) return true;
+      }
+    } finally {
+      titleNavigationRef.current = false;
+      setTitleNavigationPending(false);
     }
   }
 
@@ -831,7 +1090,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error);
       if (sessionId === activeSessionIdRef.current) setActiveClassroomId(classroomId ?? "");
-      await loadClassrooms();
+      classroomRevisionRef.current += 1;
+      setClassroomLists((current) => patchListedSession(current, sessionId, { classroom_id: classroomId }));
     } catch (caught) {
       setError(caught instanceof Error && caught.message
         ? caught.message
@@ -853,12 +1113,13 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     setError("");
     // 낙관적 삭제: 목록에서 먼저 지우고 서버 cascade는 뒤에서 돈다.
     // 긴 강의는 문장 수천 행을 지우느라 서버가 느려서, 기다리면 UI가 몇 초 얼었다.
+    classroomRevisionRef.current += 1;
     setClassrooms((current) => current.map((classroom) => ({
       ...classroom,
       sessions: classroom.sessions.filter((item) => item.id !== sessionId),
     })));
     setUnassignedSessions((current) => current.filter((item) => item.id !== sessionId));
-    if (sessionId === activeSessionIdRef.current) prepareNewLecture();
+    if (sessionId === activeSessionIdRef.current) await prepareNewLecture(false);
     try {
       const response = await fetch(`/api/lecture-sessions?sessionId=${encodeURIComponent(sessionId)}`, {
         method: "DELETE",
@@ -906,7 +1167,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       if (data.questions?.length) {
         lines.push("", isEnglish ? "## Questions" : "## 질문과 답변", "");
         for (const item of data.questions) {
-          lines.push(`Q. ${item.question}`, `A. ${cleanAnswerText(item.answer)}`, "");
+          lines.push(`Q. ${item.question}`, "", cleanAnswerMarkdown(item.answer), "");
         }
       }
 
@@ -951,24 +1212,48 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     }
   }
 
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const controller = new AbortController();
+    const refresh = () => {
+      if (document.hidden) return;
+      fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store", signal: controller.signal })
+        .then(async response => { if (response.ok) setCreditStatus(await response.json()); })
+        .catch(() => {});
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [profileMenuOpen, creditStatus?.credits, locale]);
+
   async function loadCredits() {
     try {
       const response = await fetch("/api/credits", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
-      if (!response.ok) return;
+      if (!response.ok) return false;
       setCreditStatus(await response.json() as CreditStatus);
+      return true;
     } catch {
       // The server enforces credits even when this display cannot refresh.
+      return false;
     }
   }
 
+  function upsertListedSession(session: Omit<SessionSummary, "question_count"> & { question_count?: number }) {
+    classroomRevisionRef.current += 1;
+    setClassroomLists((current) => mergeListedSession(current, session));
+  }
+
   async function loadClassrooms(preferredId?: string) {
+    const revision = classroomRevisionRef.current;
+    const requestId = ++classroomLoadRef.current;
     try {
       const response = await fetch("/api/classrooms", { headers: { "X-Site-Locale": locale }, cache: "no-store" });
       const data = await response.json() as { classrooms?: Classroom[]; unassignedSessions?: SessionSummary[]; profile?: UserProfile; error?: string };
       if (!response.ok) throw new Error(data.error);
+      // A slow refresh must not undo a successful edit or a newer response.
+      if (revision !== classroomRevisionRef.current || requestId !== classroomLoadRef.current) return;
       const next = data.classrooms ?? [];
-      setClassrooms(next);
-      setUnassignedSessions(data.unassignedSessions ?? []);
+      setClassroomLists({ classrooms: next, unassignedSessions: data.unassignedSessions ?? [] });
       setProfile(data.profile ?? null);
       if (preferredId !== undefined) setActiveClassroomId(preferredId);
       if (!initialRouteRef.current) {
@@ -978,15 +1263,9 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         const classroomId = params.get("classroom");
         if (sessionId) void openSession(sessionId);
         else if (classroomId && next.some((classroom) => classroom.id === classroomId)) setActiveClassroomId(classroomId);
-        // Checkout sends the buyer here with ?payment=success and nothing used
-        // to read it, so a completed purchase was confirmed by nothing at all.
-        if (params.get("payment") === "success") {
-          setNotice(isEnglish
-            ? "Payment complete. Your credits have been added."
-            : "결제가 완료됐습니다. 크레딧이 추가되었습니다.");
-        }
       }
     } catch (caught) {
+      if (revision !== classroomRevisionRef.current || requestId !== classroomLoadRef.current) return;
       setError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not load your classrooms." : "강의실을 불러오지 못했습니다.");
@@ -999,7 +1278,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     if (!title || classroomPending) return;
 
     setClassroomPending(true);
-    setError("");
+    setClassroomCreateError("");
     try {
       const response = await fetch("/api/classrooms", {
         method: "POST",
@@ -1008,13 +1287,16 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       });
       const data = await response.json() as { classroom?: Classroom; error?: string };
       if (!response.ok || !data.classroom) throw new Error(data.error);
+      classroomRevisionRef.current += 1;
       setClassrooms((current) => [data.classroom!, ...current]);
-      setActiveClassroomId(data.classroom.id);
+      if (await prepareNewLecture()) setActiveClassroomId(data.classroom.id);
       setNewClassroomTitle("");
       setCreateOpen(false);
-      prepareNewLecture();
+      const mobileToggle = mobileSidebarToggleRef.current;
+      if (mobileToggle?.getClientRects().length) mobileToggle.focus();
+      else classroomCreateToggleRef.current?.focus();
     } catch (caught) {
-      setError(caught instanceof Error && caught.message
+      setClassroomCreateError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not create the classroom." : "강의실을 만들지 못했습니다.");
     } finally {
@@ -1034,10 +1316,12 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
         body: JSON.stringify({ classroomId: editingClassroomId, title, glossary: editingGlossary }),
       });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error);
+      const data = await response.json() as { classroom?: Omit<Classroom, "sessions">; error?: string };
+      if (!response.ok || !data.classroom) throw new Error(data.error);
+      classroomRevisionRef.current += 1;
+      setClassrooms((current) => current.map((classroom) => classroom.id === data.classroom!.id
+        ? { ...classroom, ...data.classroom } : classroom));
       setEditingClassroomId("");
-      await loadClassrooms(editingClassroomId);
     } catch (caught) {
       setError(caught instanceof Error && caught.message
         ? caught.message
@@ -1049,6 +1333,9 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
 
   async function openSession(sessionId: string) {
     if (classroomPending || status === "recording" || status === "connecting" || finishingRef.current) return;
+    if (!(await flushLectureTitle())) return;
+    setMaterialsOpen(false);
+    setMaterialUploadState(undefined);
     setClassroomPending(true);
     setRestoring(true);
     setError("");
@@ -1062,11 +1349,31 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         error?: string;
       };
       if (!response.ok || !data.session) throw new Error(data.error);
+      let recoveredStatus = data.session.status;
+      let recordedMs = data.session.recorded_ms ?? data.session.duration_seconds * 1_000;
+      let activeElsewhere = false;
+      if (data.session.status === "recording") {
+        const recoveryResponse = await fetch("/api/lecture-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
+          body: JSON.stringify({ action: "recover", sessionId: data.session.id }),
+        });
+        const recovery = await recoveryResponse.json() as { status?: SessionSummary["status"]; recordedMs?: number; activeRecording?: boolean; error?: string };
+        if (!recoveryResponse.ok || !recovery.status) throw new Error(recovery.error);
+        recoveredStatus = recovery.status;
+        recordedMs = recovery.recordedMs ?? recordedMs;
+        activeElsewhere = recovery.activeRecording === true;
+      }
+      setRemoteRecording(activeElsewhere);
+      if (activeElsewhere) setNotice(isEnglish
+        ? "This lecture already has a recording connection. You can read it here while keeping that connection active."
+        : "이 수업의 녹음 연결이 이미 사용 중입니다. 기존 연결을 유지한 채 기록을 보여드립니다.");
       const restoredSegments = data.segments ?? [];
       setActiveClassroomId(data.session.classroom_id ?? "");
       setActiveSessionId(data.session.id);
       activeSessionIdRef.current = data.session.id;
       setLectureTitle(data.session.title);
+      setTitleSaveStatus("idle");
       setSegments(restoredSegments);
       segmentIdsRef.current = new Set(restoredSegments.map((segment) => segment.id));
       // Restored segments are already saved, so /api/ask must not re-upload them.
@@ -1075,27 +1382,13 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         { id: `${item.id}-q`, role: "user" as const, text: item.question, questionAtMs: item.question_at_ms },
         // 저장된 provider는 내부 식별자다("lecture-live", "openai"). 그대로
         // 보여주지 않고 화면용 이름으로 바꾼다. 기본 AI는 모델명도 숨긴다.
-        { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerText(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, materialSources: item.material_sources, questionAtMs: item.question_at_ms, assistantLabel: item.provider === "lecture-live"
+        { id: `${item.id}-a`, role: "assistant" as const, text: cleanAnswerMarkdown(item.answer), sources: cleanSources(item.external_sources ?? []), lectureSources: item.lecture_sources, materialSources: item.material_sources, questionAtMs: item.question_at_ms, assistantLabel: item.provider === "lecture-live"
           ? (isEnglish ? "Lecture assistant · Default AI" : "강의 조교 · 기본 AI")
           : `${providerNames[item.provider as PersonalProvider] ?? item.provider} · ${item.model}` },
       ]));
       showInterim("");
-      let recordedMs = data.session.recorded_ms ?? data.session.duration_seconds * 1_000;
-      let nextStatus: Status = data.session.status === "draft" ? "idle"
-        : data.session.status === "completed" ? "ended" : "paused";
-      // A refresh closes the browser microphone but cannot close the old DB
-      // session. Recover it as paused so wall-clock time never becomes audio.
-      if (data.session.status === "recording") {
-        const pauseResponse = await fetch("/api/lecture-sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
-          body: JSON.stringify({ action: "pause", sessionId: data.session.id }),
-        });
-        const pauseData = await pauseResponse.json() as { recordedMs?: number; error?: string };
-        if (!pauseResponse.ok) throw new Error(pauseData.error);
-        recordedMs = pauseData.recordedMs ?? recordedMs;
-        nextStatus = "paused";
-      }
+      const nextStatus: Status = recoveredStatus === "draft" ? "idle"
+        : recoveredStatus === "completed" ? "ended" : "paused";
       elapsedBaseMsRef.current = recordedMs;
       startedAtRef.current = 0;
       streamOffsetMsRef.current = recordedMs;
@@ -1104,13 +1397,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       // 클릭에서 선택창을 연다(LIFE-05).
       restoreInputSource(data.session.input_source);
       setStatus(nextStatus);
-      setMobilePane((data.questions?.length ?? 0) > 0 ? "chat" : "transcript");
       setMobileSidebarOpen(false);
       setNoteOpen(false);
       // 업로드로 만들어진 강의는 실시간 접기(2분 주기)를 거치지 않아 요약이
       // 없고, 질문마다 원문 전체가 나간다. 열 때 뒤에서 마저 접는다.
       // 서버가 할 일이 없으면 written:0으로 바로 끝난다.
-      if (nextStatus === "ended") void foldSummaries(data.session.id);
     } catch (caught) {
       setError(caught instanceof Error && caught.message ? caught.message : isEnglish ? "Could not load the lecture." : "수업 기록을 불러오지 못했습니다.");
     } finally {
@@ -1137,25 +1428,34 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     }
   }
 
-  function prepareNewLecture() {
-    if (status === "recording" || status === "connecting" || finishingRef.current) return;
+  async function prepareNewLecture(saveTitle = true) {
+    if (status === "recording" || status === "connecting" || finishingRef.current) return false;
+    if (saveTitle && !(await flushLectureTitle())) return false;
+    restoreInputSource("microphone");
+    setRemoteRecording(false);
+    phonePairRef.current?.dispose();
+    phonePairRef.current = null;
+    setError("");
     setNoteOpen(false);
     setActiveSessionId("");
     activeSessionIdRef.current = "";
     setLectureTitle("");
+    setMaterialUploadState(undefined);
+    setTitleSaveStatus("idle");
+    setMaterialsOpen(false);
     setSegments([]);
     segmentIdsRef.current.clear();
     confirmedSegmentIdsRef.current.clear();
     setMessages([]);
     showInterim("");
     setElapsedMs(0);
-    setMobilePane("chat");
     setMobileSidebarOpen(false);
     elapsedBaseMsRef.current = 0;
     startedAtRef.current = 0;
     setNotice("");
     saveFailuresRef.current = 0;
     setStatus("idle");
+    return true;
   }
 
   const savedCredential = aiProvider === "lecture-live"
@@ -1223,10 +1523,10 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     }
   }
 
-  // 가입 이후에 만들어진 계정은 이미 기록이 있다. 그 전에 만든 계정만 여기서
-  // 한 번 걸리고, 그 뒤로는 다시 뜨지 않는다.
+  // Browsing is available before consent; recording/upload still fail closed.
   useEffect(() => {
-    void refreshConsent().then((satisfied) => setConsentGate(!satisfied));
+    void refreshConsent();
+    return () => { consentAbortRef.current?.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1253,7 +1553,13 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         const response = await fetch("/api/consents", { headers: { "X-Site-Locale": locale } });
         if (!response.ok) throw new Error();
         const data = await response.json() as { satisfied?: boolean };
-        const satisfied = data.satisfied === true;
+        // A late initial GET must not undo a newer successful consent POST.
+        const satisfied = data.satisfied === true || consentConfirmedRef.current;
+        if (satisfied) {
+          consentConfirmedRef.current = true;
+          setConsentAge(true);
+          setConsentRecording(true);
+        }
         setConsentSatisfied(satisfied);
         return satisfied;
       } catch {
@@ -1264,64 +1570,78 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   }
 
   async function acceptConsentGate() {
-    if (!consentAge || !consentRecording) return;
+    if (!consentAge || !consentRecording || consentSaveRef.current) return;
+    const action = consentAction;
+    const controller = new AbortController();
+    consentAbortRef.current = controller;
     setConsentPending(true);
     setError("");
-    try {
+    setNotice("");
+    const saving = (async () => {
       const response = await fetch("/api/consents", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Site-Locale": locale },
         body: JSON.stringify({ types: ["age_14", "recording"] }),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error);
+      controller.signal.throwIfAborted();
+      consentConfirmedRef.current = true;
       setConsentSatisfied(true);
-      setConsentGate(false);
+    })();
+    consentSaveRef.current = saving;
+    setConsentGate(false);
+    // Native pickers need this click's activation and a non-inert target.
+    consentDialogRef.current?.close();
+    try {
+      if (action === "microphone" || action === "browser-tab") {
+        // Only permission/source selection starts now. The recorder waits for
+        // saved consent before its meter, PCM, session, or provider connection.
+        void startLecture(action, saving);
+      } else if (action === "upload") {
+        const input = audioUploadInputRef.current;
+        if (input?.showPicker) input.showPicker();
+        else input?.click();
+      }
+      await saving;
+      if (action === "phone") setPhoneDialogOpen(true);
+      setConsentAction(null);
     } catch (caught) {
+      // Also observe the save if opening a native picker threw synchronously.
+      await saving.catch(() => {});
+      if (controller.signal.aborted) return;
+      setConsentGate(true);
       setError(caught instanceof Error && caught.message
         ? caught.message
         : isEnglish ? "Could not save your agreement." : "동의 기록을 저장하지 못했습니다.");
     } finally {
+      if (consentSaveRef.current === saving) consentSaveRef.current = null;
+      if (consentAbortRef.current === controller) consentAbortRef.current = null;
       setConsentPending(false);
     }
   }
 
   const hasTranscript = segments.length > 0 || interim.length > 0;
-  const onboardingSteps = isEnglish
-    ? ["Sit near the speaker and check your mic", "Press Start lecture — speech piles up live", "Ask anything the moment you get lost"]
-    : ["강사 가까이에 앉아 마이크를 확인하세요", "강의 시작을 누르면 말이 실시간으로 쌓여요", "놓친 순간 바로 채팅에 물어보세요"];
+  const hasMaterials = hasReadyMaterials(activeSessionId, materials);
+  const hasQuestionContext = hasTranscript || hasMaterials;
   // 진행 중인 강의는 크레딧이 다 떨어져도 질문까지는 막지 않는다.
   const creditsAllowAsk = creditStatus === null || creditStatus.credits > 0 || status === "recording" || status === "paused";
   const outOfCredits = creditStatus !== null && creditStatus.credits <= 0;
-  const canAsk = hasTranscript
-    && !messages.some((message) => message.pending)
+  const canAsk = hasQuestionContext
+    && !isFinalizing
+    && !messages.some((message) => message.pending && message.kind !== "live-assist")
     && creditsAllowAsk;
-
-  /**
-   * 놓친 구간 복구. 질문을 문장으로 못 쓰는 순간이 강의에서는 훨씬 잦다 — 무엇을
-   * 물어야 할지 모르는 채로 흐름만 놓치기 때문이다. 서버가 창을 마지막 90초로
-   * 좁히고 검색을 끄므로 이 경로가 가장 빠르고 가장 싸다.
-   */
-  function askCatchup() {
-    void submitQuestion(
-      isEnglish ? "I missed that — what was just said?" : "방금 놓쳤어요. 지금까지 무슨 말이었나요?",
-      false,
-      "catchup",
-    );
-  }
 
   function askQuestion(event: FormEvent) {
     event.preventDefault();
     void submitQuestion(question, true);
   }
 
-  // Typing during a lecture is itself a distraction, so a transcript paragraph
-  // can send its own question with one press (PRD 36.3.3). Both entry points
-  // land here; only the composer clears itself, or a half-typed draft would
-  // disappear when the learner tapped a paragraph instead.
+  // Follow-up suggestions preserve an in-progress draft in the composer.
   async function submitQuestion(text: string, fromComposer = false, mode?: "catchup", atMs = elapsedMs) {
     const cleanQuestion = text.trim().slice(0, 1_000);
-    if (!cleanQuestion || !canAsk || messages.some((message) => message.pending)) return;
+    if (!cleanQuestion || !canAsk || messages.some((message) => message.pending && message.kind !== "live-assist")) return;
     if (aiProvider !== "lecture-live" && !personalApiKey.trim() && !savedCredential) {
       setError(isEnglish
         ? "Enter or save an API key for the selected provider in Answer model settings."
@@ -1329,7 +1649,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       return;
     }
 
-    setMobilePane("chat");
     setError("");
     const selectedModel =
       aiProvider === "lecture-live"
@@ -1348,13 +1667,14 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       questionAtMs: askedAt,
     };
     const assistantId = crypto.randomUUID();
+    jumpToLatest();
     setMessages((current) => [
       ...current,
       userMessage,
       {
         id: assistantId,
         role: "assistant",
-        text: isEnglish ? "Reviewing the lecture context…" : "강의 흐름을 확인하고 있습니다…",
+        text: "",
         pending: true,
         questionAtMs: askedAt,
         assistantLabel,
@@ -1382,6 +1702,10 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           locale,
           classroomId: activeClassroomId,
           lectureSessionId: activeSessionId,
+          liveAssistAnswers: liveAssistAvailable
+            ? messages.filter((message) => message.kind === "live-assist" && !message.pending && message.text.trim())
+              .slice(-3).map((message) => message.text.slice(0, 2_000))
+            : undefined,
           personalLlm:
             aiProvider === "lecture-live"
               ? undefined
@@ -1397,8 +1721,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
       if (!response.body) throw new Error(isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다.");
 
       // NDJSON: one {"delta"} line per text chunk, then a final {"done"} line
-      // (or {"error"} if the provider failed mid-stream). Deltas render raw so
-      // the reader sees text arrive immediately; done's cleaned text replaces it.
+      // (or {"error"} if the provider failed mid-stream). Keep Markdown intact;
+      // LearningAnswer renders partial and completed text through the same path.
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -1442,9 +1766,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           message.id === assistantId
             ? {
                 ...message,
-                // Cleaned once here rather than on every render: it is eleven
-                // regex passes and the result never changes.
-                text: cleanAnswerText(answer),
+                text: cleanAnswerMarkdown(answer),
                 pending: false,
                 sources: cleanSources(sources ?? []),
                 lectureSources: lectureSources ?? [],
@@ -1474,13 +1796,17 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
     }
   }
 
-  // 끝난 수업은 다시 시작하지 않는다. 새 수업은 사이드바의 "새 수업"으로 연다.
-  const canStart = (status === "idle" || status === "error")
-    && (creditStatus === null || creditStatus.credits > 0);
   const [noteOpen, setNoteOpen] = useState(false);
+  const noteLanguage = useNoteLanguage(locale);
+  const noteState = useLectureNote(status === "ended" && !isFinalizing ? activeSessionId : null, isEnglish, noteLanguage.language);
+  useEffect(() => { setNoteOpen(false); }, [activeSessionId]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 새로고침 직후, URL의 세션을 다시 여는 동안. 빈 새 수업 화면 대신 베일을 덮는다.
   const [restoring, setRestoring] = useState(Boolean(restoreSessionId));
+  // Keep the active lecture stable while saving its name or restoring another.
+  const canStart = (status === "idle" || status === "error")
+    && !isFinalizing && !classroomPending && !titleNavigationPending && !restoring
+    && (creditStatus === null || creditStatus.credits > 0);
 
   // 설정을 열 때만 장치 목록을 읽는다. 마이크 권한 전에는 라벨이 비어 온다.
   useEffect(() => {
@@ -1498,18 +1824,19 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   const activeClassroomTitle = classrooms.find((classroom) => classroom.id === activeClassroomId)?.title
     ?? (isEnglish ? "Unassigned" : "미분류 수업");
 
-  const preparing = (status === "idle" || status === "error") && !hasTranscript && !restoring;
+  // Keep a fresh microphone lecture here until its audio connection opens.
+  const startingMicrophone = status === "connecting" && inputSource === "microphone" && elapsedMs === 0 && messages.length === 0;
+  const preparing = (status === "idle" || status === "error" || startingMicrophone) && !hasQuestionContext && !restoring;
   const questions = messages.filter((message) => message.role === "user");
-  function changeSpeechLanguage(next: DeepgramLanguage) {
+  function changeSpeechLanguage(next: string) {
+    if (!isSpeechLanguage(next)) return;
     setSpeechLanguage(next);
     window.localStorage.setItem("lecue-speech-language", next);
   }
-  const languageOptions = [
-    { id: "ko" as DeepgramLanguage, label: isEnglish ? "Korean" : "한국어" },
-    { id: "multi" as DeepgramLanguage, label: isEnglish ? "Korean + English" : "한국어 + 영어" },
-    { id: "en" as DeepgramLanguage, label: "English" },
-  ];
-  const sidebarLocked = classroomPending || status === "recording" || status === "connecting" || status === "paused";
+  const languageChoices = lectureLanguageChoices(region, locale);
+  const selectedLanguageLabel = [...languageChoices.primary, ...languageChoices.other].find(item => item.id === speechLanguage)?.label ?? speechLanguage;
+  const otherLanguageLabel = isEnglish ? "Other languages" : "다른 언어";
+  const sidebarLocked = isFinalizing || classroomPending || titleNavigationPending || materialPending || status === "recording" || status === "connecting" || (!remoteRecording && status === "paused");
 
   /** One lecture row: open it, rename it in place, or drag it into a classroom. */
   function renderSessionRow(session: SessionSummary) {
@@ -1523,6 +1850,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           maxLength={80}
           onBlur={(event) => {
             setRenamingSessionId("");
+            if (session.id === activeSessionIdRef.current) setLectureTitle(event.target.value);
             void renameSession(session.id, event.target.value);
           }}
           onKeyDown={(event) => {
@@ -1542,7 +1870,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           onClick={() => void openSession(session.id)}
           disabled={sidebarLocked}
           title={session.title}
-        >{session.title}</button>
+        ><span className="sidebar-session-title">{session.title}</span><small className="sidebar-session-details">
+          {Number.isFinite(Date.parse(session.started_at)) ? new Intl.DateTimeFormat(isEnglish ? "en-US" : "ko-KR", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(session.started_at)) : ""}
+          {" · "}{session.status === "draft" ? (isEnglish ? "Not started" : "시작 전") : `${Math.ceil(session.duration_seconds / 60)}${isEnglish ? " min" : "분"}`}
+          {" · "}{isEnglish ? `${session.question_count} questions` : `질문 ${session.question_count}개`}
+        </small></button>
         <details className="session-menu" onToggle={(event) => positionSessionMenu(event.currentTarget)}>
           <summary aria-label={isEnglish ? "Lecture options" : "수업 옵션"}><MoreVertical size={14} aria-hidden="true" /></summary>
           <div className="session-menu-panel">
@@ -1593,9 +1925,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           <button
             type="button"
             className={activeClassroomId === key ? "sidebar-classroom active" : "sidebar-classroom"}
-            onClick={() => {
-              setActiveClassroomId(key);
-              prepareNewLecture();
+            onClick={async () => {
+              if (await prepareNewLecture()) setActiveClassroomId(key);
             }}
             disabled={sidebarLocked}
           >
@@ -1621,7 +1952,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
   }
 
   return (
-    <main className={`workspace experience${preparing ? " is-preparing" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <main className={`workspace experience question-workspace${preparing ? " is-preparing" : ""}${onlineViewing ? " is-online" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside id="lecture-sidebar" className={`workspace-sidebar${mobileSidebarOpen ? " is-mobile-open" : ""}`}>
         <div className="sidebar-header">
           <Link className="sidebar-brand" href={basePath || "/"} aria-label={isEnglish ? "Lecue home" : "Lecue 홈"}>L<span className="sidebar-wordmark">ecue</span><span className="sidebar-brand-dot" aria-hidden="true">.</span></Link>
@@ -1634,7 +1965,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         <button
           type="button"
           className="sidebar-new-lecture"
-          onClick={prepareNewLecture}
+          onClick={() => void prepareNewLecture()}
           disabled={sidebarLocked}
           aria-label={isEnglish ? "New lecture" : "새 수업"}
           title={isEnglish ? "New lecture" : "새 수업"}
@@ -1647,6 +1978,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         <button
           type="button"
           className="sidebar-mobile-toggle"
+          ref={mobileSidebarToggleRef}
           aria-expanded={mobileSidebarOpen}
           onClick={() => setMobileSidebarOpen((open) => !open)}
         >{mobileSidebarOpen
@@ -1672,11 +2004,14 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               </button>
               <button
                 type="button"
+                ref={classroomCreateToggleRef}
                 className={createOpen ? "active" : undefined}
                 aria-expanded={createOpen}
-                aria-label={isEnglish ? "Add a classroom" : "강의실 추가"}
-                onClick={() => setCreateOpen((open) => !open)}
-              ><Plus size={14} aria-hidden="true" /></button>
+                aria-controls="classroom-create-form"
+                aria-label={createOpen ? (isEnglish ? "Close classroom form" : "강의실 추가 닫기") : (isEnglish ? "Add a classroom" : "강의실 추가")}
+                aria-disabled={classroomPending || undefined}
+                onClick={() => { if (classroomPending) return; setClassroomCreateError(""); setCreateOpen((open) => !open); }}
+              >{createOpen ? <X size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}</button>
             </div>
           </div>
 
@@ -1699,19 +2034,37 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           )}
 
           {createOpen && (
-            <form className="sidebar-create-classroom" onSubmit={createClassroom}>
-              <div>
-                <input
-                  autoFocus
-                  value={newClassroomTitle}
-                  onChange={(event) => setNewClassroomTitle(event.target.value)}
-                  onKeyDown={(event) => { if (event.key === "Escape") setCreateOpen(false); }}
-                  placeholder={isEnglish ? "e.g. Economics" : "예: 경제학개론"}
-                  maxLength={80}
-                  disabled={classroomPending}
-                  aria-label={isEnglish ? "New classroom name" : "새 강의실 이름"}
-                />
-                <button type="submit" disabled={classroomPending || !newClassroomTitle.trim()} aria-label={isEnglish ? "Add classroom" : "강의실 추가"}><Plus size={15} aria-hidden="true" /></button>
+            <form id="classroom-create-form" className="classroom-create-form" onSubmit={createClassroom}
+              aria-busy={classroomPending}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape" || classroomPending) return;
+                event.preventDefault();
+                setCreateOpen(false);
+                classroomCreateToggleRef.current?.focus();
+              }}>
+              <label htmlFor="classroom-create-name">{isEnglish ? "Classroom name" : "강의실 이름"}</label>
+              <input
+                id="classroom-create-name"
+                name="classroomName"
+                autoFocus
+                autoComplete="off"
+                value={newClassroomTitle}
+                onChange={(event) => { setNewClassroomTitle(event.target.value); setClassroomCreateError(""); }}
+                placeholder={isEnglish ? "e.g. Economics" : "예: 경제학개론"}
+                maxLength={80}
+                disabled={classroomPending}
+                aria-invalid={classroomCreateError ? true : undefined}
+                aria-describedby={classroomCreateError ? "classroom-create-error" : undefined}
+              />
+              {classroomCreateError && <p id="classroom-create-error" className="classroom-create-error" role="alert">{classroomCreateError}</p>}
+              <div className="classroom-create-actions">
+                <button type="button" disabled={classroomPending} onClick={() => {
+                  setCreateOpen(false);
+                  classroomCreateToggleRef.current?.focus();
+                }}>{isEnglish ? "Cancel" : "취소"}</button>
+                <button type="submit" disabled={classroomPending || !newClassroomTitle.trim()}>
+                  {classroomPending ? (isEnglish ? "Creating…" : "만드는 중…") : (isEnglish ? "Create" : "만들기")}
+                </button>
               </div>
             </form>
           )}
@@ -1727,13 +2080,16 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             <nav className="sidebar-classrooms" aria-label={isEnglish ? "Classrooms and lectures" : "강의실과 수업 목록"}>
               {renderClassroomGroup("", isEnglish ? "Unassigned" : "미분류 수업", unassignedSessions)}
               {classrooms.map((classroom) => renderClassroomGroup(classroom.id, classroom.title, classroom.sessions, classroom.glossary))}
+              {sessionQuery.trim() && ![...sessionsById.values()].some((session) => session.title.toLowerCase().includes(sessionQuery.trim().toLowerCase())) && (
+                <div className="sidebar-search-empty" role="status"><p>{isEnglish ? `No lectures match “${sessionQuery.trim()}”.` : `‘${sessionQuery.trim()}’에 해당하는 수업이 없어요.`}</p><p>{isEnglish ? "Try another name or clear your search." : "다른 이름으로 검색하거나 검색어를 지워 주세요."}</p><button type="button" onClick={() => setSessionQuery("")}>{isEnglish ? "Clear search" : "검색어 지우기"}</button></div>
+              )}
             </nav>
           </DragDropProvider>
 
         </div>
 
         <div className="sidebar-account">
-          <details className="profile-menu" onKeyDown={(event) => {
+          <details className="profile-menu" onToggle={(event) => setProfileMenuOpen(event.currentTarget.open)} onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             event.currentTarget.open = false;
             event.currentTarget.querySelector("summary")?.focus();
@@ -1750,15 +2106,20 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             <div className="profile-menu-panel">
               <header>
                 <span className="profile-avatar" aria-hidden="true">{(profile?.displayName || profile?.email || "L").slice(0, 1).toUpperCase()}</span>
-                <span>
+                <span className="profile-identity">
                   <strong>{profile?.displayName || (isEnglish ? "My account" : "내 계정")}</strong>
                   <small title={profile?.email}>{profile?.email}</small>
                 </span>
+                <button type="button" className="profile-close" aria-label={isEnglish ? "Close account menu" : "계정 메뉴 닫기"} onClick={(event) => {
+                  const menu = event.currentTarget.closest("details");
+                  menu?.removeAttribute("open");
+                  menu?.querySelector("summary")?.focus();
+                }}><X size={16} aria-hidden="true" /></button>
               </header>
 
               <div className="profile-usage">
-                <span>{planLabel}</span>
-                <span className="profile-credits"><strong>{creditStatus ? creditStatus.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</strong><span>credits</span></span>
+                <CreditUsage status={creditStatus} locale={locale} compact onRefresh={() => void loadCredits()} />
+                <Link className="profile-topup" href={`${basePath}/billing?plan=topup`}>{isEnglish ? "Add credits" : "크레딧 추가"}<Plus size={13} aria-hidden="true" /></Link>
               </div>
 
               <div className="profile-menu-items">
@@ -1813,34 +2174,38 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                     ? (isEnglish ? "You can change this after ending the lecture." : "수업을 종료한 뒤 변경할 수 있어요.")
                     : (isEnglish ? "The language of menus and screens." : "메뉴와 화면에 쓰는 언어입니다.")}</p>
                 </div>
-                <SegmentedControl
+                <LanguageChoices
                   label={isEnglish ? "Display language" : "표시 언어"}
                   value={displayLocale}
-                  options={[
-                    { id: "en", label: "English" },
-                    { id: "ko", label: isEnglish ? "Korean" : "한국어" },
-                  ]}
-                  // 전체 새로고침이어야 한다: 언어는 프록시가 ?lang=을 받아 쿠키로
-                  // 굳히는 방식이라 클라이언트 내비게이션으로는 반영되지 않는다.
-                  onChange={changeDisplayLocale}
+                  primary={region === "kr" ? [{ id: "ko", label: "한국어" }, { id: "en", label: "English" }] : [{ id: "en", label: "English" }]}
+                  other={region === "kr" ? [] : [{ id: "ko", label: "한국어" }]}
+                  otherLabel={otherLanguageLabel}
+                  onChange={next => { if (next === "ko" || next === "en") changeDisplayLocale(next); }}
                   disabled={status === "recording" || status === "connecting" || status === "paused"}
+                />
+              </section>
+
+              <section className="settings-row settings-language-row">
+                <div>
+                  <h3>{isEnglish ? "Lecture language" : "수업 언어"}</h3>
+                </div>
+                <LanguageChoices
+                  label={isEnglish ? "Lecture language" : "수업 언어"}
+                  value={speechLanguage}
+                  disabled={status === "recording" || status === "connecting" || status === "paused"}
+                  {...languageChoices}
+                  otherLabel={otherLanguageLabel}
+                  onChange={changeSpeechLanguage}
                 />
               </section>
 
               <section className="settings-row">
                 <div>
-                  <h3>{isEnglish ? "Lecture language" : "음성 인식 언어"}</h3>
-                  <p>{isEnglish
-                    ? "Choose Korean + English when the lecturer switches between both languages."
-                    : "영어 용어와 문장이 자주 섞이는 수업은 ‘한국어 + 영어’를 선택하세요."}</p>
+                  <h3>{isEnglish ? "Note language" : "노트 작성 언어"}</h3>
+                  <p>{isEnglish ? "For new notes. System default follows your device’s language." : "새로 만드는 노트에 적용돼요. 기본은 기기의 언어를 따라갑니다."}</p>
                 </div>
-                <SegmentedControl
-                  label={isEnglish ? "Lecture language" : "음성 인식 언어"}
-                  value={speechLanguage}
-                  disabled={status === "recording" || status === "connecting"}
-                  options={languageOptions}
-                  onChange={changeSpeechLanguage}
-                />
+                <NoteLanguagePicker value={noteLanguage.preference} systemLanguage={noteLanguage.systemLanguage}
+                  isEnglish={isEnglish} onChange={noteLanguage.change} disabled={noteState.phase === "generating"} />
               </section>
 
               <section className="settings-row">
@@ -1870,6 +2235,21 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 </select>
               </section>
 
+
+              {liveAssistAvailable && <details className="profile-advanced live-assist-settings">
+                <summary>{isEnglish ? "Admin lab" : "관리자 실험실"}</summary>
+                <section className="settings-row">
+                  <div>
+                    <h3 id="live-assist-setting-label">{isEnglish ? "Live assist" : "실시간 답변"}</h3>
+                    <p id="live-assist-setting-help">{isEnglish
+                      ? "Get a direct answer when a question comes up in the conversation."
+                      : "대화에서 질문을 감지하면, 바로 활용할 수 있는 답변을 보여줘요."}</p>
+                  </div>
+                  <input type="checkbox" role="switch" className="live-assist-switch"
+                    aria-labelledby="live-assist-setting-label" aria-describedby="live-assist-setting-help"
+                    checked={liveAssistEnabled} onChange={(event) => setLiveAssistEnabled(event.target.checked)} />
+                </section>
+              </details>}
 
               {/* 한 층 접어 둔다: 개인 API 키 기능이 기본 제공 무료 기능으로
                   오해되지 않게, 열어야만 보이고 비용 주체를 먼저 말한다. */}
@@ -1970,13 +2350,16 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
         </WorkspaceDialog>
       )}
 
+      {phoneDialogOpen && <PhoneMicDialog open={phoneDialogOpen} locale={locale} onClose={() => setPhoneDialogOpen(false)} onReady={acceptPhone} onPause={phonePause} />}
+
       <div className="workspace-main">
         <header className="topbar">
-          <label className="lecture-title-field">
+          <div className="lecture-title-field">
             <span>{activeClassroomTitle}</span>
             <input
               value={lectureTitle}
-              onChange={(event) => setLectureTitle(event.target.value)}
+              disabled={titleNavigationPending || restoring}
+              onChange={(event) => { setLectureTitle(event.target.value); setTitleSaveStatus("idle"); }}
               onBlur={(event) => {
                 if (activeSessionId) void renameSession(activeSessionId, event.target.value);
                 else setLectureTitle(event.target.value.trim());
@@ -1988,44 +2371,68 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 }
                 if (event.key === "Escape" || event.key === "Enter") event.currentTarget.blur();
               }}
-              placeholder={isEnglish ? "Name this lecture" : "수업 이름을 입력하세요"}
+              placeholder={isEnglish ? "Lecture name (optional)" : "수업 이름 (선택)"}
               aria-label={isEnglish ? "Lecture name" : "수업 이름"}
               maxLength={80}
+              aria-describedby={activeSessionId ? "lecture-title-save-status" : undefined}
             />
-          </label>
+            {activeSessionId && <small id="lecture-title-save-status" className="lecture-title-save-status" role="status">
+              {titleSaveStatus === "saving" ? (isEnglish ? "Saving name…" : "이름 저장 중…")
+                : titleSaveStatus === "saved" ? (isEnglish ? "Name saved" : "이름 저장됨")
+                : titleSaveStatus === "error" ? <button type="button" onClick={() => void renameSession(activeSessionId, lectureTitleRef.current)}>{isEnglish ? "Name not saved · Retry" : "이름 저장 실패 · 다시 저장"}</button> : ""}
+            </small>}
+          </div>
 
           <div className="session-state" aria-live="polite">
             <span className={`state-dot state-${status}`} />
-            {status === "recording" && (
-              <span className="mic-meter" ref={meterRef} aria-hidden="true">
-                <i /><i /><i /><i /><i />
-              </span>
-            )}
+            {status === "recording" && <span className="mic-meter" ref={meterRef} aria-hidden="true"><i /><i /><i /><i /><i /></span>}
             <span>{statusLabel}</span>
             <time>{formatTime(elapsedMs)}</time>
           </div>
 
-          {status === "recording" || status === "connecting" || status === "paused" ? (
+          {remoteRecording ? (
+            <div className="lecture-controls">
+              <button className="pause-button" type="button" disabled={classroomPending} onClick={() => void openSession(activeSessionId)}>
+                {isEnglish ? "Check recording status" : "녹음 상태 확인"}
+              </button>
+            </div>
+          ) : status === "recording" || status === "connecting" || status === "paused" ? (
             <div className="lecture-controls">
               <button
                 className="pause-button"
                 type="button"
-                onClick={() => void (status === "paused" ? resumeLecture() : pauseLecture())}
-                disabled={status === "connecting"}
-              >{status === "paused" ? resumeLabel : isEnglish ? "Pause" : "일시정지"}</button>
-              <button className="stop-button" type="button" onClick={stopLecture} disabled={status === "connecting"}>
+                onClick={() => { if (status === "paused") requestResume(); else void pauseLecture(); }}
+                disabled={isFinalizing || isSwitchingMicrophone || status === "connecting"}
+              aria-busy={isPausing}
+                title={isPausing ? (isEnglish ? "Finishing the last audio before you can resume." : "마지막 음성을 정리한 뒤 이어서 녹음할 수 있어요.") : undefined}
+              >{isPausing ? (isEnglish ? "Finishing audio…" : "기록 정리 중…") : status === "paused" ? resumeLabel : isEnglish ? "Pause" : "일시정지"}</button>
+              <button className="stop-button" type="button" onClick={stopLecture} disabled={isFinalizing || isSwitchingMicrophone || status === "connecting"}>
                 {isEnglish ? "End lecture" : "강의 종료"}
               </button>
+              {inputSource === "microphone" && <MicrophoneSwitch
+                phone={phoneInput} english={isEnglish}
+                disabled={isSwitchingMicrophone || isFinalizing || status === "connecting"}
+                onChange={target => { void changeMicrophone(target); }}
+              />}
             </div>
           ) : (
             <div className="lecture-controls">
               {/* UPL-01. A lecture already recorded on a phone takes the same
                   path as a live one; it just arrives all at once. */}
-              <label className="audio-upload-button">
+              <label className="audio-upload-button" aria-disabled={!audioAvailability?.available || audioAvailabilityChecking || audioBusy || isFinalizing}>
                 <input
+                  ref={audioUploadInputRef}
                   type="file"
                   accept=".mp3,.m4a,.wav,.webm,.mp4,audio/*"
-                  disabled={audioBusy}
+                  disabled={!audioAvailability?.available || audioAvailabilityChecking || audioBusy || isFinalizing}
+                  aria-describedby="audio-upload-availability"
+                  onClick={(event) => {
+                    if (!audioAvailability?.available || audioAvailabilityChecking) { event.preventDefault(); return; }
+                    if (consentSatisfied !== true && !consentSaveRef.current && !consentConfirmedRef.current) {
+                      event.preventDefault();
+                      openConsentGate("upload");
+                    }
+                  }}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     event.target.value = "";
@@ -2034,34 +2441,53 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 />
                 {audioBusy
                   ? isEnglish ? "Transcribing…" : "변환 중…"
+                  : audioAvailabilityChecking ? (isEnglish ? "Checking upload…" : "업로드 확인 중…")
+                  : !audioAvailability?.available ? (isEnglish ? "Recording upload unavailable" : "녹음 파일 업로드 불가")
                   : isEnglish ? "Upload recording" : "녹음 파일"}
               </label>
               {status === "ended" && activeSessionId && hasTranscript && (<>
-                <button className="note-button" type="button" onClick={() => setNoteOpen(true)}>
-                  <BookOpen size={15} aria-hidden="true" />
+                <button className={`note-button${noteState.phase === "generating" ? " is-generating" : ""}`} type="button" disabled={isFinalizing} onClick={() => setNoteOpen(true)} aria-label={noteState.phase === "generating" ? (isEnglish ? "Review note — creating" : "복습 노트 — 작성 중") : undefined}>
+                  {noteState.phase === "generating" ? <NoteGenerationIcon /> : <BookOpen size={15} aria-hidden="true" />}
                   {isEnglish ? "Review note" : "복습 노트"}
+                  {noteState.phase === "generating" && <span className="note-button-status" role="status">{isEnglish ? "Creating" : "작성 중"}</span>}
                 </button>
-                <button className="review-export" type="button" onClick={() => void exportSession(activeSessionId)}>{isEnglish ? "Export" : "기록 내려받기"}</button>
+                <button className="review-export" type="button" disabled={isFinalizing} onClick={() => void exportSession(activeSessionId)}>{isEnglish ? "Export" : "기록 내려받기"}</button>
               </>)}
               {/* 빈 화면 한가운데 시작 버튼이 떠 있는 동안엔 상단 중복을 데스크톱에서만
                   숨긴다(CSS). 모바일 채팅 탭에선 가운데 버튼이 안 보여 상단이 유일한 시작점. */}
-              {status !== "ended" && renderStartButtons(!canStart, status === "idle" && canStart && segments.length === 0 && !interim ? "is-duplicate-of-center" : "")}
+              {status !== "ended" && renderStartButtons(!canStart || materialPending, preparing ? "is-duplicate-of-center" : "")}
             </div>
           )}
+          <button type="button" className="online-settings-button" aria-label={isEnglish ? "Settings" : "설정"} title={isEnglish ? "Settings" : "설정"} onClick={() => setSettingsOpen(true)}><Settings2 size={16} aria-hidden="true" /></button>
         </header>
 
-        <div className="session-wayfinding">
+        {status !== "recording" && status !== "connecting" && status !== "paused" && !audioBusy && (
+          <p id="audio-upload-availability" className="audio-upload-availability" role="status">
+            {audioAvailabilityChecking ? (isEnglish ? "Checking recording upload availability…" : "녹음 파일 업로드 가능 여부를 확인하고 있어요…")
+              : audioAvailability?.available ? (isEnglish ? `Recording uploads: up to ${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))} MB per file.` : `녹음 파일은 ${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))}MB까지 올릴 수 있어요.`)
+              : audioAvailability ? (isEnglish ? "Recording uploads are currently unavailable on our service. You can still record a live lecture or add materials." : "현재 서비스에서 녹음 파일 업로드를 사용할 수 없습니다. 실시간 강의 기록과 자료 추가는 이용할 수 있어요.")
+              : (isEnglish ? "Could not check recording upload availability. Try again." : "녹음 파일 업로드 가능 여부를 확인하지 못했습니다. 다시 확인해 주세요.")}
+            {!audioAvailabilityChecking && !audioAvailability?.available && <button type="button" onClick={() => void checkAudioAvailability()}>{isEnglish ? "Check again" : "다시 확인"}</button>}
+          </p>
+        )}
+
+        <div className="session-wayfinding" hidden={!preparing}>
           <ol aria-label={isEnglish ? "Lecture progress" : "수업 진행 단계"}>
             {(isEnglish ? ["Prepare", "Learn", "Review"] : ["수업 준비", "수업 중", "복습"]).map((label, index) => (
               <li key={label} aria-current={index === (status === "ended" ? 2 : preparing ? 0 : 1) ? "step" : undefined}>{label}</li>
             ))}
           </ol>
           {status === "ended" && activeSessionId && <span className="review-summary">{isEnglish ? `${questions.length} questions · ${materials.length} materials` : `질문 ${questions.length}개 · 자료 ${materials.length}개`}</span>}
-          <button type="button" onClick={() => setSettingsOpen(true)}><Settings2 size={14} aria-hidden="true" />{isEnglish ? "Settings" : "수업 설정"}</button>
+        </div>
+
+        <div className="session-listening-space">
+          <ListeningIndicator key={activeSessionId} sessionId={activeSessionId} status={status} waitingForAudio={waitingForAudio} finalizing={isFinalizing && !isPausing} english={isEnglish} script={liveScript} />
         </div>
 
         {noteOpen && activeSessionId && (
-          <LectureNotePanel sessionId={activeSessionId} isEnglish={isEnglish} onClose={() => setNoteOpen(false)} />
+          <LectureNotePanel state={noteState} isEnglish={isEnglish} languagePreference={noteLanguage.preference}
+            systemLanguage={noteLanguage.systemLanguage} outputLanguage={noteLanguage.language}
+            onLanguageChange={noteLanguage.change} onClose={() => setNoteOpen(false)} />
         )}
 
         {/* 사이드바 팝오버는 좁아서 잘렸다. 설정은 화면 가운데 모달로 연다. */}
@@ -2087,8 +2513,8 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                     placeholder={isEnglish ? "e.g. duration, coupon rate, YTM" : "예: 듀레이션, 표면금리, 만기수익률"}
                   />
                   <small>{isEnglish
-                    ? "Comma-separated. Helps the transcript spell these words correctly."
-                    : "쉼표로 구분합니다. 받아쓰기가 이 단어들을 정확히 적는 데 쓰여요."}</small>
+                    ? "Separate with commas."
+                    : "쉼표로 구분하세요."}</small>
                 </label>
                 <footer>
                   <button type="button" className="classroom-edit-cancel" onClick={() => setEditingClassroomId("")}>
@@ -2107,12 +2533,12 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           ref={consentDialogRef}
           className="consent-modal"
           aria-label={isEnglish ? "Before your first recording" : "첫 녹음을 시작하기 전에"}
-          onCancel={(event) => event.preventDefault()}
+          onCancel={(event) => { event.preventDefault(); dismissConsentGate(); }}
         >
           <div className="consent-gate">
             <p>{isEnglish
-              ? "Before Lecue records for the first time, confirm both. Your answer is stored on your account with the date and the wording version."
-              : "Lecue가 처음 녹음하기 전에 두 가지를 확인합니다. 확인한 문구의 버전과 시각이 계정에 기록됩니다."}</p>
+              ? "Please confirm these before recording or transcribing an audio file."
+              : "녹음이나 음성 파일 변환을 시작하기 전에 확인해 주세요."}</p>
             <label>
               <input autoFocus type="checkbox" checked={consentAge} onChange={(event) => setConsentAge(event.target.checked)} />
               {CONSENT_COPY.age_14[isEnglish ? "en" : "ko"]}
@@ -2121,6 +2547,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               <input type="checkbox" checked={consentRecording} onChange={(event) => setConsentRecording(event.target.checked)} />
               {CONSENT_COPY.recording[isEnglish ? "en" : "ko"]}
             </label>
+            {error && <p role="alert">{error}</p>}
             <span>
               <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
               <Link href={`${basePath}/terms`}>{isEnglish ? "Terms" : "이용약관"}</Link>
@@ -2130,8 +2557,11 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                 disabled={!consentAge || !consentRecording || consentPending}
               >{consentPending
                 ? isEnglish ? "Saving…" : "저장 중…"
-                : isEnglish ? "Agree and continue" : "동의하고 계속"}</button>
+                : consentAction === "upload"
+                  ? isEnglish ? "Agree and choose a file" : "동의하고 파일 선택"
+                  : isEnglish ? "Agree and start lecture" : "동의하고 강의 시작"}</button>
             </span>
+            <button type="button" className="consent-browse" disabled={consentPending} onClick={dismissConsentGate}>{isEnglish ? "Browse first" : "먼저 둘러보기"}</button>
           </div>
         </dialog>
         {/* HIS-03. window.confirm 대신 앱과 같은 모양의 확인 창. Esc·바깥 클릭은 취소. */}
@@ -2179,17 +2609,6 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
           </div>
         )}
 
-        <div className="mobile-pane-switch" aria-label={isEnglish ? "Workspace view" : "작업 화면 선택"}>
-          <button type="button" aria-pressed={mobilePane === "chat"} onClick={() => setMobilePane("chat")}>
-            {isEnglish ? "Questions" : "질문"}
-            <span>{messages.filter((message) => message.role === "user").length}</span>
-          </button>
-          <button type="button" aria-pressed={mobilePane === "transcript"} onClick={() => setMobilePane("transcript")}>
-            {onlineViewing && !onlineTranscriptOpen ? (isEnglish ? "Lecture screen" : "강의 화면") : (isEnglish ? "Transcript" : "스크립트")}
-            <span>{sentenceCount}</span>
-          </button>
-        </div>
-
         {preparing && (
           <section className="lecture-preparation" aria-labelledby="prepare-title">
             <div className="preparation-intro">
@@ -2198,20 +2617,26 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               <span>{isEnglish ? "Lecue keeps the lecture context. You focus on understanding." : "강의의 맥락은 Lecue가 기억할게요. 이해하는 데 집중하세요."}</span>
             </div>
             <div className="preparation-sheet">
-              <div className="preparation-sheet-heading"><Mic size={20} aria-hidden="true" /><h2>{isEnglish ? "Before you start" : "시작 전, 이것만 확인하세요"}</h2></div>
-              <div className="preparation-language"><label htmlFor="prepare-language">{isEnglish ? "Lecture language" : "수업에서 쓰는 언어"}</label>
-                <select id="prepare-language" value={speechLanguage} onChange={(event) => changeSpeechLanguage(event.target.value as DeepgramLanguage)}>{languageOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
-                <p>{speechLanguage === "multi" ? (isEnglish ? "For lectures that mix Korean and English, including technical terms." : "한국어 설명에 영어 전문용어와 문장이 섞이는 수업에 적합해요.") : speechLanguage === "ko" ? (isEnglish ? "For lectures delivered mostly in Korean." : "주로 한국어로 설명하는 수업에 적합해요.") : (isEnglish ? "For lectures delivered in English." : "영어로 진행하는 수업에 적합해요.")}</p>
+              <div className="preparation-sheet-heading"><h2>{isEnglish ? "Start your lecture" : "수업을 시작해 볼까요?"}</h2></div>
+              <div className="preparation-language"><span className="preparation-language-label">{isEnglish ? "Lecture language" : "수업에서 쓰는 언어"}</span>
+                <LanguageChoices label={isEnglish ? "Lecture language" : "수업에서 쓰는 언어"} value={speechLanguage} {...languageChoices} otherLabel={otherLanguageLabel} onChange={changeSpeechLanguage} />
               </div>
-              <div className="preparation-mic"><span><strong>{isEnglish ? "Microphone" : "마이크"}</strong><small>{isEnglish ? "Use your laptop near the lecturer. Permission is requested when you start." : "노트북을 강사 가까이 두세요. 시작할 때 마이크 사용을 요청해요."}</small></span><button type="button" onClick={() => setSettingsOpen(true)}>{isEnglish ? "Choose mic" : "장치 선택"}</button></div>
-              <label className="preparation-material"><input type="file" accept=".pdf,.docx,.pptx,.txt,.csv,.tsv,.xlsx,.xls" disabled={materialPending} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadMaterial(file); }} /><Upload size={18} aria-hidden="true" /><span><strong>{materialPending ? (isEnglish ? "Reading material…" : "자료를 읽고 있어요…") : materials.length ? (isEnglish ? `${materials.length} materials ready · add more` : `자료 ${materials.length}개 준비됨 · 더 추가하기`) : (isEnglish ? "Add lecture material" : "강의 자료 미리 올리기")}</strong><small>{isEnglish ? "Optional · helps with terminology and answers" : "선택 사항 · 전문용어 인식과 질문에 도움이 돼요"}</small></span></label>
               {renderStartButtons(!canStart || materialPending, "preparation-start", true)}
-              <p className="preparation-permission">{onlineLectureEnabled ? onlineHint : (isEnglish ? "Start after confirming permission to record this lecture." : "현장 녹음 허용 여부를 확인한 뒤 시작하세요.")}</p>
+              <RecordingPreparation english={isEnglish} language={selectedLanguageLabel} deviceId={micDeviceId} deviceLabel={micDevices.find(device => device.deviceId === micDeviceId)?.label} enabled={canStart && !materialPending} stopRef={microphoneCheckStopRef} />
+              <details className="preparation-options">
+                <summary>{isEnglish ? "Materials & microphone" : "자료 · 마이크 설정"}<span>{materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : materials.length ? (isEnglish ? `${materials.length} ready` : `자료 ${materials.length}개`) : (isEnglish ? "Optional" : "선택")}</span><ChevronRight size={14} aria-hidden="true" /></summary>
+              <label className="preparation-material"><input type="file" accept=".pdf,.docx,.pptx,.txt,.csv,.tsv,.xlsx,.xls" disabled={materialPending} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadMaterial(file); }} /><Upload size={18} aria-hidden="true" /><span><strong>{materialPending ? (isEnglish ? "Reading material…" : "자료를 읽고 있어요…") : materials.length ? (isEnglish ? `${materials.length} materials ready · add more` : `자료 ${materials.length}개 준비됨 · 더 추가하기`) : (isEnglish ? "Add lecture material" : "강의 자료 추가하기")}</strong></span></label>
+              <MaterialList documents={materials} locale={locale} upload={materialUploadState} busy={materialPending} defaultOpen onRemove={deleteMaterial} onReplace={(id, file) => uploadMaterial(file, id)} />
+              <div className="preparation-mic"><span><strong>{isEnglish ? "Microphone" : "마이크"}</strong></span><button type="button" onClick={() => setSettingsOpen(true)}>{isEnglish ? "Choose mic" : "장치 선택"}</button></div>
+              </details>
             </div>
           </section>
         )}
 
-        <section className="panes" hidden={preparing}>
+        <section ref={onlineLayout.panesRef} style={{ maxWidth: onlineLayout.maxWidth }} className={`panes${onlineViewing ? " online-panes" : ""}`} hidden={preparing}>
+          {onlineViewing && <section className="online-video-pane" aria-label={isEnglish ? "Lecture screen" : "강의 화면"}>
+            <LecturePreview stream={previewStream} isEnglish={isEnglish} waitingForAudio={waitingForAudio} onAspectRatioChange={setOnlineAspectRatio} />
+          </section>}
           {restoring && (
             <div className="restore-veil" role="status">
               <i className="auth-spinner auth-spinner-dark" aria-hidden="true" />
@@ -2219,7 +2644,7 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             </div>
           )}
           <section
-            className={`chat-pane${mobilePane === "chat" ? " is-mobile-active" : ""}${materialDragOver ? " material-drop-active" : ""}`}
+            className={`chat-pane is-mobile-active${messages.length === 0 ? " is-empty" : ""}${materialDragOver ? " material-drop-active" : ""}`}
             aria-labelledby="chat-title"
             onDragOver={(event) => {
               if (!event.dataTransfer.types.includes("Files")) return;
@@ -2243,58 +2668,38 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               {isEnglish ? "Drop a material into this lecture" : "자료를 이 수업에 놓으세요"}
             </div>
           )}
-          <div className="pane-heading">
-            <div>
-              <h1 id="chat-title">{isEnglish ? "Understand this part" : "이해하고 넘어가기"}</h1>
+          <h1 id="chat-title" className="sr-only" tabIndex={-1}>{isEnglish ? "Ask about your lecture" : "강의에 대해 질문하기"}</h1>
+          {liveAssistAvailable && liveAssistEnabled && <div className="live-assist-status">
+            <div role="status">
+              <strong>{isEnglish ? "Live assist" : "실시간 답변"}</strong>
+              <span>{liveAssist.error || (status !== "recording"
+                ? (isEnglish ? "Waiting for the conversation" : "대화 시작을 기다리고 있어요")
+                : liveAssist.phase === "answering" ? (isEnglish ? "Answering…" : "답변 중…")
+                : liveAssist.phase === "thinking" ? (isEnglish ? "Reading the conversation…" : "대화를 살펴보고 있어요")
+                : (isEnglish ? "Listening for a question" : "질문을 듣고 있어요"))}</span>
             </div>
-            <div className="pane-heading-actions">
-              <button type="button" className="catchup-button" disabled={!canAsk} onClick={askCatchup}>
-                {isEnglish ? "I missed that" : "방금 놓쳤어요"}
-              </button>
-              <span className="count">{messages.filter((message) => message.role === "user").length}{isEnglish ? " questions" : "개 질문"}</span>
-            </div>
-          </div>
+            {liveAssist.error && <button type="button" onClick={liveAssist.retry}>{isEnglish ? "Retry" : "다시 연결"}</button>}
+            <button type="button" onClick={() => setLiveAssistEnabled(false)}>{isEnglish ? "Turn off" : "끄기"}</button>
+          </div>}
 
-          {/* Likewise: announce the newest answer, not the whole thread. */}
+          {/* Announce completion without revealing a folded practice solution. */}
           <p className="sr-only" aria-live="polite">
-            {messages.at(-1)?.role === "assistant" && !messages.at(-1)?.pending ? messages.at(-1)!.text : ""}
+            {messages.at(-1)?.role === "assistant" && !messages.at(-1)?.pending ? (isEnglish ? "Your answer is ready below." : "아래에 답변이 준비됐어요.") : ""}
           </p>
 
           <div
             className="messages"
             ref={messagesScrollRef}
-            onScroll={(event) => {
-              const node = event.currentTarget;
-              messagesFollowRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
-            }}
+            tabIndex={0}
+            aria-label={isEnglish ? "Conversation" : "대화 내용"}
           >
             {messages.length === 0 ? (
               <div className="empty-chat">
-                {/* 한 페인만 보이는 좁은 화면(폰·패드 세로)에선 기본 탭이 채팅이라,
-                    스크립트 페인의 인사·첫 사용 안내가 안 보인다. 여기에도 띄운다. */}
-                {status === "idle" && (
-                  <div className="narrow-welcome">
-                    {greeting && <strong className="empty-greeting">{greeting}</strong>}
-                    {sessionsById.size === 0 && (
-                      <ol className="onboarding-steps">
-                        {onboardingSteps.map((step, index) => (
-                          <li key={step}><em>{index + 1}</em>{step}</li>
-                        ))}
-                      </ol>
-                    )}
-                  </div>
-                )}
-                <BookOpen size={28} strokeWidth={1.4} aria-hidden="true" /><p>{hasTranscript ? (isEnglish ? "What made you pause?" : "어디에서 잠깐 멈칫했나요?") : status === "ended" ? (isEnglish ? "There is no transcript to ask about." : "질문할 강의 기록이 없어요.") : status === "paused" ? (isEnglish ? "Recording is paused." : "기록을 잠시 멈췄어요.") : (isEnglish ? "Listening to the lecture." : "강의 내용을 듣고 있어요.")}</p><span>{hasTranscript ? (isEnglish ? "A short question is enough. Lecue uses the lecture so far." : "짧게 물어봐도 괜찮아요. 지금까지의 강의를 함께 보고 답해요.") : status === "ended" ? (isEnglish ? "Prepare a new lecture or upload a recording to get started." : "새 수업을 준비하거나 녹음 파일을 올려 시작할 수 있어요.") : (isEnglish ? "You can ask as soon as the first words arrive." : "첫 문장이 들어오면 바로 물어볼 수 있어요.")}</span>
-                {hasTranscript && <div className="empty-chat-examples">
-                  {(isEnglish
-                    ? ["Why does that follow?", "Explain with a different example"]
-                    : ["방금 결론이 왜 그렇게 나오나요?", "다른 예시로 설명해 주세요"]
-                  ).map((example) => (
-                    // 스크립트가 없으면 보내지도 못하므로 눌리지 않게 잠근다.
-                    // 입력창 채우기가 아니라 즉시 질문 — 칩은 바로가기다.
-                    <button key={example} type="button" disabled={!canAsk} onClick={() => void submitQuestion(example)}>{example}</button>
-                  ))}
-                </div>}
+                <p>{liveAssistEnabled && liveAssistAvailable ? (isEnglish ? "Speak naturally." : "편하게 대화하세요.") : (isEnglish ? "What would you like to understand?" : "무엇이 궁금한가요?")}</p>
+                {hasMaterials && !hasTranscript ? <span>{isEnglish ? "Ask about your materials. You can start recording whenever you need it." : "올린 자료에 대해 바로 질문하세요. 녹음은 필요할 때 시작할 수 있어요."}</span>
+                  : liveAssistEnabled && liveAssistAvailable ? <span>{isEnglish ? "When a question comes up, an answer appears here." : "답변이 필요한 순간, 여기에 바로 보여드릴게요."}</span> : !hasTranscript && <span>{status === "ended"
+                  ? (isEnglish ? "No lecture content was saved. Add materials to ask questions." : "저장된 강의 내용이 없습니다. 자료를 추가하면 질문할 수 있어요.")
+                  : (isEnglish ? "Add materials or record the lecture to ask questions." : "자료를 추가하거나 강의를 기록하면 질문할 수 있어요.")}</span>}
               </div>
             ) : (
               messages.map((message) => (
@@ -2302,12 +2707,9 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                   {message.role === "assistant" && (
                     <span className="message-label">{message.assistantLabel ?? (isEnglish ? "Lecture assistant · AI" : "강의 조교 · AI")}</span>
                   )}
-                  {message.role === "user" && message.questionAtMs !== undefined && (
-                    <button type="button" className="question-moment" aria-label={isEnglish ? `View transcript at ${formatTime(message.questionAtMs)}` : `${formatTime(message.questionAtMs)} 시점의 강의 기록 보기`} onClick={() => showTranscriptAt(message.questionAtMs!)}><span>{formatTime(message.questionAtMs)}</span>{isEnglish ? "View transcript" : "강의 기록 보기"}</button>
-                  )}
-                  <p className={message.pending ? "pending" : undefined}>
-                    {message.text}
-                  </p>
+                  {message.role === "assistant"
+                    ? <LearningAnswer text={message.text} pending={message.pending} isEnglish={isEnglish} />
+                    : <p>{message.text}</p>}
                   {message.sources && message.sources.length > 0 && (
                     <div className="sources">
                       <span>{isEnglish ? "External search used" : "외부 검색 사용"}</span>
@@ -2343,25 +2745,20 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
                       </button>
                     </div>
                   )}
-                  {message.materialSources && message.materialSources.length > 0 && (
-                    <div className="lecture-sources material-sources">
-                      <span>{isEnglish ? "Material used" : "강의 자료 참고"}</span>
-                      {message.materialSources.map((source) => (
-                        <span className="material-source" key={`${source.documentId}-${source.startPage}`}>
-                          {source.filename} p.{source.startPage}
-                          {source.endPage !== source.startPage ? `-${source.endPage}` : ""}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                   {message.lectureSources && message.lectureSources.length > 0 && (
                     <div className="lecture-sources">
                       <span>{isEnglish ? "Earlier lecture used" : "이전 수업 참고"}</span>
                       {message.lectureSources.map((source) => (
-                        <button type="button" key={`${source.sessionId}-${source.startMs}`} disabled={sidebarLocked && source.sessionId !== activeSessionId} onClick={() => source.sessionId === activeSessionId ? showTranscriptAt(source.startMs) : void openSession(source.sessionId)}>
+                        <button type="button" key={`${source.sessionId}-${source.startMs}`} disabled={sidebarLocked || source.sessionId === activeSessionId} onClick={() => void openSession(source.sessionId)}>
                           {source.title}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {message.role === "assistant" && message.kind !== "live-assist" && !message.pending && message.id === messages.at(-1)?.id && message.text.length > 100 && (
+                    <div className="answer-followups" aria-label={isEnglish ? "Keep learning" : "이어서 이해하기"}>
+                      <button type="button" disabled={!canAsk} onClick={() => void submitQuestion(isEnglish ? "Explain your last answer with one simple, concrete example." : "방금 답변을 구체적인 예시 하나로 쉽게 설명해 줘.", false, undefined, message.questionAtMs)}>{isEnglish ? "Give an example" : "예시로 더 쉽게"}</button>
+                      <button type="button" disabled={!canAsk} onClick={() => void submitQuestion(isEnglish ? "Give me one practice question to check that I understand your last explanation, with its answer and a short reason." : "방금 설명을 이해했는지 확인할 문제 하나와 정답, 짧은 이유를 알려 줘.", false, undefined, message.questionAtMs)}>{isEnglish ? "Check my understanding" : "이해 확인하기"}</button>
                     </div>
                   )}
                 </article>
@@ -2369,6 +2766,33 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
             )}
           </div>
 
+          <div className="conversation-composer">
+          <div className="conversation-compose-row">
+          {!isFollowingLatest && messages.length > 0 && <button type="button" className="conversation-jump-latest" onClick={jumpToLatest} aria-label={isEnglish ? "Back to latest answer" : "최신 답변으로 이동"} title={isEnglish ? "Back to latest answer" : "최신 답변으로 이동"}><ArrowDown size={17} aria-hidden="true" /></button>}
+            <details className="conversation-materials" open={materialsOpen} onToggle={event => setMaterialsOpen(event.currentTarget.open)}>
+              <summary aria-label={isEnglish ? `Lecture materials · ${materials.length}` : `강의 자료 ${materials.length}개`} title={isEnglish ? "Lecture materials" : "강의 자료"} aria-busy={materialPending}><Paperclip size={18} aria-hidden="true" />{materials.length > 0 && <span className="material-count" aria-hidden="true">{materials.length}</span>}</summary>
+          <div className="material-toolbar">
+            <div>
+              <strong>{isEnglish ? "Lecture materials" : "강의 자료"}</strong>
+              <span>{isEnglish ? `${materials.length} materials` : `자료 ${materials.length}개`}</span>
+            </div>
+            <label className={`material-upload-button${materialPending ? " is-pending" : ""}`} aria-busy={materialPending}>
+              <input
+                type="file"
+                accept=".pdf,.docx,.pptx,.txt,.csv,.tsv,.xlsx,.xls"
+                disabled={materialPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void uploadMaterial(file);
+                }}
+              />
+              {materialPending && <span className="material-upload-spinner" aria-hidden="true" />}
+              {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add material" : "자료 추가")}
+            </label>
+            <MaterialList documents={materials} locale={locale} upload={materialUploadState} busy={materialPending} defaultOpen onRemove={deleteMaterial} onReplace={(id, file) => uploadMaterial(file, id)} />
+          </div>
+            </details>
           <form className="question-form" onSubmit={askQuestion}>
             <label htmlFor="question" className="sr-only">{isEnglish ? "Enter a question" : "질문 입력"}</label>
             <textarea
@@ -2388,162 +2812,26 @@ export default function LectureWorkspace({ locale = "ko", initial, restoreSessio
               }}
               placeholder={!creditsAllowAsk
                 ? isEnglish ? "Add credits to keep asking" : "크레딧을 충전하면 질문할 수 있습니다"
+                : hasMaterials && !hasTranscript
+                  ? (questionFocused ? "" : isEnglish ? "Ask about your materials" : "올린 자료에 대해 질문하세요")
                 : hasTranscript
                   ? questionFocused ? "" : messages.length ? (isEnglish ? "Ask about this lecture" : "이 강의에 대해 질문하세요") : askHint || (isEnglish ? "Ask about this lecture" : "이 강의에 대해 질문하세요")
-                  : status === "ended" ? (isEnglish ? "No transcript was saved" : "저장된 강의 내용이 없습니다")
-                  : isEnglish ? "You can ask once the transcript begins" : "스크립트가 들어오면 질문할 수 있습니다"}
+                  : isEnglish ? "Add materials or record the lecture to ask" : "자료를 추가하거나 강의를 기록하면 질문할 수 있어요"}
               maxLength={1_000}
+              aria-describedby={question.length >= 800 ? "question-length" : undefined}
               // 답변을 기다리는 동안에도 다음 질문은 미리 쓸 수 있다. 전송만 막는다.
-              disabled={!hasTranscript || !creditsAllowAsk}
+              disabled={!hasQuestionContext || !creditsAllowAsk}
               rows={1}
             />
             <button type="submit" disabled={!canAsk || !question.trim()} aria-label={isEnglish ? "Send question" : "질문 보내기"}>
               <ArrowUp size={16} aria-hidden="true" />
             </button>
           </form>
+          </div>
+          {question.length >= 800 && <p id="question-length" className="question-length" role="status">{question.length.toLocaleString(isEnglish ? "en-US" : "ko-KR")} / 1,000{isEnglish ? " characters" : "자"}{question.length >= 1_000 ? (isEnglish ? " · Limit reached. Attach longer content as a material." : " · 최대 길이입니다. 긴 내용은 자료로 첨부해 주세요.") : ""}</p>}
+          </div>
           </section>
 
-          <section className={`transcript-pane${mobilePane === "transcript" ? " is-mobile-active" : ""}${onlineViewing && !onlineTranscriptOpen ? " showing-lecture" : ""}`} aria-labelledby="transcript-title">
-          <div className="pane-heading transcript-heading">
-            <div>
-              <h2 id="transcript-title">{onlineViewing && !onlineTranscriptOpen ? (isEnglish ? "Lecture screen" : "강의 화면") : status === "ended" ? (isEnglish ? "Lecture record" : "강의 기록") : (isEnglish ? "Following the lecture" : "지금, 강의의 흐름")}</h2>
-            </div>
-            {onlineViewing ? <button type="button" className="view-transcript-button" onClick={() => setOnlineTranscriptOpen(open => !open)}>{onlineTranscriptOpen ? (isEnglish ? "Lecture screen" : "강의 화면 보기") : (isEnglish ? "Transcript" : "스크립트 보기")}</button> : <span className="count">{sentenceCount}{isEnglish ? " sentences" : "개 문장"}</span>}
-          </div>
-          {onlineViewing && !onlineTranscriptOpen && <LecturePreview stream={previewStream} isEnglish={isEnglish} />}
-
-          <div className="material-toolbar">
-            <div>
-              <strong>{isEnglish ? "Lecture materials" : "강의 자료"}</strong>
-              <span>{isEnglish ? `${materials.length} materials · also improves term recognition` : `자료 ${materials.length}개 · 전문용어 인식에도 반영`}</span>
-            </div>
-            <label className={`material-upload-button${materialPending ? " is-pending" : ""}`} aria-busy={materialPending}>
-              <input
-                type="file"
-                accept=".pdf,.docx,.pptx,.txt,.csv,.tsv,.xlsx,.xls"
-                disabled={materialPending}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) void uploadMaterial(file);
-                }}
-              />
-              {materialPending && <span className="material-upload-spinner" aria-hidden="true" />}
-              {materialPending ? (isEnglish ? "Reading…" : "읽는 중…") : (isEnglish ? "Add material" : "자료 추가")}
-            </label>
-            {materials.length > 0 && (
-              <details className="material-list">
-                <summary>{isEnglish ? "Manage" : "관리"}</summary>
-                <ul>
-                  {materials.map((document) => (
-                    <li key={document.id}>
-                      <span>{document.filename}</span>
-                      <small>{document.page_count}{isPdfMaterial(document) ? (isEnglish ? " pages" : "쪽") : (isEnglish ? " sections" : "개 구간")}</small>
-                      <button type="button" disabled={materialPending} onClick={() => void deleteMaterial(document.id)}>
-                        {isEnglish ? "Remove" : "삭제"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </div>
-
-          {preparing && activeSessionId && materials.length === 0 && (
-            <p className="material-hint">{isEnglish
-              ? "Add material to this lecture and answers will use it too."
-              : "이 수업에 강의 자료를 올리면 답변에 반영합니다."}</p>
-          )}
-
-          {/* The live region is the newest line only. On the scrollback
-              container a screen reader re-read the entire lecture every time a
-              segment arrived, roughly every five seconds. */}
-          <p className="sr-only" aria-live="polite">
-            {interim || transcriptParagraphs.at(-1)?.text || ""}
-          </p>
-
-
-          <div
-            className="transcript"
-            ref={transcriptScrollRef}
-            onScroll={(event) => {
-              const node = event.currentTarget;
-              const following = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
-              transcriptFollowRef.current = following;
-              setFollowingTranscript(following);
-            }}
-          >
-            {segments.length === 0 && !interim ? (
-              <div className="empty-transcript">
-                {/* 시작 전: 인사 + 팁 한 줄 + 버튼. 첫 방문이면 팁 대신 3단계. */}
-                {status === "idle" ? (
-                  <>
-                    {greeting && <strong className="empty-greeting">{greeting}</strong>}
-                    {sessionsById.size === 0 ? (
-                      <ol className="onboarding-steps">
-                        {onboardingSteps.map((step, index) => (
-                          <li key={step}><em>{index + 1}</em>{step}</li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <span>{isEnglish
-                        ? "Place your laptop near the speaker for better recognition."
-                        : "노트북을 강사 가까이 두면 인식률이 좋아져요."}</span>
-                    )}
-                    {/* 이 화면의 유일한 할 일이 우상단 구석에만 있으면 멀다. */}
-                    {canStart && renderStartButtons(false, "empty-start-button")}
-                  </>
-                ) : (
-                  <p>{status === "connecting"
-                    ? onlineLecture
-                      ? (isEnglish ? "Connecting your lecture audio…" : "강의 소리를 연결하고 있어요…")
-                      : (isEnglish ? "Connecting to the microphone" : "마이크와 연결하는 중입니다")
-                    : status === "ended" ? (isEnglish ? "No speech was saved for this lecture." : "이 수업에는 저장된 강의 내용이 없습니다.")
-                    : status === "paused" && onlineLecture && pauseReason === "manual"
-                      ? (isEnglish ? "Recording is paused. The tab stays connected so you can resume." : "기록은 멈췄어요. 이어 듣기를 위해 탭 연결을 유지해요.")
-                    : isEnglish ? "Speech will appear here once you start the lecture" : "강의를 시작하면 말이 이곳에 쌓입니다"}</p>
-                )}
-              </div>
-            ) : (
-              <div className="transcript-copy">
-                {transcriptParagraphs.map((paragraph) => {
-                  const key = `${paragraph.startMs}-${paragraph.endMs}`;
-                  const reported = reportedKeys.includes(`stt:${key}`);
-                  return (
-                    <div className={`transcript-line${highlightedTime === paragraph.startMs ? " is-highlighted" : ""}`} key={key} id={`transcript-${paragraph.startMs}`} tabIndex={-1}>
-                      <time dateTime={`PT${Math.floor(paragraph.startMs / 1000)}S`}>{formatTime(paragraph.startMs)}</time>
-                      <p>{paragraph.text}</p>
-                      <div className="transcript-line-actions">
-                        <button
-                          type="button"
-                          className="line-ask"
-                          disabled={!canAsk}
-                          onClick={() => void submitQuestion(isEnglish
-                            ? `Explain this part of the lecture in plain language: "${paragraph.text}"`
-                            : `강의의 이 부분을 쉽게 설명해 줘: "${paragraph.text}"`, false, undefined, paragraph.endMs)}
-                        >
-                          {isEnglish ? "Explain" : "설명"}
-                        </button>
-                        <button
-                          type="button"
-                          className="line-report"
-                          disabled={reported || !activeSessionId}
-                          onClick={() => void reportIssue("stt_error", paragraph.text, `stt:${key}`)}
-                        >
-                          {reported
-                            ? isEnglish ? "Reported" : "신고됨"
-                            : isEnglish ? "Misheard" : "잘못 적힘"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {interim && <p className="interim-line">{interim}</p>}
-              </div>
-            )}
-          </div>
-          {!followingTranscript && hasTranscript && <button type="button" className="follow-transcript" onClick={followTranscript}><ArrowDown size={15} aria-hidden="true" />{status === "recording" ? (isEnglish ? "Back to live" : "지금 강의로 돌아가기") : (isEnglish ? "Latest part" : "마지막 기록으로")}</button>}
-          </section>
         </section>
 
         <footer className="footnote">

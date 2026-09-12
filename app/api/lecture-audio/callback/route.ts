@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
+import { enqueueStorageDeletion, drainStorageDeletions } from "../../../lib/storage-cleanup";
+import { reserveLectureIndex, finishLectureIndex } from "../../../lib/lecture-index-budget";
+
 import { chunkTranscript } from "../../../lib/chunk-transcript";
 import { isUuid } from "../../../lib/billing";
 import {
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
 
   const { data: upload } = await supabase
     .from("uploads")
-    .select("id,session_id,user_id,object_key,status")
+    .select("id,session_id,user_id,object_key,status,duration_ms,provider_request_id")
     .eq("id", uploadId)
     .maybeSingle();
   if (!upload) return NextResponse.json({ error: "Not found." }, { status: 404 });
@@ -52,22 +55,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, duplicate: true });
   }
 
-  const discardAudio = async () => {
-    if (!upload.object_key) return;
-    // UPL-05/PRD 5.4. The transcript exists now, so the recording has no
-    // remaining purpose — it goes as soon as the transcript is saved, not on
-    // the 24-hour deadline that only covers failures.
-    const { error } = await supabase.storage.from("lecture-audio").remove([upload.object_key]);
-    if (error) console.error("Audio remove failed", error.message);
+  const { data: claimed, error: claimError } = await supabase.rpc("claim_audio_callback_service", { p_upload_id: upload.id });
+  if (claimError || !claimed) return NextResponse.json({ error: "Callback is already processing." }, { status: 503 });
+  const retry = async (message: string) => {
+    await supabase.from("uploads").update({ callback_claimed_at: null }).eq("id", upload.id);
+    return NextResponse.json({ error: message }, { status: 500 });
   };
-
+  const discardAudio = async () => {
+    if (upload.object_key) await enqueueStorageDeletion(supabase, {
+      bucket: "lecture-audio", objectKey: upload.object_key, userId: upload.user_id, reason: "audio_finished",
+    });
+    await drainStorageDeletions(supabase, { limit: 5, userId: upload.user_id });
+  };
   const markFailed = async (code: string) => {
     await discardAudio();
-    await supabase
-      .from("uploads")
-      .update({ status: "failed", error_code: code, object_key: null, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", upload.id);
-    // The session was only ever a container for this transcript.
+    await supabase.from("uploads").update({ status: "failed", error_code: code, updated_at: new Date().toISOString() }).eq("id", upload.id);
     await supabase.from("lecture_sessions").delete().eq("id", upload.session_id);
   };
 
@@ -79,88 +81,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const segments = segmentsFromPrerecorded(payload);
-  if (!segments.length) {
-    // Silence, music, or a language the model could not read. Nothing to store
-    // and nothing to charge for.
+  if (upload.provider_request_id && payload.metadata?.request_id && upload.provider_request_id !== payload.metadata.request_id) {
+    return retry("Request mismatch.");
+  }
+  // The canonical file was fully decoded and its samples counted before
+  // submission. Settle that exact processing time, including silent audio.
+  // Charging only returned words lets repeated silent jobs consume free API work.
+  const { data: charged, error: creditError } = await supabase.rpc("settle_audio_credits_service", {
+    p_user_id: upload.user_id, p_upload_id: upload.id, p_charge: true,
+  });
+  if (creditError || !Number(charged)) return retry("Charge failed.");
+  const durationMs = Math.min(MAX_AUDIO_MS, Number(upload.duration_ms));
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return retry("Verified duration missing.");
+  const durationSeconds = Math.ceil(durationMs / 1_000);
+  const paidSegments = segmentsFromPrerecorded(payload).filter(segment => segment.startMs < durationMs)
+    .map(segment => ({ ...segment, endMs: Math.min(segment.endMs, durationMs) }));
+  if (!paidSegments.length) {
     await markFailed("empty");
     return NextResponse.json({ ok: true });
   }
-
-  const { data: session } = await supabase
-    .from("lecture_sessions")
-    .select("id,classroom_id,user_id,status")
-    .eq("id", upload.session_id)
-    .maybeSingle();
+  const { data: session } = await supabase.from("lecture_sessions").select("id,classroom_id,user_id,status")
+    .eq("id", upload.session_id).eq("user_id", upload.user_id).maybeSingle();
   if (!session) {
-    // The learner deleted the lecture while it was transcribing. Their choice
-    // stands: drop the audio and stop.
     await markFailed("session_gone");
     return NextResponse.json({ ok: true });
-  }
-
-  // Length comes from Deepgram, never from the browser: the client's estimate
-  // gates acceptance, this decides the bill. Falling back to the last segment
-  // keeps a response without metadata from billing zero.
-  const measuredSeconds = Number(payload.metadata?.duration);
-  let durationMs = Math.min(
-    MAX_AUDIO_MS,
-    Number.isFinite(measuredSeconds) && measuredSeconds > 0
-      ? Math.round(measuredSeconds * 1_000)
-      : segments.at(-1)?.endMs ?? 0,
-  );
-  let durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
-  let paidSegments = segments;
-
-  // BILL-01, on the same meter as a live lecture: one started minute, one
-  // credit. The owner comes from the session row rather than auth.uid(), which
-  // is null on this service-key connection — the cookie-bound RPC raised
-  // AUTH_REQUIRED here and every upload went out unbilled. The service variant
-  // is idempotent per minute, so a retried callback cannot double-charge.
-  // 과금이 저장보다 먼저다: 과금이 계속 실패하면 스크립트도 저장하지 않아
-  // '전달됐는데 미과금' 상태가 남지 않는다.
-  const { data: charge, error: creditError } = await supabase.rpc("consume_lecture_credits_service", {
-    p_user_id: session.user_id,
-    p_session_id: session.id,
-    p_minute_index: Math.min(179, Math.max(0, Math.ceil(durationSeconds / 60) - 1)),
-  });
-  if (creditError) {
-    // A retry that arrives after an earlier attempt charged and completed the
-    // session raises LECTURE_NOT_RECORDING. The money is already taken —
-    // failing forever here would just make Deepgram hammer the callback.
-    if (String(creditError.message ?? "").includes("LECTURE_NOT_RECORDING")) {
-      console.error("Upload charge skipped, session already closed", upload.id);
-    } else {
-      // Nothing is written yet and the charge is idempotent — let Deepgram
-      // retry rather than deliver the product unbilled.
-      console.error("Upload credit charge failed", creditError.code);
-      return NextResponse.json({ error: "Charge failed." }, { status: 500 });
-    }
-  }
-  // Out of credits mid-upload. Deliver exactly the minutes that were paid for
-  // and drop the rest — completing the full transcript regardless turned one
-  // credit into a three-hour transcription, multiplied by parallel uploads.
-  if (Array.isArray(charge) && charge[0] && charge[0].allowed === false) {
-    const paidMs = (Math.max(-1, Number(charge[0].charged_through)) + 1) * 60_000;
-    if (paidMs <= 0) {
-      // Not even the first minute could be charged: no product to deliver.
-      await markFailed("credit");
-      return NextResponse.json({ ok: true });
-    }
-    console.error("Upload credit charge partial, truncating", upload.id, charge[0].charged_through);
-    // 예전 코드가 전체를 먼저 저장했을 수 있으니(재시도 콜백) 초과분을 지운다.
-    const { error: trimError } = await supabase
-      .from("transcript_segments")
-      .delete()
-      .eq("session_id", session.id)
-      .gte("start_ms", paidMs);
-    if (trimError) {
-      console.error("Upload transcript trim failed", trimError.code);
-      return NextResponse.json({ error: "Trim failed." }, { status: 500 });
-    }
-    paidSegments = segments.filter((segment) => segment.startMs < paidMs);
-    durationMs = Math.min(durationMs, paidMs);
-    durationSeconds = Math.max(1, Math.ceil(durationMs / 1_000));
   }
 
   const { error: segmentError } = await supabase.from("transcript_segments").upsert(
@@ -177,15 +121,14 @@ export async function POST(request: Request) {
   );
   if (segmentError) {
     console.error("Upload transcript save failed", segmentError.code);
-    await markFailed("save");
-    return NextResponse.json({ ok: true });
+    return retry("Transcript save failed.");
   }
 
   const { error: completeError } = await supabase
     .from("lecture_sessions")
-    .update({ status: "completed", ended_at: new Date().toISOString(), duration_seconds: Math.min(10_800, durationSeconds) })
+    .update({ status: "completed", recorded_ms: durationMs, ended_at: new Date().toISOString(), duration_seconds: Math.min(10_800, durationSeconds) })
     .eq("id", session.id);
-  if (completeError) console.error("Upload session completion failed", completeError.code);
+  if (completeError) return retry("Session completion failed.");
 
   await indexUpload(supabase, session, paidSegments);
   await discardAudio();
@@ -194,8 +137,6 @@ export async function POST(request: Request) {
     .update({
       status: "completed",
       duration_ms: durationMs,
-      object_key: null,
-      deleted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", upload.id);
@@ -221,8 +162,13 @@ async function indexUpload(
   const chunks = chunkTranscript(segments);
   if (!chunks.length) return;
 
+  const claimToken = await reserveLectureIndex(supabase, {
+    sessionId: session.id, userId: session.user_id, characters: chunks.reduce((total, chunk) => total + chunk.text.length, 0),
+  });
+  if (!claimToken) return;
+  let succeeded = false;
   try {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 120_000, maxRetries: 1 });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 120_000, maxRetries: 0 });
     const created = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: chunks.map((chunk) => chunk.text),
@@ -241,7 +187,10 @@ async function indexUpload(
       embedding: embeddings[index].embedding,
     })));
     if (error) throw error;
+    succeeded = true;
   } catch (error) {
     console.error("Upload indexing failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+  } finally {
+    await finishLectureIndex(supabase, session.id, claimToken, succeeded);
   }
 }

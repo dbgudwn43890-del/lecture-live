@@ -1,0 +1,41 @@
+.root {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: inherit;
+}
+
+.link,
+.select {
+  min-height: 44px;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+.root .link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.select {
+  width: 92px;
+  padding: 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.select option,
+.select optgroup {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.link:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}

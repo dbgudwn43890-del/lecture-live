@@ -6,11 +6,13 @@
 //
 //   node --experimental-strip-types scripts/paddle-catalog.mjs --env sandbox|live \
 //     [--webhook https://www.lecue.app/api/billing/webhook]
+// For an existing Live integration, --product pro_... --skip-webhook requires
+// only Products: Read and Prices: Write. It does not replace the runtime key.
 //
 // Reads PADDLE_CATALOG_API_KEY (falls back to PADDLE_API_KEY). Prints the env
 // lines to paste into Vercel. Secrets never hit git.
 
-import { PLANS, PURCHASE_PLANS } from "../app/lib/plans.ts";
+import { PLANS, PURCHASE_PLANS, ENTITLEMENT_VERSION } from "../app/lib/plans.ts";
 
 const args = Object.fromEntries(process.argv.slice(2).map((arg, i, all) => arg.startsWith("--") ? [arg.slice(2), all[i + 1]] : []).filter(Boolean));
 const environment = args.env;
@@ -33,8 +35,9 @@ async function paddle(path, init = {}) {
 }
 
 const PRODUCT_NAME = "Lecue";
-const products = await paddle("/products?status=active&per_page=200");
-let product = products.find((p) => p.name === PRODUCT_NAME);
+const products = args.product ? [await paddle(`/products/${args.product}`)] : await paddle("/products?status=active&per_page=200");
+let product = products.find((p) => p.name === PRODUCT_NAME && p.status !== "archived");
+if (args.product && !product) throw new Error("The specified active Lecue product was not found");
 if (!product) {
   product = await paddle("/products", { method: "POST", body: JSON.stringify({
     name: PRODUCT_NAME,
@@ -53,28 +56,41 @@ for (const plan of PURCHASE_PLANS) {
   const offer = PLANS[plan];
   const usd = String(Math.round(offer.usd * 100));
   const krw = String(offer.krw);
-  const key = `${plan}:${usd}:${krw}:${offer.recurring ? "month" : "once"}`;
+  const key = `${ENTITLEMENT_VERSION}:${plan}:${usd}:${krw}:${offer.credits}:${offer.installmentCount}:${offer.recurring ? "month" : "once"}`;
   let price = prices.find((p) => p.custom_data?.lecue_key === key);
   if (!price) {
     price = await paddle("/prices", { method: "POST", body: JSON.stringify({
       product_id: product.id,
       name: offer.name,
-      description: offer.recurring
-        ? `Lecue ${offer.name} — ${offer.credits.toLocaleString("en-US")} credits every month`
-        : `Lecue ${offer.name} — ${offer.credits.toLocaleString("en-US")} credits, valid ${offer.months} months`,
+      description: offer.monthlyCredits
+        ? `Lecue ${offer.name} — ${offer.monthlyCredits.toLocaleString("en-US")} credits monthly${offer.recurring ? ", auto-renews monthly" : ` for ${offer.installmentCount} months, paid upfront, no auto-renewal`}`
+        : `Lecue ${offer.name} — ${offer.credits.toLocaleString("en-US")} extra credits, available immediately`,
       unit_price: { amount: usd, currency_code: "USD" },
       unit_price_overrides: [{ country_codes: ["KR"], unit_price: { amount: krw, currency_code: "KRW" } }],
       billing_cycle: offer.recurring ? { interval: "month", frequency: 1 } : null,
       trial_period: null,
       tax_mode: "internal",
       quantity: { minimum: 1, maximum: 1 },
-      custom_data: { lecue_key: key, plan, credits: offer.credits, months: offer.months },
+      custom_data: { lecue_key: key, plan, credits: offer.credits, months: offer.months,
+        entitlement_version: ENTITLEMENT_VERSION, monthly_credits: offer.monthlyCredits, installment_count: offer.installmentCount },
     }) });
     console.error(`created ${plan} ${price.id}`);
   } else {
     console.error(`reusing ${plan} ${price.id}`);
   }
-  envLines.push(`PADDLE_${plan.toUpperCase()}_V2_PRICE_ID=${price.id}`);
+  const kr = price.unit_price_overrides?.find(item => item.country_codes.includes("KR"))?.unit_price;
+  if (price.status !== "active" || price.unit_price?.amount !== usd || price.unit_price.currency_code !== "USD"
+    || kr?.amount !== krw || kr.currency_code !== "KRW" || price.tax_mode !== "internal"
+    || price.trial_period !== null || price.quantity?.minimum !== 1 || price.quantity.maximum !== 1
+    || (offer.recurring ? price.billing_cycle?.interval !== "month" || price.billing_cycle.frequency !== 1 : price.billing_cycle !== null)) {
+    throw new Error(`Catalog mismatch for ${plan}: verify the existing price before continuing`);
+  }
+  envLines.push(`PADDLE_${plan.toUpperCase()}_V3_PRICE_ID=${price.id}`);
+}
+
+if (Object.hasOwn(args, "skip-webhook")) {
+  console.log(envLines.join("\n"));
+  process.exit(0);
 }
 
 const settings = await paddle("/notification-settings");
@@ -107,7 +123,7 @@ console.log([
   `BILLING_ENABLED=true`,
   `PADDLE_ENVIRONMENT=${environment === "live" ? "production" : "sandbox"}`,
   `NEXT_PUBLIC_PADDLE_ENVIRONMENT=${environment === "live" ? "production" : "sandbox"}`,
-  `PADDLE_WEBHOOK_SECRET=${setting.endpoint_secret_key}`,
+  `# PADDLE_WEBHOOK_SECRET: copy from notification destination ${setting.id}; not printed`,
   ...envLines,
   `# NEXT_PUBLIC_PADDLE_CLIENT_TOKEN and PADDLE_API_KEY: dashboard-only, set by hand`,
 ].join("\n"));

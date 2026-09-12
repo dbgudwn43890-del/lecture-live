@@ -1,16 +1,21 @@
 import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
+import { hasVerifiedEmail } from "../../lib/verified-email";
+
+import { AudioVerificationError, verifyAudio } from "../../lib/verified-audio";
+import { enqueueStorageDeletion, drainStorageDeletions } from "../../lib/storage-cleanup";
 
 import { isUuid } from "../../lib/billing";
 import { deepgramLanguage } from "../../lib/deepgram";
+import { isSpeechLanguage } from "../../lib/speech-languages";
 import { parseGlossary } from "../../lib/glossary";
 import {
   callbackToken,
-  MAX_AUDIO_BYTES,
-  MAX_AUDIO_MS,
   prerecordedUrl,
 } from "../../lib/lecture-audio";
+import { getAudioUploadAvailability } from "../../lib/lecture-audio-availability";
+import { handleDirectAudioUpload } from "../../lib/lecture-audio-direct";
 import { hasRecordingConsents } from "../../lib/consent";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createAdminClient } from "../../lib/supabase/admin";
@@ -25,11 +30,17 @@ const SIGNED_URL_SECONDS = 3_600;
 
 const AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "wav", "webm", "mp4"]);
 
+function unavailableMessage(isEnglish: boolean) {
+  return isEnglish
+    ? "Recording uploads are currently unavailable on our service. You can still record a live lecture."
+    : "현재 서비스에서 녹음 파일 업로드를 사용할 수 없습니다. 실시간 강의 기록은 사용할 수 있어요.";
+}
+
 async function context(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   const isEnglish = request.headers.get("x-site-locale") === "en";
-  if (!user) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
+  if (authError || !hasVerifiedEmail(user)) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
   const rateLimit = await checkSharedRateLimit(`lecture-audio:${user.id}`, 20, 60_000);
   if (!rateLimit.allowed) {
     return { response: NextResponse.json(
@@ -40,43 +51,25 @@ async function context(request: Request) {
   // uploads rows are read-only for the authenticated role (20260902010000);
   // every write in this route goes through the service key.
   const admin = createAdminClient();
-  if (!admin) {
-    console.error("Lecture audio has no admin client");
-    return { response: NextResponse.json({ error: isEnglish ? "File transcription is not configured yet." : "녹음 파일 변환이 아직 설정되지 않았습니다." }, { status: 503 }) };
-  }
   return { userId: user.id, supabase, admin, isEnglish };
 }
 
-/**
- * UPL-06. Anything past its deadline that still has an object loses it. This
- * runs on the polling path rather than a scheduled job: an upload is always
- * being watched by the client that made it, so the sweep gets called far more
- * often than a cron would, with no extra infrastructure.
- *
- * ponytail: piggybacked on polling. Move to a scheduled function if uploads
- * ever outlive the sessions that watch them.
- */
-async function sweepExpired(supabase: Awaited<ReturnType<typeof createClient>>, admin: NonNullable<ReturnType<typeof createAdminClient>>) {
-  const { data: expired } = await supabase
-    .from("uploads")
-    .select("id,object_key")
-    .is("deleted_at", null)
-    .lt("delete_at", new Date().toISOString())
-    .limit(20);
+async function sweepExpired(supabase: Awaited<ReturnType<typeof createClient>>, admin: NonNullable<ReturnType<typeof createAdminClient>>, userId: string) {
+  const { data: expired } = await supabase.from("uploads").select("id,object_key")
+    .is("deleted_at", null).lt("delete_at", new Date().toISOString()).limit(20);
   for (const upload of expired ?? []) {
-    if (upload.object_key) await supabase.storage.from("lecture-audio").remove([upload.object_key]);
-    await admin
-      .from("uploads")
-      .update({ status: "deleted", object_key: null, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", upload.id);
+    if (upload.object_key) await enqueueStorageDeletion(admin, { bucket: "lecture-audio", objectKey: upload.object_key, userId, reason: "upload_expired" });
+    await admin.from("uploads").update({ status: "deleted", updated_at: new Date().toISOString() }).eq("id", upload.id);
   }
+  await drainStorageDeletions(admin, { limit: 20, userId });
 }
 
 /** UPL-03. What the progress panel polls while Deepgram works. */
 export async function GET(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
-  await sweepExpired(current.supabase, current.admin);
+  const availability = await getAudioUploadAvailability(Boolean(current.admin));
+  if (current.admin) await sweepExpired(current.supabase, current.admin, current.userId);
 
   const sessionId = new URL(request.url).searchParams.get("sessionId");
   const query = current.supabase
@@ -90,7 +83,7 @@ export async function GET(request: Request) {
     console.error("Upload list failed", error.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not check your uploads." : "업로드 상태를 확인하지 못했습니다." }, { status: 500 });
   }
-  return NextResponse.json({ uploads: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ uploads: data ?? [], availability }, { headers: { "Cache-Control": "no-store" } });
 }
 
 /**
@@ -103,6 +96,10 @@ export async function POST(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
   const { admin, isEnglish, supabase, userId } = current;
+  const availability = await getAudioUploadAvailability(Boolean(admin));
+  if (!admin || !availability.available) {
+    return NextResponse.json({ error: unavailableMessage(isEnglish), code: "AUDIO_UPLOAD_UNAVAILABLE", availability }, { status: 503 });
+  }
 
   // Uploads are recordings too: the same legal gate as live lectures
   // (ACC-02/03), enforced here rather than only in the dialog.
@@ -112,11 +109,12 @@ export async function POST(request: Request) {
     }, { status: 403 });
   }
 
-  const apiKey = process.env.DEEPGRAM_API_KEY;
-  const callbackBase = process.env.SITE_URL;
-  if (!apiKey || !callbackBase || !process.env.LECTURE_AUDIO_CALLBACK_SECRET) {
-    return NextResponse.json({ error: isEnglish ? "File transcription is not configured yet." : "녹음 파일 변환이 아직 설정되지 않았습니다." }, { status: 503 });
+  if (request.headers.get("content-type")?.includes("application/json")) {
+    return handleDirectAudioUpload(request, { admin, supabase, userId, isEnglish }, availability);
   }
+
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  const callbackBase = process.env.SITE_URL!;
 
   let formData: FormData;
   try {
@@ -129,32 +127,31 @@ export async function POST(request: Request) {
   const title = String(formData.get("title") ?? "").trim().slice(0, 80);
   const classroomId = formData.get("classroomId");
   const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim();
-  const raw = deepgramLanguage(formData.get("language"), "ko");
+  const requestedLanguage = formData.get("language");
+  if (requestedLanguage != null && requestedLanguage !== "default" && !isSpeechLanguage(requestedLanguage)) {
+    return NextResponse.json({
+      error: isEnglish ? "Choose a supported transcription language." : "지원하는 받아쓰기 언어를 선택해 주세요.",
+    }, { status: 400 });
+  }
+  const raw = deepgramLanguage(requestedLanguage, isEnglish ? "en" : "ko");
   // 업로드는 지원받는 Deepgram 배치로 간다. Deepgram의 multi는 한국어를
   // 지원하지 않으므로 혼용(실시간 Soniox 전용) 선택은 여기서 ko로 내린다.
   const language = raw === "multi" ? "ko" : raw;
-  // The browser reads this off an <audio> element before uploading. It decides
-  // whether to accept the job at all; the charge uses Deepgram's own
-  // measurement and the callback cuts the transcript off where credits run
-  // out, so a client lying here cannot buy a cheaper transcription.
-  const claimedDurationMs = Number(formData.get("durationMs") ?? 0);
-
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json({ error: isEnglish ? "Choose an audio file." : "녹음 파일을 선택해 주세요." }, { status: 400 });
   }
-  if (file.size > MAX_AUDIO_BYTES) {
-    return NextResponse.json({ error: isEnglish ? "Upload a file of 1GB or less." : "1GB 이하의 파일을 올려 주세요." }, { status: 413 });
+  if (file.size > availability.maxFileBytes) {
+    const limit = "200MB";
+    return NextResponse.json({
+      error: isEnglish ? `Upload a file of ${limit} or less.` : `${limit} 이하의 파일을 올려 주세요.`,
+      code: "AUDIO_UPLOAD_TOO_LARGE", maxFileBytes: availability.maxFileBytes,
+    }, { status: 413 });
   }
   const extension = (file.name.split(".").pop() ?? "").toLowerCase();
   if (!AUDIO_EXTENSIONS.has(extension)) {
     return NextResponse.json({
       error: isEnglish ? "Supported formats are MP3, M4A, WAV, WebM, and MP4." : "MP3, M4A, WAV, WebM, MP4 파일만 변환할 수 있습니다.",
     }, { status: 400 });
-  }
-  if (Number.isFinite(claimedDurationMs) && claimedDurationMs > MAX_AUDIO_MS) {
-    return NextResponse.json({
-      error: isEnglish ? "A lecture can be up to 3 hours long." : "한 수업은 최대 3시간까지 변환할 수 있습니다.",
-    }, { status: 413 });
   }
   if (!title) {
     return NextResponse.json({ error: isEnglish ? "Name this lecture." : "수업 제목을 입력해 주세요." }, { status: 400 });
@@ -175,28 +172,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ upload: existing, duplicate: true });
   }
 
-  // Transcribing a 3-hour file costs real money before a single credit is
-  // charged, so the door asks for the whole claimed length up front — one
-  // credit used to admit any file, and parallel submits multiplied the free
-  // Deepgram spend before the first callback landed. The charge itself still
-  // happens on the callback, against Deepgram's measured length.
-  // 신고 길이만 믿으면 '1분'이라 우기는 1GB 파일이 크레딧 1개로 입장해
-  // Deepgram 전체 변환 비용을 태운다. 파일 크기에서 최소 길이를 추정해
-  // (무압축 WAV ≈ 분당 10.6MB — 가장 보수적인 하한) 신고치와 큰 쪽을 쓴다.
-  const claimedMinutes = Math.ceil(
-    (Number.isFinite(claimedDurationMs) && claimedDurationMs > 0 ? claimedDurationMs : 0) / 60_000,
-  );
-  const sizeFloorMinutes = Math.ceil(file.size / (10.6 * 1024 * 1024));
-  const requiredCredits = Math.max(1, Math.min(180, Math.max(claimedMinutes, sizeFloorMinutes)));
-  const { data: creditStatus } = await supabase.rpc("get_credit_status");
-  const credits = Number((Array.isArray(creditStatus) ? creditStatus[0] : creditStatus)?.credits ?? 0);
-  if (credits < requiredCredits) {
-    return NextResponse.json({
-      error: isEnglish
-        ? `This lecture needs ${requiredCredits} credits and you have ${credits}. Choose a plan to continue.`
-        : `이 수업을 변환하려면 크레딧 ${requiredCredits}개가 필요합니다. 남은 크레딧은 ${credits}개입니다.`,
-      credits,
-    }, { status: 402 });
+  // Reject empty wallets before spending CPU decoding an untrusted recording.
+  const { data: creditStatus, error: creditStatusError } = await supabase.rpc("get_credit_status");
+  const availableCredits = Number((Array.isArray(creditStatus) ? creditStatus[0] : creditStatus)?.credits ?? 0);
+  if (creditStatusError || availableCredits < 1) return NextResponse.json({ error: creditStatusError
+    ? (isEnglish ? "Could not check your credits." : "크레딧을 확인하지 못했습니다.")
+    : (isEnglish ? "Add credits to transcribe this recording." : "녹음 파일을 변환하려면 크레딧을 추가해 주세요."), credits: availableCredits,
+  }, { status: creditStatusError ? 503 : 402 });
+  const verificationLimit = await checkSharedRateLimit(`audio-verification:${userId}`, 20, 86_400_000);
+  if (!verificationLimit.allowed) return NextResponse.json({ error: isEnglish ? "Your daily upload limit has been reached. Try again tomorrow." : "오늘의 파일 업로드 한도에 도달했습니다. 내일 다시 시도해 주세요." }, { status: 429 });
+  let verified: Awaited<ReturnType<typeof verifyAudio>>;
+  try {
+    verified = await verifyAudio(file);
+  } catch (error) {
+    const code = error instanceof AudioVerificationError ? error.code : "invalid";
+    return NextResponse.json({ error: code === "too_long"
+      ? (isEnglish ? "A lecture can be up to 3 hours long." : "한 수업은 최대 3시간까지 변환할 수 있습니다.")
+      : code === "unavailable"
+        ? (isEnglish ? "File transcription is temporarily unavailable. Try again shortly." : "파일 변환을 잠시 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.")
+        : (isEnglish ? "We couldn’t read this recording safely. Export it as MP3, M4A, WAV, WebM, or MP4 and try again." : "녹음 파일을 확인하지 못했습니다. MP3, M4A, WAV, WebM, MP4로 다시 저장해 올려 주세요."),
+    }, { status: code === "unavailable" ? 503 : code === "too_long" || code === "too_large" ? 413 : 400 });
   }
 
   const room = isUuid(classroomId) ? classroomId : null;
@@ -218,7 +213,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Could not create the lecture record." : "수업 기록을 만들지 못했습니다." }, { status: 500 });
   }
 
-  const objectKey = `${userId}/${randomUUID()}.${extension}`;
+  const objectKey = `${userId}/${randomUUID()}.flac`;
   const { data: upload, error: uploadRowError } = await admin
     .from("uploads")
     .insert({
@@ -228,8 +223,8 @@ export async function POST(request: Request) {
       object_key: objectKey,
       status: "uploading",
       filename: (file.name || `lecture.${extension}`).slice(0, 200),
-      byte_size: file.size,
-      duration_ms: Number.isFinite(claimedDurationMs) && claimedDurationMs > 0 ? Math.round(claimedDurationMs) : null,
+      byte_size: verified.bytes.byteLength,
+      duration_ms: verified.durationMs,
     })
     .select("id,session_id,status")
     .single();
@@ -239,25 +234,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Could not start this upload." : "업로드를 시작하지 못했습니다." }, { status: 500 });
   }
 
+  const { data: reservation, error: reservationError } = await admin.rpc("reserve_audio_credits_service", {
+    p_user_id: userId, p_upload_id: upload.id, p_duration_ms: verified.durationMs,
+  });
+  const reserved = (Array.isArray(reservation) ? reservation[0] : reservation) as { allowed?: boolean; credits?: number } | null;
+  if (reservationError || !reserved?.allowed) {
+    await admin.from("lecture_sessions").delete().eq("id", session.id);
+    return NextResponse.json({ error: reservationError
+      ? (isEnglish ? "Could not check your credits. Try again shortly." : "크레딧을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+      : (isEnglish ? `This lecture needs ${Math.ceil(verified.durationMs / 60_000)} credits.` : `이 수업을 변환하려면 크레딧 ${Math.ceil(verified.durationMs / 60_000)}개가 필요합니다.`),
+      credits: reserved?.credits ?? 0,
+    }, { status: reservationError ? 503 : 402 });
+  }
+
   const fail = async (code: string, message: string, status: number) => {
-    await supabase.storage.from("lecture-audio").remove([objectKey]);
+    // Only called when work definitely was not accepted by the provider.
+    const { error: releaseError } = await admin.rpc("settle_audio_credits_service", { p_user_id: userId, p_upload_id: upload.id, p_charge: false });
+    if (releaseError) console.error("Audio reservation release failed", releaseError.code);
+    await enqueueStorageDeletion(admin, { bucket: "lecture-audio", objectKey, userId, reason: code });
     await admin.from("uploads").update({ status: "failed", error_code: code, updated_at: new Date().toISOString() }).eq("id", upload.id);
-    // The lecture never existed as far as the learner is concerned: no
-    // transcript, no charge. Leaving an empty session in the sidebar would be
-    // a row they have to clean up themselves.
-    await supabase.from("lecture_sessions").delete().eq("id", session.id);
+    await admin.from("lecture_sessions").delete().eq("id", session.id);
+    await drainStorageDeletions(admin, { limit: 5, userId });
     return NextResponse.json({ error: message }, { status });
   };
 
-  const { error: storageError } = await supabase.storage
+  const { error: storageError } = await admin.storage
     .from("lecture-audio")
-    .upload(objectKey, new Uint8Array(await file.arrayBuffer()), { contentType: file.type || "application/octet-stream", upsert: false });
+    .upload(objectKey, verified.bytes, { contentType: "audio/flac", upsert: false });
   if (storageError) {
     console.error("Audio upload failed", storageError.message);
     return fail("storage", isEnglish ? "Could not save this recording." : "녹음 파일을 저장하지 못했습니다.", 500);
   }
 
-  const { data: signed, error: signError } = await supabase.storage
+  const { data: signed, error: signError } = await admin.storage
     .from("lecture-audio")
     .createSignedUrl(objectKey, SIGNED_URL_SECONDS);
   if (signError || !signed) {
@@ -272,6 +281,11 @@ export async function POST(request: Request) {
     : { data: null };
 
   const callbackUrl = `${callbackBase.replace(/\/$/, "")}/api/lecture-audio/callback?uploadId=${upload.id}&token=${callbackToken(upload.id)}`;
+  const { data: submitting, error: submitError } = await admin.rpc("submit_audio_reservation_service", { p_user_id: userId, p_upload_id: upload.id });
+  if (submitError || !submitting) return fail("reservation", isEnglish ? "Could not prepare transcription." : "받아쓰기를 준비하지 못했습니다.", 503);
+  // Persist processing before the request: a callback can arrive before fetch
+  // returns, and must not be overwritten back to processing after completion.
+  await admin.from("uploads").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", upload.id);
   let requestId: string | null = null;
   try {
     const response = await fetch(prerecordedUrl({
@@ -287,18 +301,20 @@ export async function POST(request: Request) {
     });
     if (!response.ok) {
       console.error("Deepgram prerecorded submit failed", response.status);
-      return fail("provider", isEnglish ? "Could not start transcription." : "받아쓰기를 시작하지 못했습니다.", 502);
+      if (response.status >= 400 && response.status < 500) return fail("provider", isEnglish ? "Could not start transcription." : "받아쓰기를 시작하지 못했습니다.", 502);
+      throw new Error("PROVIDER_ACCEPTANCE_UNKNOWN");
     }
     const accepted = await response.json() as { request_id?: string };
     requestId = accepted.request_id ?? null;
   } catch (error) {
     console.error("Deepgram prerecorded submit threw", error instanceof Error ? error.name : "unknown");
-    return fail("provider", isEnglish ? "Could not start transcription." : "받아쓰기를 시작하지 못했습니다.", 502);
+    // Acceptance is unknown. Keep the reservation and callback tracking; a
+    // timeout must never turn already-running work into free processing.
   }
 
   const { data: queued } = await admin
     .from("uploads")
-    .update({ status: "processing", provider_request_id: requestId, updated_at: new Date().toISOString() })
+    .update({ provider_request_id: requestId, updated_at: new Date().toISOString() })
     .eq("id", upload.id)
     .select("id,session_id,status,filename,byte_size,duration_ms,error_code,created_at")
     .maybeSingle();

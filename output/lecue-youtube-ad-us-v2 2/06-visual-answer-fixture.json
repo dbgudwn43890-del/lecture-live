@@ -1,0 +1,45 @@
+{
+  "kind": "synthetic_production_fixture_not_product_metrics",
+  "show_source_lecture": false,
+  "source_context": "This is an illustrative comparison of two groups. Group A contains 70 units of Part 1 and 30 of Part 2. Group B contains 30 units of Part 1 and 70 of Part 2. Each group totals 100 units. The total is the same, but the proportions differ.",
+  "question": "Can you explain that last part?",
+  "answer_heading": "Same total. Different mix.",
+  "takeaway": "The total stays the same. The parts change.",
+  "chart_caption": "Example values",
+  "chart": {
+    "type": "stacked-bar",
+    "title": "Same total. Different mix.",
+    "unit": "units",
+    "series": [
+      "Part 1",
+      "Part 2"
+    ],
+    "rows": [
+      {
+        "label": "Group A",
+        "values": [
+          70,
+          30
+        ]
+      },
+      {
+        "label": "Group B",
+        "values": [
+          30,
+          70
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {
+      "title": "Compare the totals.",
+      "body": "Both add up to 100."
+    },
+    {
+      "title": "Look at the parts.",
+      "body": "The proportions change."
+    }
+  ],
+  "note": "Supply this context to a test session if capturing generated output. Exact answer copy is an illustrative reconstruction, not a guaranteed response."
+}

@@ -1,0 +1,76 @@
+/* The email flow shares Lecue's established green paper and type palette. */
+.email-login-shell.login-shell { grid-template-rows: 64px minmax(0, 1fr); }
+.email-login-shell .login-stage { padding: 40px 20px 64px; }
+.email-login-shell .login-panel { width: min(100%, 430px); padding: 32px; border-radius: 10px; box-shadow: 0 8px 30px -24px #24372438; }
+.email-login-shell .auth-heading { margin: 0 0 24px; text-align: left; }
+.email-login-shell .auth-heading h1 { font-size: 25px; line-height: 1.3; font-weight: 650; letter-spacing: -.045em; }
+.email-login-shell .auth-heading p { font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.email-login-shell .google-auth-button { min-height: 48px; font-size: 13px; font-weight: 550; border-radius: 6px; }
+.email-login-shell .google-mark { width: 18px; height: 18px; }
+.email-login-shell .auth-consent { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 24px; padding-top: 20px; font-size: 11px; }
+.email-login-shell .auth-consent a { color: var(--muted); }
+.email-login-shell .auth-consent a:hover { color: var(--ink); }
+.email-login-shell .auth-start-note { margin-top: 16px; font-size: 12px; }
+.email-login-shell button { cursor: pointer; font-family: inherit; }
+.email-login-shell button:disabled { cursor: default; opacity: .58; }
+.email-login-shell :is(button, input, a):focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+.email-mode-switch { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.email-mode-switch button { position: relative; min-height: 42px; padding: 8px 4px 12px; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 550; }
+.email-mode-switch button[aria-pressed="true"] { color: var(--signal); }
+.email-mode-switch button[aria-pressed="true"]::after { content: ""; position: absolute; inset: auto 0 -1px; height: 2px; background: var(--signal); }
+.email-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0; color: var(--muted); font-size: 11px; }
+.email-divider::before, .email-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+.email-auth-form { display: grid; gap: 18px; }
+.email-field { display: grid; gap: 8px; min-width: 0; color: var(--ink); font-size: 13px; font-weight: 550; }
+.email-field input { width: 100%; min-width: 0; height: 48px; padding: 0 13px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: 400 15px/1.4 var(--font-sans), system-ui, sans-serif; transition: border-color 140ms ease; }
+.email-field input::placeholder { color: var(--muted); opacity: .68; }
+.email-field input:focus { border-color: var(--signal); }
+.email-field input:disabled { background: var(--paper); }
+.email-field small { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.6; }
+.email-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.email-password-wrap { position: relative; }
+.email-password-wrap input { padding-right: 48px; }
+.email-login-shell .email-password-toggle { position: absolute; inset: 3px 3px 3px auto; display: grid; place-items: center; width: 42px; padding: 0; border: 0; border-radius: 4px; color: var(--muted); background: transparent; }
+.email-login-shell .email-password-toggle:hover { color: var(--ink); }
+.email-login-shell .email-submit { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 48px; margin-top: 2px; padding: 12px 16px; border: 1px solid var(--signal); border-radius: 6px; background: var(--signal); color: var(--surface); font-size: 14px; font-weight: 550; line-height: 1.4; transition: background-color 140ms ease; }
+.email-login-shell .email-submit:not(:disabled):hover { background: color-mix(in srgb, var(--signal) 87%, var(--ink)); }
+.email-text-button { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.5; text-underline-offset: 3px; }
+.email-text-button:not(:disabled):hover { color: var(--signal); text-decoration: underline; }
+.email-back { display: inline-flex; align-items: center; gap: 7px; margin: -5px 0 26px; padding: 5px 0; border: 0; background: transparent; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.email-back:not(:disabled):hover { color: var(--ink); }
+.email-step-mark { display: flex; align-items: center; margin: 0 0 20px; color: var(--signal); }
+.email-recipient { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: -6px 0 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.email-recipient strong { min-width: 0; color: var(--ink); font-size: 13px; font-weight: 550; line-height: 1.7; overflow-wrap: anywhere; }
+.email-recipient button { flex: none; min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.email-field .email-code-input { height: 56px; padding-left: calc(13px + .25em); text-align: center; font-size: 24px; font-weight: 500; letter-spacing: .25em; font-variant-numeric: tabular-nums; }
+.email-feedback:empty { display: none; }
+.email-feedback p { margin: 14px 0 0; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.email-error { color: var(--danger); }
+.email-notice { color: var(--muted); }
+.email-resend-row { display: grid; justify-items: center; gap: 8px; margin-top: 24px; text-align: center; }
+.email-resend-row p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.email-resend-row > .email-text-button { min-height: 32px; color: var(--signal); font-size: 12px; }
+.email-resend-row > .email-text-button:disabled { color: var(--muted); }
+.email-resend-row p.email-existing-account { margin-top: 8px; }
+.email-existing-account .email-text-button { margin-left: 4px; color: var(--signal); text-decoration: underline; }
+.email-resend-confirmation { min-height: 40px; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--signal); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.email-auth-stage { animation: email-stage-enter 180ms ease-out both; }
+@keyframes email-stage-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 520px) {
+  .email-login-shell.login-shell { grid-template-rows: 58px minmax(0, 1fr); }
+  .email-login-shell .login-stage { align-items: start; padding: 28px 16px 40px; }
+  .email-login-shell .login-panel { padding: 28px 24px; }
+  .email-login-shell .auth-heading h1 { font-size: 24px; }
+  .email-field input { font-size: 16px; }
+  .email-label-row .email-text-button { min-height: 24px; }
+}
+@media (max-width: 360px) {
+  .email-login-shell .login-stage { padding-right: 12px; padding-left: 12px; }
+  .email-login-shell .login-panel { padding: 24px 18px; }
+  .email-login-shell .auth-heading h1 { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .email-login-shell .email-auth-stage, .email-login-shell .auth-spinner { animation: none; }
+  .email-login-shell .auth-spinner { border-style: dotted; }
+  .email-login-shell .email-submit, .email-field input { transition: none; }
+}

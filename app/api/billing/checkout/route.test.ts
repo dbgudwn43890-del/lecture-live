@@ -2,18 +2,19 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { registerHooks } from "node:module";
 import { pathToFileURL } from "node:url";
-import { PLANS } from "../../../lib/plans.ts";
+import { PLANS, ENTITLEMENT_VERSION } from "../../../lib/plans.ts";
 let signedIn = true, allowed = true, calls: {path:string;body:any}[] = [], reservationError: unknown = null, priceWrong = false;
-let existing: {id:string;transaction_id:string|null;price_id?:string;credits?:number;months?:number} | null = null;
+let existing: {id:string;transaction_id:string|null;price_id?:string;credits?:number;months?:number;entitlement_version?:string} | null = null;
+let reservation: Record<string, unknown> | null = null;
 const query = { select(){return query;},eq(){return query;},is(){return Promise.resolve({error:null});},update(){return query;},maybeSingle(){return Promise.resolve({data:null,error:null});} };
-const admin = { from(){return query;}, async rpc(_name:string, p:any){return {data:[existing ?? {id:p.p_id,transaction_id:null}],error:reservationError};} };
+const admin = { from(){return query;}, async rpc(_name:string, p:any){reservation=p;return {data:[existing ?? {id:p.p_id,transaction_id:null,price_id:p.p_price_id,credits:p.p_credits,months:p.p_months,entitlement_version:p.p_entitlement_version}],error:reservationError};} };
 mock.module(pathToFileURL("app/lib/auth.ts").href,{namedExports:{getAuthenticatedUserId:async()=>signedIn?"00000000-0000-4000-8000-000000000006":null}});
 mock.module(pathToFileURL("app/lib/supabase/admin.ts").href,{namedExports:{createAdminClient:()=>admin}});
 mock.module(pathToFileURL("app/lib/rate-limit.ts").href,{namedExports:{checkSharedRateLimit:async()=>({allowed})}});
 mock.module(pathToFileURL("app/lib/billing.ts").href,{namedExports:{PaddleApiError:class extends Error { status=400; },paddleRequest:async(path:string,init?:RequestInit)=>{calls.push({path,body:init?.body?JSON.parse(String(init.body)):null});if(path.startsWith("/transactions?"))return[];if(path.startsWith("/prices/"))return{status:"active",unit_price:{amount:priceWrong?"1":String(PLANS.monthly.usd*100),currency_code:"USD"},unit_price_overrides:[{country_codes:["KR"],unit_price:{amount:String(PLANS.monthly.krw),currency_code:"KRW"}}],billing_cycle:{interval:"month",frequency:1},trial_period:null};return{id:"txn_test",status:"ready"};}}});
 registerHooks({resolve(specifier,context,next){try{return next(specifier,context);}catch(error){for(const ext of[".ts",".js"]){try{return next(specifier+ext,context);}catch{}}throw error;}}});
 const {POST}=await import("./route.ts");
-test.beforeEach(()=>{signedIn=true;allowed=true;calls=[];existing=null;reservationError=null;priceWrong=false;Object.assign(process.env,{BILLING_ENABLED:"true",PADDLE_ENVIRONMENT:"sandbox",NEXT_PUBLIC_PADDLE_ENVIRONMENT:"sandbox",NEXT_PUBLIC_PADDLE_CLIENT_TOKEN:"test_dummy",PADDLE_API_KEY:"dummy",PADDLE_WEBHOOK_SECRET:"dummy",PADDLE_MONTHLY_V2_PRICE_ID:"pri_new_monthly",PADDLE_SEMESTER_V2_PRICE_ID:"pri_new_semester"});});
+test.beforeEach(()=>{signedIn=true;allowed=true;calls=[];existing=null;reservationError=null;priceWrong=false;Object.assign(process.env,{BILLING_ENABLED:"true",PADDLE_ENVIRONMENT:"sandbox",NEXT_PUBLIC_PADDLE_ENVIRONMENT:"sandbox",NEXT_PUBLIC_PADDLE_CLIENT_TOKEN:"test_dummy",PADDLE_API_KEY:"pdl_sdbx_dummy",PADDLE_WEBHOOK_SECRET:"dummy",PADDLE_MONTHLY_V3_PRICE_ID:"pri_new_monthly",PADDLE_SEMESTER_V3_PRICE_ID:"pri_new_semester"});});
 const request=(body:unknown={plan:"monthly"},origin="https://lecue.test")=>POST(new Request("https://lecue.test/api/billing/checkout",{method:"POST",headers:{origin,"Content-Type":"application/json"},body:JSON.stringify(body)}));
 test("cross-origin checkout cannot create a transaction",async()=>{assert.equal((await request({},"https://evil.test")).status,403);assert.equal(calls.length,0);});
 test("anonymous checkout is rejected",async()=>{signedIn=false;assert.equal((await request()).status,401);});
@@ -24,6 +25,7 @@ test("null body and legacy plan are rejected",async()=>{assert.equal((await requ
 test("client cannot supply a price, quantity, or recipient",async()=>{assert.equal((await request({plan:"monthly",priceId:"pri_cheap",quantity:999,userId:"victim"})).status,200);const tx=calls.find(c=>c.path==="/transactions")!;assert.deepEqual(tx.body.items,[{price_id:"pri_new_monthly",quantity:1}]);assert.ok(tx.body.custom_data.lecue_order_id);assert.equal(tx.body.custom_data.lecue_user_id,undefined);});
 test("a changed Paddle price blocks checkout before reservation",async()=>{priceWrong=true;assert.equal((await request()).status,503);assert.equal(calls.length,1);});
 test("an existing subscription cannot buy another monthly subscription",async()=>{reservationError={message:"ACTIVE_SUBSCRIPTION"};assert.equal((await request()).status,409);assert.equal(calls.length,1);});
+test("an active prepaid plan cannot accidentally buy overlapping monthly allowances",async()=>{reservationError={message:"ACTIVE_PLAN"};assert.equal((await request()).status,409);assert.equal(calls.length,1);});
 test("retry reuses the same provider transaction",async()=>{existing={id:"existing",transaction_id:"txn_existing"};assert.equal((await request()).status,200);assert.equal(calls.some(c=>c.path==="/transactions"),false);});
 test("concurrent checkout cannot create a second transaction",async()=>{existing={id:"other_request",transaction_id:null};assert.equal((await request()).status,409);assert.equal(calls.some(c=>c.path==="/transactions"),false);});
 test("an old-price reservation cannot reopen under the new offer",async()=>{
@@ -31,4 +33,20 @@ test("an old-price reservation cannot reopen under the new offer",async()=>{
   assert.equal((await request()).status,409);
   assert.equal(calls.some(c=>c.path.startsWith("/transactions")),false);
 });
-test("a plan without a catalog price is refused before any provider call",async()=>{delete process.env.PADDLE_ANNUAL_V2_PRICE_ID;assert.equal((await request({plan:"annual"})).status,503);assert.equal(calls.length,0);});
+test("a plan without a catalog price is refused before any provider call",async()=>{delete process.env.PADDLE_ANNUAL_V3_PRICE_ID;assert.equal((await request({plan:"annual"})).status,503);assert.equal(calls.length,0);});
+test("new orders snapshot the monthly issuance policy server-side",async()=>{
+  assert.equal((await request({plan:"monthly",entitlement_version:"upfront_v2"})).status,200);
+  assert.equal(reservation?.p_entitlement_version,ENTITLEMENT_VERSION);
+  assert.equal(reservation?.p_credits,PLANS.monthly.credits);
+  assert.equal(reservation?.p_months,PLANS.monthly.months);
+});
+test("a reservation with the same price but old issuance terms cannot be reused",async()=>{
+  existing={id:"old_terms",transaction_id:"txn_old",price_id:"pri_new_monthly",credits:PLANS.monthly.credits,months:1,entitlement_version:"upfront_v2"};
+  assert.equal((await request()).status,409);
+  assert.equal(calls.some(c=>c.path.startsWith("/transactions")),false);
+});
+test("a current reservation safely reopens its provider checkout",async()=>{
+  existing={id:"new_terms",transaction_id:"txn_existing",price_id:"pri_new_monthly",credits:PLANS.monthly.credits,months:1,entitlement_version:ENTITLEMENT_VERSION};
+  assert.equal((await request()).status,200);
+  assert.equal(calls.some(c=>c.path==="/transactions"),false);
+});

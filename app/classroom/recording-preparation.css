@@ -1,0 +1,9 @@
+.recording-preparation { margin-top: 16px; padding-block: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.6; }
+.recording-preparation p { margin: 5px 0 0; }
+.recording-preparation-device { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.recording-preparation-device span { min-width: 0; overflow-wrap: anywhere; flex: 1; }
+.recording-preparation-device button { background: none; border: 0; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; min-height: 36px; cursor: pointer; white-space: nowrap; }
+.recording-preparation-device button:disabled { opacity: .65; cursor: default; }
+.recording-preparation-level { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.recording-preparation-level[hidden] { display: none; }
+.recording-preparation-level meter { width: 110px; accent-color: var(--accent); }

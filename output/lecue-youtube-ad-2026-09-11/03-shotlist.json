@@ -1,0 +1,224 @@
+{
+  "title": "방금, 그 말",
+  "brand": "Lecue",
+  "date": "2026-09-11",
+  "status": "production_plan_not_rendered_video",
+  "timing_status": "draft_until_final_voiceover",
+  "target": "대학생·대학원생",
+  "master": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "duration_seconds": 30,
+    "frame_count": 900
+  },
+  "scenes": [
+    {
+      "id": "s01",
+      "start": 0,
+      "end": 3,
+      "purpose": "한 단어에서 막히는 강의 중 순간",
+      "screen": [
+        "잠깐. 방금 그 말?"
+      ],
+      "ui": [],
+      "action": "강의 문장은 이동하고 가중치라는 단어는 잠깐 남는다. 작은 Lecue 워드마크 첫 프레임 노출.",
+      "vo": "강의는 계속되는데,",
+      "vo_start": 0.3,
+      "vo_end": 2.7,
+      "start_frame": 0,
+      "end_frame_exclusive": 90
+    },
+    {
+      "id": "s02",
+      "start": 3,
+      "end": 5,
+      "purpose": "같은 강의를 수신하는 제품",
+      "screen": [],
+      "ui": [
+        "통계학",
+        "기록 중",
+        "소리를 함께 듣고 있어요"
+      ],
+      "action": "이미 녹음 중인 실제 교실 UI로 전환. 추가 클릭 없음.",
+      "vo": "그 말에서 막혔다면.",
+      "vo_start": 3.05,
+      "vo_end": 4.9,
+      "start_frame": 90,
+      "end_frame_exclusive": 150
+    },
+    {
+      "id": "s03",
+      "start": 5,
+      "end": 10,
+      "purpose": "맥락을 다시 설명하지 않는 짧은 질문",
+      "screen": [],
+      "ui": [
+        "이 강의에 대해 질문하세요",
+        "방금 말한 가중치가 뭐야?",
+        "질문 보내기"
+      ],
+      "action": "입력창 확대. 질문 타이핑 후 위 화살표 전송. 전송 직후 실제 로딩 형태. 상태 표시 유지.",
+      "vo": "같은 강의를 듣는 AI에게 물어보세요.",
+      "vo_start": 5.1,
+      "vo_end": 9.2,
+      "start_frame": 150,
+      "end_frame_exclusive": 300
+    },
+    {
+      "id": "s04",
+      "start": 10,
+      "end": 17,
+      "purpose": "앞선 강의 맥락으로 답함을 입증",
+      "screen": [],
+      "ui": [
+        "강의 조교 · AI",
+        "앞서 말한 PC·모바일 방문자 비율이에요."
+      ],
+      "action": "답변 등장. 12–17초 주요 텍스트 고정. 타임스탬프 근거 버튼 없음.",
+      "vo": null,
+      "vo_start": null,
+      "vo_end": null,
+      "start_frame": 300,
+      "end_frame_exclusive": 510
+    },
+    {
+      "id": "s05",
+      "start": 17,
+      "end": 23,
+      "purpose": "질문하면서 기록 지속",
+      "screen": [
+        "질문하는 동안에도 기록은 계속."
+      ],
+      "ui": [
+        "기록 중",
+        "소리를 함께 듣고 있어요"
+      ],
+      "action": "실제 상태와 경과 시간 계속. 다음 강의 문장은 제품 창 바깥 광고 그래픽으로 배치.",
+      "vo": "앞서 나온 내용까지 연결해 설명하니까.",
+      "vo_start": 17.3,
+      "vo_end": 21.8,
+      "start_frame": 510,
+      "end_frame_exclusive": 690
+    },
+    {
+      "id": "s06",
+      "start": 23,
+      "end": 27,
+      "purpose": "브랜드와 포지셔닝 결합",
+      "screen": [
+        "같은 강의를 듣는 AI, Lecue."
+      ],
+      "ui": [],
+      "action": "UI를 정렬·축소하고 브랜드 문장과 승인 로고로 시선 이동.",
+      "vo": "같은 강의를 듣는 AI, 레큐.",
+      "vo_start": 23.15,
+      "vo_end": 26.45,
+      "start_frame": 690,
+      "end_frame_exclusive": 810
+    },
+    {
+      "id": "s07",
+      "start": 27,
+      "end": 30,
+      "purpose": "가입 없는 데모 진입",
+      "screen": [
+        "30초만 체험하기",
+        "lecue.app",
+        "가입 없이 체험"
+      ],
+      "ui": [],
+      "action": "엔드카드 유지. 마지막 1초 주요 화면 정지.",
+      "vo": "지금, 30초만 체험해 보세요.",
+      "vo_start": 27.1,
+      "vo_end": 29.7,
+      "start_frame": 810,
+      "end_frame_exclusive": 900
+    }
+  ],
+  "example_disclosure": {
+    "start": 5,
+    "end": 23,
+    "text": "광고용 예시 · 대기 시간 편집"
+  },
+  "pronunciation": {
+    "Lecue": "레큐",
+    "AI": "에이아이"
+  },
+  "cta": {
+    "text": "30초만 체험하기",
+    "display_url": "lecue.app",
+    "destination": "https://www.lecue.app/",
+    "behavior": "사용자가 홈페이지의 30초만 체험하기를 직접 선택"
+  },
+  "audio": {
+    "lecture_voice": false,
+    "narrator_count": 1,
+    "silence_for_answer": [
+      10,
+      17
+    ]
+  },
+  "short_versions": {
+    "15s": {
+      "duration": 15,
+      "scenes": [
+        {
+          "start": 0,
+          "end": 3,
+          "content": "막히는 순간과 함께 듣기 상태"
+        },
+        {
+          "start": 3,
+          "end": 6,
+          "content": "질문 타이핑과 전송"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "content": "맥락 답변과 기록 지속"
+        },
+        {
+          "start": 11,
+          "end": 15,
+          "content": "브랜드와 체험 CTA"
+        }
+      ],
+      "example_disclosure": {
+        "start": 3,
+        "end": 11,
+        "text": "광고용 예시 · 대기 시간 편집"
+      }
+    },
+    "6s": {
+      "duration": 6,
+      "scenes": [
+        {
+          "start": 0,
+          "end": 2,
+          "content": "방금 그 말? / 함께 듣기 상태"
+        },
+        {
+          "start": 2,
+          "end": 4,
+          "content": "같은 강의를 듣는 AI"
+        },
+        {
+          "start": 4,
+          "end": 6,
+          "content": "Lecue / lecue.app / 30초 체험"
+        }
+      ]
+    }
+  },
+  "constraints": [
+    "실사 인물·공간 없음",
+    "한글·로고·UI 편집 가능한 레이어",
+    "자동 음성 질문·자동답변 묘사 없음",
+    "실제 앱에 없는 근거 시간 점프 버튼 없음",
+    "상시 좌우 전사패널 없음",
+    "제작용 예시 데이터임을 표시",
+    "질문 전송 이전 답변 등장 금지",
+    "9:16 별도 레이아웃"
+  ]
+}

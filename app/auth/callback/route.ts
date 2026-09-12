@@ -1,4 +1,3 @@
-import type { EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 
 import { SIGNUP_CONSENT_TYPES, CONSENT_VERSION } from "../../lib/consent";
@@ -8,14 +7,23 @@ import { getSafeAuthNext } from "../../lib/auth-redirect";
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const tokenHash = request.nextUrl.searchParams.get("token_hash");
-  const type = request.nextUrl.searchParams.get("type") as EmailOtpType | null;
+  const type = request.nextUrl.searchParams.get("type");
   const requestedNext = request.nextUrl.searchParams.get("next");
   const nextPath = getSafeAuthNext(requestedNext);
+  // Recovery codes belong to the reset form. A generic callback must not turn
+  // a password-reset link into an ordinary classroom sign-in.
+  if (type === "recovery") {
+    const resetUrl = new URL(nextPath.startsWith("/en/") ? "/en/login" : "/login", request.nextUrl.origin);
+    resetUrl.searchParams.set("mode", "recovery");
+    resetUrl.searchParams.set("error", "recovery_link");
+    resetUrl.searchParams.set("next", nextPath);
+    return NextResponse.redirect(resetUrl);
+  }
   const supabase = await createClient();
 
   const result = code
     ? await supabase.auth.exchangeCodeForSession(code)
-    : tokenHash && type
+    : tokenHash && (type === "signup" || type === "email")
       ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
       : { error: new Error("Missing authentication token") };
 
@@ -37,12 +45,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const redirectUrl = request.nextUrl.clone();
-  redirectUrl.search = "";
-  redirectUrl.pathname = result.error
-    ? nextPath.startsWith("/en/") ? "/en/login" : "/login"
-    : nextPath;
-  if (result.error) redirectUrl.searchParams.set("error", "callback");
+  // nextPath can include a lecture or plan query. Assigning it to pathname
+  // encodes the question mark and sends the learner to a nonexistent page.
+  const redirectUrl = new URL(nextPath, request.nextUrl.origin);
+  if (result.error) {
+    redirectUrl.pathname = nextPath.startsWith("/en/") ? "/en/login" : "/login";
+    redirectUrl.search = "";
+    redirectUrl.searchParams.set("error", "callback");
+    redirectUrl.searchParams.set("next", nextPath);
+  }
 
   return NextResponse.redirect(redirectUrl);
 }

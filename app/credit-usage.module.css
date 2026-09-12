@@ -1,0 +1,29 @@
+.root { min-width:0; color:var(--ink); text-align:left; }
+.heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:5px 14px; }
+.heading>strong { font-size:17px; font-weight:600; }
+.total { font-size:16px; font-weight:550; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.total small { font-size:12px; color:var(--muted); font-weight:400; }
+.period { flex-basis:100%; margin:0; font-size:12px; color:var(--muted); line-height:1.7; }
+.buckets { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; margin-top:22px; }
+.bucket { min-width:0; }
+.emptyBucket { display:flex; align-items:baseline; justify-content:space-between; gap:12px; align-self:start; color:var(--muted); font-size:13px; }
+.emptyAmount { white-space:nowrap; font-size:12px; font-variant-numeric:tabular-nums; }
+.label { display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:13px; }
+.label small { color:var(--muted); font-size:11px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.meter { height:6px; margin:10px 0 8px; overflow:hidden; border-radius:8px; background:var(--line); }
+.meter>span { display:block; height:100%; border-radius:inherit; background:var(--signal); transition:width .2s ease; }
+.amount { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+.amount strong { color:var(--ink); font-weight:550; font-size:13px; }
+.expiry,.unavailable { margin:4px 0 0; font-size:11px; color:var(--muted); line-height:1.65; }
+.unavailable { margin-top:16px; }
+.unavailable p { margin:4px 0 0; }
+.unavailable button { margin-left:8px; padding:8px 0; border:0; background:none; color:var(--signal); font:inherit; text-decoration:underline; cursor:pointer; }
+.compact .heading>strong { font-size:13px; }
+.compact .total { font-size:13px; }
+.compact .total small { font-size:11px; }
+.compact .period { font-size:11px; }
+.compact .buckets { grid-template-columns:minmax(0,1fr); gap:18px; margin-top:18px; }
+.compact .label { font-size:12px; }
+.compact .emptyBucket { font-size:12px; }
+@media(max-width:540px) { .buckets { grid-template-columns:minmax(0,1fr); gap:20px; } }
+@media(prefers-reduced-motion:reduce) { .meter>span { transition:none; } }

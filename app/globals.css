@@ -43,34 +43,33 @@
   color-scheme: light;
 }
 
-/* Dark is the same product, not a second one: the same green brand, moved onto
-   near-black paper. Only the tokens change — every rule below reads them. */
+/* Neutral charcoal surfaces keep the green brand accent in the controls. */
 /* 다크 팔레트는 미디어쿼리가 아니라 data-theme 속성이 정한다. layout.tsx의
    인라인 스크립트가 저장된 선택(lecue-theme) 또는 OS 설정으로 첫 페인트 전에
    속성을 찍는다. 토글은 프로필 메뉴에 있다. */
 :root[data-theme="dark"] {
-    /* 웜 다크: 검정에 온기를 반 스푼. 액센트는 라이트보다 밝힌 세이지. */
-    --paper: #131110;
+    --paper: #151515;
     /* 배경과 한 단계 확실히 벌린다. 다크에서 표면 구분은 그림자가 아니라
        밝기 차가 한다 (Material dark elevation). */
-    --surface: #1e1b18;
-    --ink: #f0ece5;
-    --muted: #a89f93;
-    --line: rgba(240, 236, 229, .1);
-    --line-strong: rgba(240, 236, 229, .22);
+    --surface: #202020;
+    --surface-raised: #292929;
+    --ink: #f2f2f2;
+    --muted: #adadad;
+    --line: #343434;
+    --line-strong: #4b4b4b;
     /* Lightened enough to read as text on near-black, still the brand hue.
        Anything filled with it takes --on-signal for its label. */
-    --signal: #86b598;
-    --signal-dark: #a2c9b1;
-    --accent: #e0b064;
+    --signal: #bcc9bf;
+    --signal-dark: #d0d9d2;
+    --accent: #c4b078;
     --status: #6cc79a;
-    --blue: #86b598;
-    --focus: #86b598;
-    --soft-blue: #232a24;
-    --tint: rgba(134, 181, 152, .14);
-    --invert-bg: #2e2a25;
-    --edge: #55493d;
-    --on-signal: #10241a;
+    --blue: var(--signal);
+    --focus: var(--signal);
+    --soft-blue: #272727;
+    --tint: #303030;
+    --invert-bg: #292929;
+    --edge: #4b4b4b;
+    --on-signal: #171c18;
     --danger: #ffb1a3;
     --danger-tint: #3a1c17;
     --danger-line: #6b2f26;
@@ -90,7 +89,7 @@
 [data-theme="dark"] .session-menu-panel,
 [data-theme="dark"] .profile-menu-panel,
 [data-theme="dark"] .consent-modal .consent-gate,
-[data-theme="dark"] .material-list ul { background: #2b2437; }
+[data-theme="dark"] .material-list ul { background: var(--surface-raised); }
 
 /* 밝은 회색 오프셋 그림자는 다크에서 번진 자국처럼 보인다. */
 [data-theme="dark"] .chat-pane,
@@ -922,15 +921,21 @@ a, button, summary, input, textarea, select {
 .footnote a { color: inherit; text-decoration: none; }
 .footnote a:hover { color: white; }
 
-/* Login wears the landing page's design system — same paper, same ink, the same
-   mono kicker and teal action — with one deliberate difference: the form sits on
-   a raised panel instead of the landing's full-bleed sections. */
+/* Keep the approved landing/workspace identity through the sign-in step. */
 .login-shell {
+  --paper: #f7f8f2; --surface: #fffffc; --ink: #29372b; --muted: #65705f;
+  --signal: #405e42; --accent: #ad9557; --line: #dce1d5; --line-strong: #c4ccbd;
+  --radius: 8px; --focus: var(--signal); --pop-shadow: 0 12px 36px -28px #24372455;
   min-height: 100svh;
   display: grid;
   grid-template-rows: 64px minmax(0, 1fr) auto;
   background: var(--paper);
+  color: var(--ink);
   word-break: keep-all;
+}
+[data-theme="dark"] .login-shell {
+  --paper: inherit; --surface: inherit; --ink: inherit; --muted: inherit;
+  --signal: inherit; --accent: inherit; --line: inherit; --line-strong: inherit;
 }
 
 .login-topbar {
@@ -946,12 +951,13 @@ a, button, summary, input, textarea, select {
 }
 
 .login-topbar .brand {
-  color: var(--ink);
-  font-size: 18px;
-  font-weight: 760;
-  letter-spacing: -.025em;
+  color: var(--signal);
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -.06em;
   text-decoration: none;
 }
+.login-topbar .brand > span { color: var(--accent); }
 
 .login-nav {
   display: flex;
@@ -962,7 +968,7 @@ a, button, summary, input, textarea, select {
 .login-nav a {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 500;
   text-decoration: none;
 }
 
@@ -970,13 +976,14 @@ a, button, summary, input, textarea, select {
 
 .login-home-link {
   padding: 9px 14px;
-  color: white !important;
-  background: var(--invert-bg);
+  color: var(--signal) !important;
+  background: transparent;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
-  font-weight: 800;
+  font-weight: 500;
 }
 
-.login-home-link:hover { background: color-mix(in srgb, var(--invert-bg), #fff 8%); }
+.login-home-link:hover { background: var(--surface); }
 
 .login-stage {
   display: grid;
@@ -989,7 +996,7 @@ a, button, summary, input, textarea, select {
   width: min(100%, 396px);
   padding: 34px 32px 26px;
   background: var(--surface);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--pop-shadow);
 }
@@ -999,8 +1006,8 @@ a, button, summary, input, textarea, select {
 .auth-heading h1 {
   margin: 0 0 10px;
   font-size: 24px;
-  font-weight: 760;
-  line-height: 1.12;
+  font-weight: 650;
+  line-height: 1.3;
   letter-spacing: -.03em;
 }
 
@@ -1009,6 +1016,14 @@ a, button, summary, input, textarea, select {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.7;
+}
+
+.auth-start-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .google-auth-button {
@@ -1481,7 +1496,7 @@ a, button, summary, input, textarea, select {
   *:not(.auth-spinner), *::before, *::after {
     scroll-behavior: auto !important;
     animation: none !important;
-    transition-duration: .01ms !important;
+    transition: none !important;
   }
   .consent-modal::backdrop { animation: none !important; }
 }
@@ -2611,14 +2626,12 @@ button:active,
   border-radius: 2px;
   background: var(--status);
   height: calc(3px + var(--level, 0) * 13px * var(--w, 1));
-  animation: bar-sway 1.3s ease-in-out infinite;
 }
-.mic-meter i:nth-child(1) { --w: .55; animation-delay: 0s; }
-.mic-meter i:nth-child(2) { --w: .9; animation-delay: .18s; }
-.mic-meter i:nth-child(3) { --w: 1; animation-delay: .32s; }
-.mic-meter i:nth-child(4) { --w: .8; animation-delay: .12s; }
-.mic-meter i:nth-child(5) { --w: .6; animation-delay: .26s; }
-@keyframes bar-sway { 50% { transform: scaleY(.72); } }
+.mic-meter i:nth-child(1) { --w: .55; }
+.mic-meter i:nth-child(2) { --w: .9; }
+.mic-meter i:nth-child(3) { --w: 1; }
+.mic-meter i:nth-child(4) { --w: .8; }
+.mic-meter i:nth-child(5) { --w: .6; }
 /* 녹음 중엔 바가 상태를 말한다. 옆의 정적인 점은 중복이라 숨긴다. */
 .session-state:has(.mic-meter) .state-dot { display: none; }
 
@@ -3336,4 +3349,31 @@ button:active,
   color: var(--signal-dark);
   font-size: 11.5px;
   font-weight: 700;
+}
+
+
+/* Approved folded-L symbol: the alpha mask follows each surface's theme. */
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  white-space: nowrap;
+}
+/* Account for the PNG's transparent inset when aligning it with the lettering. */
+.brand-lockup > .lecue-symbol {
+  width: 1.15em;
+  height: 1.15em;
+  transform: translate(.08em, -.08em);
+}
+.lecue-symbol {
+  display: inline-block;
+  width: 1.5em;
+  height: 1.5em;
+  flex: 0 0 auto;
+  vertical-align: middle;
+  color: inherit !important;
+  margin: 0 !important;
+  background-color: currentColor;
+  -webkit-mask: url("/brand/lecue-symbol-b.png") center / contain no-repeat;
+  mask: url("/brand/lecue-symbol-b.png") center / contain no-repeat;
 }

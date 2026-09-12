@@ -13,40 +13,45 @@
 .heading h1 { margin:15px 0 20px; font-size:clamp(30px,4.5vw,46px); font-weight:650; letter-spacing:-1.6px; line-height:1.3; }
 .heading p { margin:0; color:var(--muted); line-height:1.8; font-size:15px; text-wrap:balance; }
 .notice { background:var(--soft-blue); padding:13px 18px; border-radius:7px; font-size:13px; line-height:1.7; text-align:center; }
-.account { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:18px 0; margin:12px 0; font-size:14px; }
-.account>div { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
-.account small { color:var(--muted); font-size:11px; }
+.account { padding:24px; margin:20px 0 24px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.account .accountActions { display:flex; flex-wrap:wrap; gap:12px 22px; margin-top:16px; border-top:1px solid var(--line); padding-top:8px; }
+.activePlan { margin:0 0 24px; padding:14px 16px; background:var(--soft-blue); border-radius:7px; font-size:13px; line-height:1.8; }
+.topupLogin { margin:0 0 24px; font-size:14px; line-height:1.8; }
+.topupLogin a { display:inline-flex; align-items:center; gap:6px; color:var(--signal); text-decoration:underline; text-underline-offset:3px; }
 .account button,.trial>a,.feedback a,.feedback button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:44px; padding:8px 0; border:0; background:none; color:var(--signal); font-size:13px; cursor:pointer; }
 .detail { font-size:13px; color:var(--muted); line-height:1.7; }
+.nextGrant { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 10px; margin:-4px 0 20px; font-size:13px; line-height:1.7; color:var(--muted); }
+.nextGrant span { color:var(--signal); font-variant-numeric:tabular-nums; }
+.creditValidity { max-width:760px; margin:0 auto 22px; font-size:14px; line-height:1.7; text-align:center; text-wrap:balance; }
 .plans { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
-.plan { display:flex; flex-direction:column; min-width:0; background:var(--surface); border:1px solid var(--line-strong); border-radius:10px; padding:26px 22px 22px; }
+.plan { display:grid; grid-row:span 5; grid-template-rows:subgrid; row-gap:0; min-width:0; background:var(--surface); border:1px solid var(--line-strong); border-radius:10px; padding:26px 22px 22px; }
 .featured { border-color:color-mix(in srgb,var(--signal) 50%,var(--line)); background:color-mix(in srgb,var(--signal) 4%,var(--surface)); }
-/* 플랜 이름 옆 배지. 예전 요금표의 '가장 많이 선택' 문법 그대로. */
+/* Keep plan recommendations separate from the price. */
 .badge { padding:4px 9px; border-radius:999px; background:var(--accent); color:var(--on-signal); font-size:10.5px; font-weight:650; white-space:nowrap; }
-.priceBlock { margin:22px 0 18px; }
-/* 취소선 예정가 + 할인율 배지. 실제 청구액보다 작게, 위에. */
-.compare { display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin:0 0 4px; font-size:11px; color:var(--muted); }
-.compare>span { flex-basis:100%; }
-.compare del { font-size:13px; font-weight:550; text-decoration-color:var(--accent); text-decoration-thickness:1.5px; }
-.compare b { padding:2px 7px; border-radius:6px; background:color-mix(in srgb,var(--accent) 22%,var(--surface)); color:var(--signal-dark); font-size:11px; font-weight:700; }
-.perMonth { margin:2px 0 0; font-size:12px; color:var(--muted); }
-.promoNote { margin:18px auto 0; max-width:680px; text-align:center; font-size:11px; line-height:1.7; color:var(--muted); }
+.priceBlock { display:flex; flex-direction:column; margin:22px 0 0; min-height:148px; }
+.comparison { display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 8px; min-height:36px; margin:0 0 8px; font-size:11px; line-height:1.5; color:var(--muted); }
+.comparisonNote { margin:16px 0 0; text-align:center; font-size:11px; line-height:1.7; color:var(--muted); }
+.comparison s { font-size:14px; font-variant-numeric:tabular-nums; text-decoration-thickness:1px; }
+.priceBlock:not(:has(.comparison)) { padding-top:44px; }
+.priceStatus { min-height:26px; margin:0 0 20px; color:var(--muted); text-align:center; font-size:12px; line-height:1.7; }
+.priceStatus button { color:var(--signal); background:none; border:0; padding:8px; min-height:44px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.currency { font-size:11px; font-weight:500; color:var(--muted); letter-spacing:0; }
+.savings { margin:10px 0 0; color:var(--signal); font-size:11px; line-height:1.6; }
 .selected { outline:2px solid var(--signal); outline-offset:3px; }
 /* 배지가 둘째 줄로 내려가도 네 카드의 가격이 같은 높이에서 시작한다. */
-.planName { display:flex; align-items:baseline; align-content:flex-start; flex-wrap:wrap; gap:8px 12px; min-height:62px; }
+.planName { display:flex; align-items:baseline; align-content:flex-start; flex-wrap:wrap; gap:8px 12px; min-height:72px; }
 .planName h2 { margin:0; font-size:23px; font-weight:600; letter-spacing:-.6px; }
-.planName>span { color:var(--muted); font-size:12px; }
-.price { margin:0; font-size:31px; font-weight:600; letter-spacing:-1.2px; font-variant-numeric:tabular-nums; line-height:1.4; }
-.price>span { margin-left:8px; font-size:13px; color:var(--muted); font-weight:400; letter-spacing:0; white-space:nowrap; }
+.planName>span { flex-basis:100%; order:1; color:var(--muted); font-size:12px; }
+.price { display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 7px; margin:0; font-size:31px; font-weight:600; letter-spacing:-1.2px; font-variant-numeric:tabular-nums; line-height:1.4; }
+.price>span { flex-basis:100%; font-size:12px; line-height:1.6; color:var(--muted); font-weight:400; letter-spacing:0; }
 .allowance { padding:22px 0; border-block:1px solid var(--line); }
-.allowance strong { font-size:22px; font-weight:550; letter-spacing:-.4px; }
-.allowance strong span { font-size:15px; color:var(--muted); font-weight:400; }
-.allowance p { font-size:13px; color:var(--muted); line-height:1.7; margin:8px 0 0; }
-.renewal { font-size:12px; line-height:1.8; margin:19px 0; min-height:43px; }
+.allowance strong { display:block; font-size:33px; line-height:1.25; font-weight:600; letter-spacing:-.8px; font-variant-numeric:tabular-nums; }
+.allowance strong span { display:inline; margin-left:8px; font-size:22px; color:var(--ink); font-weight:500; letter-spacing:0; }
+.allowance p { font-size:12px; color:var(--muted); line-height:1.7; margin:10px 0 0; }
+.renewal { font-size:12px; line-height:1.8; margin:15px 0 19px; min-height:43px; white-space:pre-line; }
 .page .choose { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:50px; padding:13px 17px; border-radius:6px; border:1px solid var(--signal); background:var(--signal); color:var(--on-signal); font-size:14px; text-align:left; margin-top:auto; }
 .choose:hover { filter:brightness(.95); }
 .choose:disabled { opacity:.55; cursor:default; }
-.expiry { font-size:11px; color:var(--muted); margin:12px 0 0; line-height:1.7; }
 .feedback { display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; font-size:14px; line-height:1.8; margin-top:20px; }
 .feedback:empty { display:none; }
 .paymentNote { display:flex; align-items:flex-start; justify-content:center; gap:7px; margin:22px auto 0; font-size:11px; color:var(--muted); line-height:1.8; max-width:670px; text-wrap:pretty; }
@@ -64,11 +69,29 @@
 .faq details { border-bottom:1px solid var(--line); }
 .faq summary { cursor:pointer; padding:22px 0; font-size:14px; line-height:1.6; }
 .faq details p { font-size:13px; line-height:1.9; color:var(--muted); max-width:740px; margin:0 0 24px; }
+.faq details p+p { margin-top:-12px; }
 .faq a { text-decoration:underline; text-underline-offset:3px; color:var(--signal); }
 .footer { padding:24px 0; border-top:1px solid var(--line); font-size:11px; color:var(--muted); flex-wrap:wrap; }
+.topupDialog { width:min(440px,calc(100vw - 40px)); max-height:calc(100dvh - 40px); margin:auto; padding:24px; border:1px solid var(--line-strong); border-radius:12px; background:var(--surface); color:var(--ink); overflow-y:auto; }
+.topupDialog::backdrop { background:rgb(0 0 0 / .4); }
+.dialogHeader { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.dialogHeader h2 { margin:0; font-size:22px; letter-spacing:-.5px; }
+.dialogClose { display:grid; place-items:center; flex-shrink:0; width:44px; height:44px; padding:0; border:0; border-radius:6px; background:none; color:var(--muted); cursor:pointer; }
+.dialogClose:hover { background:var(--tint); color:var(--ink); }
+.dialogDescription { margin:8px 0 24px; font-size:14px; color:var(--muted); line-height:1.8; }
+.topupAmount { padding:20px 0; margin-bottom:20px; border-block:1px solid var(--line); }
+.topupAmount strong { font-size:30px; font-weight:600; font-variant-numeric:tabular-nums; }
+.topupAmount strong span { font-size:16px; font-weight:500; }
+.topupAmount p,.dialogPolicy { font-size:13px; line-height:1.8; color:var(--muted); }
+.topupAmount p { margin:10px 0 0; }
+.dialogPolicy { margin:18px 0 24px; }
+.topupDialog .choose { width:100%; }
+.dialogPayment { margin:14px 0 0; font-size:11px; color:var(--muted); line-height:1.8; }
+.dialogPriceError { font-size:13px; line-height:1.8; }
+.dialogPriceError button { padding:8px; min-height:44px; background:none; border:0; color:var(--signal); text-decoration:underline; cursor:pointer; }
 .page :is(h1,h2,p,li) { overflow-wrap:break-word; word-break:normal; }
 .page:lang(ko) :is(h1,h2,p,li) { word-break:keep-all; }
 .page :is(a,button,summary):focus-visible { outline:2px solid var(--signal); outline-offset:4px; }
 @media(max-width:1000px) { .plans { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media(max-width:620px) { .header,.footer,.main { width:calc(100% - 40px); } .header { min-height:72px; } .main { padding-top:38px; } .heading { text-align:left; margin-bottom:26px; } .heading h1 { letter-spacing:-1px; } .heading p { text-wrap:initial; font-size:14px; } .plans { grid-template-columns:1fr; gap:16px; } .plan { padding:24px; } .price { font-size:33px; } .renewal { min-height:0; } .account { align-items:flex-start; gap:0; } .account small { width:100%; } .included { margin-top:38px; } .included ul { flex-direction:column; } .trial { flex-direction:column; align-items:flex-start; gap:10px; } .header nav,.footer nav { gap:16px; } .paymentNote { justify-content:flex-start; } }
+@media(max-width:620px) { .header,.footer,.main { width:calc(100% - 40px); } .header { min-height:72px; } .main { padding-top:38px; } .heading { text-align:left; margin-bottom:26px; } .heading h1 { letter-spacing:-1px; } .heading p { text-wrap:initial; font-size:14px; } .plans { grid-template-columns:1fr; gap:16px; } .plan { padding:24px; } .planName { min-height:0; margin-bottom:18px; } .priceBlock { min-height:0; } .priceBlock:not(:has(.comparison)) { padding-top:0; } .price { font-size:33px; } .renewal { min-height:0; margin-top:20px; } .account { padding:20px; } .included { margin-top:38px; } .included ul { flex-direction:column; } .trial { flex-direction:column; align-items:flex-start; gap:10px; } .header nav,.footer nav { gap:16px; } .paymentNote { justify-content:flex-start; } }
 @media(prefers-reduced-motion:reduce) { .page * { transition:none!important; animation:none!important; } }

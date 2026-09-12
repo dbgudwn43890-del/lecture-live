@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import LegalPage from "../legal-page";
+import { formatLegalDate, PRIVACY_POLICY_DATES } from "../lib/legal-date";
 import styles from "../legal.module.css";
 
 export const metadata: Metadata = {
@@ -12,6 +13,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="개인정보처리방침"
+      effectiveDate={PRIVACY_POLICY_DATES.effective}
       description="Lecue는 계정 생성, 강의 기록, 질문 답변과 결제에 필요한 정보만 처리하며 강의 내용을 맞춤 광고에 사용하지 않습니다."
     >
       <section>
@@ -134,6 +136,13 @@ export default function PrivacyPage() {
           <p>개인정보 관련 상담이나 분쟁조정은 개인정보 포털, 개인정보침해 신고센터(국번 없이 118), 개인정보분쟁조정위원회(1833-6972)에 문의할 수 있습니다.</p>
           <p>이 방침을 변경하면 시행 7일 전부터 알립니다. 이용자 권리에 중대한 변경은 최소 30일 전에 알리고 법령상 필요한 경우 별도 동의를 받습니다.</p>
         </div>
+      </section>
+      <section>
+        <h2>11. 변경 이력</h2>
+        <div><ul>
+          <li><time dateTime={PRIVACY_POLICY_DATES.effective}>{formatLegalDate(PRIVACY_POLICY_DATES.effective, "ko")}</time>: 개인정보처리방침 시행.</li>
+          <li><time dateTime={PRIVACY_POLICY_DATES.dateClarified}>{formatLegalDate(PRIVACY_POLICY_DATES.dateClarified, "ko")}</time>: 시행일을 확정된 날짜로 표시하고 변경 이력을 추가했습니다. 개인정보 처리 기준의 변경은 없습니다.</li>
+        </ul></div>
       </section>
     </LegalPage>
   );

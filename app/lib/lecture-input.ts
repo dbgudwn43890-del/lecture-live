@@ -23,6 +23,7 @@ export type LectureInputFailure =
   | "wrong-surface" // 창·전체 화면을 골랐다
   | "mic-blocked"
   | "mic-missing"
+  | "inactive"    // 활성 문서/사용자 클릭이 없어 브라우저가 선택창을 열 수 없음
   | "failed";
 
 export class LectureInputError extends Error {
@@ -35,7 +36,12 @@ export class LectureInputError extends Error {
 }
 
 // lib.dom에 없는 Chromium 힌트만 좁게 확장한다. 강제 선택이 아니라 힌트다.
+type TabCaptureController = {
+  setFocusBehavior(behavior: "no-focus-change"): void;
+};
+
 type TabCaptureOptions = DisplayMediaStreamOptions & {
+  controller?: TabCaptureController;
   selfBrowserSurface?: "include" | "exclude";
   systemAudio?: "include" | "exclude";
   monitorTypeSurfaces?: "include" | "exclude";
@@ -50,6 +56,22 @@ const TAB_CAPTURE_OPTIONS: TabCaptureOptions = {
   monitorTypeSurfaces: "exclude",
   surfaceSwitching: "exclude",
 };
+
+/** 공유 선택 뒤 강의실에 머문다. 미지원·실패 시에도 원래 공유 흐름은 그대로 진행한다. */
+function tabCaptureOptions(): TabCaptureOptions {
+  try {
+    const Controller = (globalThis as {
+      CaptureController?: { new(): TabCaptureController; prototype: TabCaptureController };
+    }).CaptureController;
+    if (typeof Controller === "function" && typeof Controller.prototype?.setFocusBehavior === "function") {
+      // 컨트롤러는 캡처마다 새로 만들어야 한다. 포커스 힌트는 선택창을 열기 전에 동기로 설정한다.
+      const controller = new Controller();
+      controller.setFocusBehavior("no-focus-change");
+      return { ...TAB_CAPTURE_OPTIONS, controller };
+    }
+  } catch { /* 선택적 포커스 힌트 때문에 탭 공유를 막지 않는다. */ }
+  return TAB_CAPTURE_OPTIONS;
+}
 
 type Devices = Pick<MediaDevices, "getUserMedia" | "getDisplayMedia">;
 
@@ -109,8 +131,8 @@ export function wrapCapture(
 }
 
 /**
- * 반드시 클릭 핸들러의 동기 구간에서 호출한다. 내부에서 getDisplayMedia를 첫
- * 문장으로 부르므로, 호출 전에 await를 두면 사용자 활성화가 사라진다.
+ * 반드시 클릭 핸들러의 동기 구간에서 호출한다. getDisplayMedia까지 비동기 대기
+ * 없이 진행한다. 호출 전에 await를 두면 사용자 활성화가 사라질 수 있다.
  */
 export function acquireLectureInput(
   source: LectureInputSource,
@@ -120,7 +142,7 @@ export function acquireLectureInput(
   const devices = options.devices ?? globalThis.navigator?.mediaDevices;
   if (source === "browser-tab") {
     if (!supportsTabCapture(devices)) return Promise.reject(new LectureInputError("unsupported"));
-    return devices!.getDisplayMedia(TAB_CAPTURE_OPTIONS)
+    return devices!.getDisplayMedia(tabCaptureOptions())
       .then((stream) => wrapCapture(source, stream, options.createStream), (caught) => {
         throw new LectureInputError(cancelCode(caught), caught);
       });
@@ -132,8 +154,57 @@ export function acquireLectureInput(
     });
 }
 
+/**
+ * 선택창은 호출자가 클릭 중에 이미 열었다. 동의 저장까지 성공해야 입력 소유권을
+ * 넘긴다. 실패·이탈 시 선택창이 늦게 돌려주는 트랙도 놓으며, PCM은 시작하지 않는다.
+ */
+export function waitForConsentedInput(
+  acquiring: Promise<LectureInput>,
+  consent: Promise<void>,
+  signal: AbortSignal,
+): Promise<LectureInput> {
+  return new Promise((resolve, reject) => {
+    let input: LectureInput | null = null;
+    let consentReady = false;
+    let settled = false;
+
+    function fail(reason: unknown) {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      input?.dispose();
+      reject(reason);
+    }
+    function abort() { fail(signal.reason ?? new DOMException("Aborted", "AbortError")); }
+    function finish() {
+      if (settled || !input || !consentReady) return;
+      if (signal.aborted) { abort(); return; }
+      if (input.disposed
+        || !input.audioStream.getAudioTracks().some((track) => track.readyState === "live")
+        || (input.source === "browser-tab" && input.captureStream.getVideoTracks()[0]?.readyState !== "live")) {
+        fail(new LectureInputError("failed"));
+        return;
+      }
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      resolve(input);
+    }
+
+    signal.addEventListener("abort", abort, { once: true });
+    // Both promises get rejection handlers immediately, including an already-aborted call.
+    acquiring.then((value) => {
+      if (settled) { value.dispose(); return; }
+      input = value;
+      finish();
+    }, fail);
+    consent.then(() => { consentReady = true; finish(); }, fail);
+    if (signal.aborted) abort();
+  });
+}
+
 function cancelCode(caught: unknown): LectureInputFailure {
   const name = caught instanceof Error ? caught.name : "";
+  if (name === "InvalidStateError") return "inactive";
   if (name === "NotAllowedError" || name === "AbortError" || name === "SecurityError") return "cancelled";
   if (name === "NotSupportedError" || name === "TypeError") return "unsupported";
   return "failed";

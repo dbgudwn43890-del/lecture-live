@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { hasVerifiedEmail } from "../../lib/verified-email";
 import OpenAI from "openai";
 
 import { isUuid } from "../../lib/billing";
@@ -6,6 +7,8 @@ import { chunkTranscript, type TranscriptPart } from "../../lib/chunk-transcript
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createAdminClient } from "../../lib/supabase/admin";
 import { createClient } from "../../lib/supabase/server";
+import { reserveLectureIndex, finishLectureIndex } from "../../lib/lecture-index-budget";
+import { drainStorageDeletions } from "../../lib/storage-cleanup";
 
 export const runtime = "nodejs";
 
@@ -49,6 +52,12 @@ async function fetchAllSegments(
     if (!data || data.length < to - from + 1) break; // fewer rows than requested: reached the end
     from += SEGMENT_PAGE_SIZE;
   }
+  if (rows.length === maxRows) {
+    const { data, error } = await supabase.from("transcript_segments").select("client_id")
+      .eq("session_id", sessionId).order("start_ms").order("client_id").range(maxRows, maxRows);
+    if (error) return { error };
+    if (data?.length) return { error: { code: "TRANSCRIPT_LIMIT" } };
+  }
   return { rows };
 }
 
@@ -65,15 +74,22 @@ type IndexInput = { sessionId: string; classroomId: string | null; userId: strin
 // fails to embed still ends up "completed" (the caller already committed
 // that); it just stays un-searchable until a later attempt indexes it.
 async function indexLectureChunks(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
   sessions: IndexInput[],
 ): Promise<Map<string, boolean>> {
   const indexed = new Map<string, boolean>();
   if (!process.env.OPENAI_API_KEY) return indexed;
 
-  const batches = sessions
-    .map((session) => ({ session, chunks: chunkTranscript(session.segments) }))
-    .filter((entry) => entry.chunks.length > 0);
+  const batches: Array<{ session: IndexInput; chunks: TranscriptPart[]; token: string }> = [];
+  for (const session of sessions) {
+    const chunks = chunkTranscript(session.segments);
+    if (!chunks.length) continue;
+    const token = await reserveLectureIndex(admin, {
+      sessionId: session.sessionId, userId: session.userId,
+      characters: chunks.reduce((sum, chunk) => sum + chunk.text.length, 0),
+    });
+    if (token) batches.push({ session, chunks, token });
+  }
   if (!batches.length) return indexed;
 
   // ponytail: one embeddings.create call for the whole batch instead of one
@@ -81,7 +97,7 @@ async function indexLectureChunks(
   // and issuing that many sequential OpenAI calls would make one reconcile
   // request take minutes. A single call scales with total transcript size,
   // not with session count.
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60_000, maxRetries: 1 });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60_000, maxRetries: 0 });
   let embeddings: Awaited<ReturnType<typeof openai.embeddings.create>>;
   try {
     embeddings = await openai.embeddings.create({
@@ -93,8 +109,13 @@ async function indexLectureChunks(
     // lecture's vector. Sort by the index the API echoes back rather than
     // trusting array position.
     embeddings.data = [...embeddings.data].sort((a, b) => a.index - b.index);
+    if (embeddings.data.length !== batches.reduce((sum, entry) => sum + entry.chunks.length, 0)
+      || embeddings.data.some((row, index) => row.index !== index || !Array.isArray(row.embedding))) {
+      throw new Error("Invalid lecture embeddings");
+    }
   } catch (error) {
     console.error("Lecture indexing embedding call failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+    await Promise.all(batches.map(({ session, token }) => finishLectureIndex(admin, session.sessionId, token, false)));
     return indexed;
   }
 
@@ -112,22 +133,50 @@ async function indexLectureChunks(
     }));
     offset += chunks.length;
     try {
-      await supabase.from("lecture_chunks").delete().eq("session_id", session.sessionId);
-      const { error } = await supabase.from("lecture_chunks").insert(rows);
+      // Replace only after every vector exists. A failed insert or a recovered
+      // tail rolls back the replacement and retains the previous usable index.
+      const { data: replaced, error } = await admin.rpc("replace_lecture_index_service", {
+        p_session_id: session.sessionId, p_user_id: session.userId,
+        p_claim_token: entry.token, p_segment_count: session.segments.length,
+        p_chunks: rows.map((row) => ({ ...row, embedding: JSON.stringify(row.embedding) })),
+      });
       if (error) throw error;
-      indexed.set(session.sessionId, true);
+      indexed.set(session.sessionId, replaced === true);
     } catch (error) {
       console.error("Lecture indexing save failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+      await finishLectureIndex(admin, session.sessionId, entry.token, false);
     }
   }
   return indexed;
 }
 
+function scheduleLectureIndex(admin: NonNullable<ReturnType<typeof createAdminClient>>, userId: string, sessionIds: string[]) {
+  if (!sessionIds.length) return;
+  after(async () => {
+    for (const sessionId of sessionIds) {
+      try {
+        // Rotate failed/limited work so one old job cannot starve newer saves.
+        await admin.from("lecture_index_queue").update({ updated_at: new Date().toISOString() })
+          .eq("session_id", sessionId).eq("user_id", userId).eq("state", "pending");
+        const { data: session, error } = await admin.from("lecture_sessions").select("id,classroom_id,status")
+          .eq("id", sessionId).eq("user_id", userId).maybeSingle();
+        if (error || !session || session.status !== "completed") continue;
+        const { rows, error: readError } = await fetchAllSegments(admin, sessionId, 50_000);
+        if (readError || !rows.length) continue;
+        await indexLectureChunks(admin, [{ sessionId, userId, classroomId: session.classroom_id,
+          segments: rows.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })) }]);
+      } catch (error) {
+        console.error("Deferred lecture indexing failed", error && typeof error === "object" && "code" in error ? error.code : "unknown");
+      }
+    }
+  });
+}
+
 async function context(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   const isEnglish = request.headers.get("x-site-locale") === "en";
-  if (!user) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
+  if (authError || !hasVerifiedEmail(user)) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
   // Every verb goes through here, so one ceiling covers them all. A lecture
   // saves a segment every few seconds, so the limit is loose — it exists to
   // bound a loop, not to pace a recording.
@@ -149,9 +198,9 @@ function validId(value: unknown): value is string {
 function validSegment(value: unknown): value is SegmentBody & { id: string } {
   if (!value || typeof value !== "object") return false;
   const segment = value as Record<string, unknown>;
-  return typeof segment.id === "string" && segment.id.length <= 2_200
-    && typeof segment.startMs === "number" && segment.startMs >= 0 && segment.startMs <= 10_800_000
-    && typeof segment.endMs === "number" && segment.endMs >= segment.startMs && segment.endMs <= 10_800_000
+  return typeof segment.id === "string" && segment.id.length > 0 && segment.id.length <= 2_200
+    && typeof segment.startMs === "number" && Number.isFinite(segment.startMs) && segment.startMs >= 0 && segment.startMs <= 10_800_000
+    && typeof segment.endMs === "number" && Number.isFinite(segment.endMs) && segment.endMs >= segment.startMs && segment.endMs <= 10_800_000
     && typeof segment.text === "string" && segment.text.trim().length > 0 && segment.text.length <= 2_000;
 }
 
@@ -276,168 +325,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ session: data }, { status: 201 });
   }
 
-  // A refresh or crash mid-lecture used to leave the row in "recording"
-  // forever: the library showed it as live and the workspace opened it at
-  // 0:00. Only active recording periods past the 3-hour cap are closed — a session younger
-  // than that may be recording right now in another tab, and completing it
-  // would make every further audio chunk fail with LECTURE_NOT_RECORDING.
+  // Opening history never mutates a live connection. Recovery checks the
+  // relay/ticket under the same account lock as relay open and heartbeat.
+  if (body.action === "recover" && validId(body.sessionId)) {
+    const admin = createAdminClient();
+    if (!admin) return NextResponse.json({ error: current.isEnglish ? "Could not check this recording. Try again." : "녹음 상태를 확인하지 못했습니다. 다시 시도해 주세요." }, { status: 503 });
+    const { data, error } = await admin.rpc("recover_lecture_session_service", { p_session_id: body.sessionId, p_user_id: current.userId });
+    if (error || !data || data.error) return NextResponse.json({ error: current.isEnglish ? "Could not recover this lecture. Try again." : "수업을 복구하지 못했습니다. 다시 시도해 주세요." }, { status: data?.error === "SESSION_NOT_FOUND" ? 404 : 503 });
+    return NextResponse.json(data);
+  }
+
   if (body.action === "reconcile") {
-    // ponytail: batch size this reconcile call closes in one request. If we
-    // fill it, more stale sessions likely remain — say so in the response
-    // instead of quietly leaving them for a caller that never checks again.
-    const MAX_RECONCILE_SESSIONS = 20;
-    // ponytail: cap on total chunks embedded per reconcile call. Batching all
-    // sessions into one OpenAI call (see indexLectureChunks) keeps this fast
-    // in the normal case, but a pile of stale 3-hour lectures could still add
-    // up to a huge combined input. Sessions beyond the cap stay "completed"
-    // without chunks — same outcome as the bug this fixes for those specific
-    // sessions — but the response reports it instead of hiding it, so this is
-    // a rare, visible edge case rather than a silent, permanent one.
-    const MAX_RECONCILE_CHUNKS = 1_000;
-    // ponytail: how far back to look for a completed lecture that never got
-    // indexed. A window rather than "all of them" because a lecture whose
-    // transcript is genuinely empty produces no chunks and would otherwise be
-    // re-checked on every page load forever. A week is long enough to cover a
-    // deferred batch or an OpenAI outage and short enough to stop retrying.
-    const INDEX_CATCH_UP_MS = 7 * 86_400_000;
-
-    // Completion writes billing columns, which only the service key may touch
-    // now — every write below is scoped to rows the RLS-bound select returned.
-    const reconcileAdmin = createAdminClient();
-    if (!reconcileAdmin) {
-      console.error("Reconcile has no admin client");
-      return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 503 });
-    }
+    const admin = createAdminClient();
+    if (!admin) return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 503 });
     const abandonedBefore = new Date(Date.now() - MAX_LECTURE_MS).toISOString();
-    const { data: stale, error } = await current.supabase
-      .from("lecture_sessions")
-      .select("id,classroom_id,user_id")
-      // recording_started_at이 NULL인 두 부류 — 콜백이 끝내 오지 않은 업로드
-      // 세션, 그리고 일시정지한 채 버려진 세션 — 는 lt만으로는 영원히 안 잡힌다.
-      // 그때는 세션 생성 시각으로 대신 판정한다.
-      .in("status", ["recording", "paused"])
-      .or(`recording_started_at.lt.${abandonedBefore},and(recording_started_at.is.null,started_at.lt.${abandonedBefore})`)
-      .limit(MAX_RECONCILE_SESSIONS);
-    if (error) {
-      console.error("Stale lecture lookup failed", error.code);
-      return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 500 });
-    }
-
-    const toIndex: IndexInput[] = [];
+    const { data: stale, error } = await current.supabase.from("lecture_sessions")
+      .select("id").in("status", ["recording", "paused"])
+      .or(`recording_started_at.lt.${abandonedBefore},and(recording_started_at.is.null,started_at.lt.${abandonedBefore})`).limit(20);
+    if (error) return NextResponse.json({ error: current.isEnglish ? "Could not check earlier lectures." : "지난 수업을 확인하지 못했습니다." }, { status: 503 });
+    let reconciled = 0;
     for (const session of stale ?? []) {
-      // The client never sends segments for a session it didn't close itself,
-      // so read the transcript straight from the table — paginated, because a
-      // 3-hour lecture has far more than PostgREST's 1,000-row default cap.
-      const { rows: segments, error: segmentsError } = await fetchAllSegments(current.supabase, session.id, 5_000);
-      if (segmentsError) console.error("Reconcile transcript read failed", segmentsError.code);
-
-      const durationSeconds = segments?.length ? Math.round(Math.max(...segments.map((row) => row.end_ms)) / 1_000) : 0;
-      await reconcileAdmin
-        .from("lecture_sessions")
-        .update({
-          status: "completed",
-          ended_at: new Date().toISOString(),
-          duration_seconds: durationSeconds,
-          recorded_ms: Math.min(MAX_LECTURE_MS, durationSeconds * 1_000),
-          recording_started_at: null,
-        })
-        .eq("id", session.id)
-        .eq("user_id", current.userId);
-
-      if (segments?.length) {
-        toIndex.push({
-          sessionId: session.id,
-          classroomId: session.classroom_id,
-          userId: session.user_id,
-          segments: segments.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })),
-        });
-      }
+      const { data: saved, error: saveError } = await admin.rpc("save_lecture_final_service", {
+        p_session_id: session.id, p_user_id: current.userId, p_segments: [], p_complete: true,
+      });
+      if (!saveError && saved?.completed) reconciled++;
     }
-
-    // A completed lecture with no chunks never comes back through the stale
-    // branch above — its status is no longer "recording" — so an indexing run
-    // that failed or was deferred left it permanently unsearchable. Pick those
-    // up here instead.
-    const catchUpAfter = new Date(Date.now() - INDEX_CATCH_UP_MS).toISOString();
-    const { data: recent, error: recentError } = await current.supabase
-      .from("lecture_sessions")
-      .select("id,classroom_id,user_id")
-      .eq("status", "completed")
-      .gt("ended_at", catchUpAfter)
-      .gt("duration_seconds", 0)
-      .order("ended_at", { ascending: false })
-      .limit(MAX_RECONCILE_SESSIONS);
-    if (recentError) console.error("Indexing catch-up lookup failed", recentError.code);
-
-    const closedNow = new Set(toIndex.map((entry) => entry.sessionId));
-    const candidates = (recent ?? []).filter((session) => !closedNow.has(session.id));
-    if (candidates.length) {
-      // Check for chunks before reading transcripts: the point of the catch-up
-      // is the handful with none, and reading every recent lecture's segments
-      // to discover that would cost far more than it saves.
-      const { data: chunked } = await current.supabase
-        .from("lecture_chunks")
-        .select("session_id")
-        .in("session_id", candidates.map((session) => session.id));
-      const hasChunks = new Set((chunked ?? []).map((row) => row.session_id));
-      for (const session of candidates) {
-        if (hasChunks.has(session.id)) continue;
-        const { rows: segments, error: segmentsError } = await fetchAllSegments(current.supabase, session.id, 5_000);
-        if (segmentsError) {
-          console.error("Catch-up transcript read failed", segmentsError.code);
-          continue;
-        }
-        if (segments?.length) {
-          toIndex.push({
-            sessionId: session.id,
-            classroomId: session.classroom_id,
-            userId: session.user_id,
-            segments: segments.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })),
-          });
-        }
-      }
-    }
-
-    let indexedCount = 0;
-    let indexingDeferred = 0;
-    if (toIndex.length) {
-      // Don't re-embed a session that somehow already has chunks (e.g. a
-      // concurrent reconcile call raced this one for the same stale session).
-      const { data: existingChunks } = await current.supabase
-        .from("lecture_chunks")
-        .select("session_id")
-        .in("session_id", toIndex.map((entry) => entry.sessionId));
-      const alreadyIndexed = new Set((existingChunks ?? []).map((row) => row.session_id));
-      const pending = toIndex.filter((entry) => !alreadyIndexed.has(entry.sessionId));
-
-      const batch: IndexInput[] = [];
-      let usedChunks = 0;
-      for (const entry of pending) {
-        const chunkCount = chunkTranscript(entry.segments).length;
-        if (batch.length && usedChunks + chunkCount > MAX_RECONCILE_CHUNKS) {
-          indexingDeferred += 1;
-          continue;
-        }
-        batch.push(entry);
-        usedChunks += chunkCount;
-      }
-      if (indexingDeferred > 0) console.warn("Reconcile deferred indexing for", indexingDeferred, "session(s) past the chunk cap");
-
-      if (batch.length) {
-        const indexResult = await indexLectureChunks(current.supabase, batch);
-        indexedCount = [...indexResult.values()].filter(Boolean).length;
-      }
-    }
-
-    const reconciled = stale?.length ?? 0;
-    return NextResponse.json({
-      reconciled,
-      indexed: indexedCount,
-      indexingDeferred,
-      // Batch was full: there may be more stale sessions this call didn't
-      // reach. The client can use this to decide whether to call again.
-      hasMore: reconciled === MAX_RECONCILE_SESSIONS,
-    });
+    // Durable pending jobs have no recency cut-off. A seven-day provider outage
+    // or partially existing chunks must not make a lecture permanently vanish.
+    const { data: pending, error: queueError } = await admin.from("lecture_index_queue")
+      .select("session_id").eq("user_id", current.userId).eq("state", "pending").order("updated_at").limit(20);
+    if (queueError) return NextResponse.json({ error: current.isEnglish ? "Could not check search preparation. Try again." : "검색 준비 상태를 확인하지 못했습니다. 다시 시도해 주세요." }, { status: 503 });
+    const pendingIds = (pending ?? []).map((job) => job.session_id as string);
+    scheduleLectureIndex(admin, current.userId, pendingIds);
+    return NextResponse.json({ reconciled, indexed: 0, indexingDeferred: pendingIds.length, hasMore: (stale?.length ?? 0) === 20 });
   }
 
   if ((body.action === "pause" || body.action === "resume") && validId(body.sessionId)) {
@@ -457,15 +377,18 @@ export async function POST(request: Request) {
 
   if (body.action === "segment" && validId(body.sessionId) && validSegment(body.segment)) {
     const segment = body.segment;
-    // The browser holds the Deepgram socket directly, so this save is the only
-    // event the server sees on a live lecture — which makes it the only place
-    // the meter can run. The minute index comes from the session's own
-    // accumulated active time, so the client cannot supply it, and consumption is idempotent
-    // per minute, so several utterances inside one minute bill it once.
-    const [{ data: creditData, error: creditError }, { data: session }] = await Promise.all([
-      current.supabase.rpc("consume_lecture_credits_elapsed", { p_session_id: body.sessionId }),
-      current.supabase.from("lecture_sessions").select("classroom_id").eq("id", body.sessionId).maybeSingle(),
+    const segmentAdmin = createAdminClient();
+    if (!segmentAdmin) return NextResponse.json({ error: current.isEnglish ? "Could not save the transcript." : "스크립트를 저장하지 못했습니다." }, { status: 503 });
+    const [{ data: relay, error: relayError }, { data: session }] = await Promise.all([
+      segmentAdmin.from("stt_relay_sessions").select("processed_bytes,authorized_bytes").eq("session_id", body.sessionId).eq("user_id", current.userId).maybeSingle(),
+      current.supabase.from("lecture_sessions").select("classroom_id,status").eq("id", body.sessionId).maybeSingle(),
     ]);
+    if (relayError) return NextResponse.json({ error: current.isEnglish ? "Could not save the transcript." : "스크립트를 저장하지 못했습니다." }, { status: 503 });
+    // The relay already billed PCM bytes. Saving its delayed final transcript
+    // must not charge wall time again or reject the last prepaid minute at 0.
+    const { data: creditData, error: creditError } = relay
+      ? { data: [{ allowed: ["recording", "paused"].includes(session?.status) && (Number(relay.processed_bytes) > 0 || Number(relay.authorized_bytes) > 0), remaining_credits: 0 }], error: null }
+      : await current.supabase.rpc("consume_lecture_credits_elapsed", { p_session_id: body.sessionId });
     if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
     if (creditError) {
       console.error("Credit consumption failed", creditError.code);
@@ -483,13 +406,7 @@ export async function POST(request: Request) {
         credits: Number(credit?.remaining_credits ?? 0),
       }, { status: 402 });
     }
-    // 20260903010000부터 세그먼트 쓰기는 서비스 키만 가능하다(직접 PostgREST
-    // 쓰기가 과금 미터를 우회했다). 소유권은 위의 RLS-bound select가 확인했다.
-    const segmentAdmin = createAdminClient();
-    if (!segmentAdmin) {
-      console.error("Segment save has no admin client");
-      return NextResponse.json({ error: current.isEnglish ? "Could not save the transcript." : "스크립트를 저장하지 못했습니다." }, { status: 503 });
-    }
+    // Parent ownership is checked above; transcript writes remain service-only.
     const { error } = await segmentAdmin.from("transcript_segments").upsert({
       session_id: body.sessionId,
       classroom_id: session.classroom_id,
@@ -536,16 +453,11 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Check the lecture ID." : "수업 ID를 확인해 주세요." }, { status: 400 });
   }
 
-  const { data: materials } = await current.supabase
-    .from("material_documents")
-    .select("storage_path")
-    .eq("session_id", sessionId);
-  const { data: deleted, error } = await current.supabase
-    .from("lecture_sessions")
-    .delete()
-    .eq("id", sessionId)
-    .select("id")
-    .maybeSingle();
+  const admin = createAdminClient();
+  if (!admin) return NextResponse.json({ error: current.isEnglish ? "Could not delete this lecture." : "이 수업을 삭제하지 못했습니다." }, { status: 503 });
+  // Database cascade triggers enqueue audio/PDF paths before removing metadata.
+  const { data: deleted, error } = await admin.from("lecture_sessions").delete()
+    .eq("id", sessionId).eq("user_id", current.userId).select("id").maybeSingle();
   if (error) {
     console.error("Lecture delete failed", error.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not delete this lecture." : "이 수업을 삭제하지 못했습니다." }, { status: 500 });
@@ -553,11 +465,7 @@ export async function DELETE(request: Request) {
   if (!deleted) {
     return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
   }
-  const storagePaths = (materials ?? []).flatMap((material) => material.storage_path ? [material.storage_path] : []);
-  if (storagePaths.length) {
-    const { error: removeError } = await current.supabase.storage.from("materials").remove(storagePaths);
-    if (removeError) console.error("Lecture material files remove failed", removeError.message);
-  }
+  await drainStorageDeletions(admin, { userId: current.userId }).catch(() => console.error("Session cleanup deferred"));
   return NextResponse.json({ deleted: true });
 }
 
@@ -567,7 +475,9 @@ export async function PATCH(request: Request) {
 
   let body: { action?: unknown; sessionId?: unknown; classroomId?: unknown; title?: unknown; durationMs?: unknown; segments?: unknown };
   try {
-    body = await request.json() as typeof body;
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > 4_000_000) return NextResponse.json({ code: "FINAL_REQUEST_TOO_LARGE", error: current.isEnglish ? "Save the transcript in smaller batches." : "스크립트를 더 작은 묶음으로 저장해 주세요." }, { status: 413 });
+    body = JSON.parse(raw) as typeof body;
   } catch {
     return NextResponse.json({ error: current.isEnglish ? "Invalid request." : "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
@@ -602,117 +512,61 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ moved: true, classroomId });
   }
 
-  if (!validId(body.sessionId) || typeof body.durationMs !== "number" || !Array.isArray(body.segments)) {
+  if (!validId(body.sessionId) || typeof body.durationMs !== "number" || !Number.isFinite(body.durationMs)
+    || !Array.isArray(body.segments) || !body.segments.every(validSegment)
+    || new Set(body.segments.map((segment) => segment.id)).size !== body.segments.length) {
     return NextResponse.json({ error: current.isEnglish ? "Invalid lecture completion data." : "수업 종료 정보를 확인해 주세요." }, { status: 400 });
   }
-  const segments = body.segments.filter(validSegment).slice(0, 5_000);
-  const { data: session } = await current.supabase
-    .from("lecture_sessions")
-    .select("id,classroom_id,started_at,status,recorded_ms,recording_started_at")
-    .eq("id", body.sessionId)
-    .maybeSingle();
-  if (!session) return NextResponse.json({ error: current.isEnglish ? "Lecture not found." : "수업을 찾지 못했습니다." }, { status: 404 });
-  // Only a recording lecture can be completed. consume_lecture_credits already
-  // refuses anything else, but that rejection was logged and stepped over, so a
-  // completed session could be re-PATCHed forever — each replay re-embedding a
-  // fresh 5,000-segment payload on the platform key. Ending twice is a no-op.
-  if (session.status !== "recording" && session.status !== "paused") return NextResponse.json({ completed: true, indexed: false });
-
-  if (segments.length) {
-    // 세그먼트 쓰기는 서비스 키만(20260903010000). 소유권은 위 select가 확인했다.
-    const finalAdmin = createAdminClient();
-    const { error } = finalAdmin
-      ? await finalAdmin.from("transcript_segments").upsert(segments.map((segment) => ({
-        session_id: body.sessionId,
-        classroom_id: session.classroom_id,
-        user_id: current.userId,
-        client_id: segment.id,
-        start_ms: Math.round(segment.startMs),
-        end_ms: Math.round(segment.endMs),
-        text: segment.text.trim(),
-      })), { onConflict: "session_id,client_id" })
-      : { error: { code: "NO_ADMIN_CLIENT" } };
-    if (error) {
-      console.error("Final transcript save failed", error.code);
-      return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture. Please retry." : "강의 기록을 저장하지 못했습니다. 다시 시도해 주세요." }, { status: 503 });
-    }
-  }
-
-  // Derived from the session's accumulated active time, not from the client. A client
-  // reporting durationMs: 0 after a 90-minute lecture used to store 0 and skip
-  // the final credit reconciliation below.
-  const elapsedMs = Math.min(MAX_LECTURE_MS, Number(session.recorded_ms ?? 0) + (session.status === "recording"
-    ? Math.max(0, Date.now() - new Date(session.recording_started_at ?? session.started_at).getTime())
-    : 0));
-  // A start that failed before the first sample (a blocked AudioContext, a
-  // missing worklet) still lands here, and billing off started_at charged it a
-  // full lecture-minute for a lecture that recorded nothing. The transcript is
-  // counted in the database rather than taken from durationMs, so a client
-  // under-reporting a real 90-minute lecture still reconciles.
-  const [{ count: storedSegments }, { data: lastSegment }] = await Promise.all([
-    current.supabase
-      .from("transcript_segments")
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", body.sessionId),
-    current.supabase
-      .from("transcript_segments")
-      .select("end_ms")
-      .eq("session_id", body.sessionId)
-      .order("end_ms", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  const recordedSomething = segments.length > 0 || (storedSegments ?? 0) > 0;
-  // 레코더가 소리 없이 죽은 채 '기록 중'으로 흘러간 시간을 그대로 과금하지
-  // 않는다: 마지막으로 실제 받아쓴 순간(+1분 여유)까지만 과금·기록한다.
-  // 활동 시각을 알 수 없으면(조회 실패) 캡 없이 기존대로 경과 시간 과금.
-  const clientTailEndMs = segments.reduce((max, segment) => Math.max(max, segment.endMs), 0);
-  const knownActivityMs = Math.max(Number(lastSegment?.end_ms ?? 0), clientTailEndMs);
-  const billableMs = knownActivityMs > 0 ? Math.min(elapsedMs, knownActivityMs + 60_000) : elapsedMs;
-  const durationSeconds = recordedSomething ? Math.min(10_800, Math.max(0, Math.ceil(billableMs / 1_000))) : 0;
-  if (durationSeconds > 0) {
-    const { error: creditError } = await current.supabase.rpc("consume_lecture_credits", {
-      p_session_id: body.sessionId,
-      p_minute_index: Math.min(179, Math.max(0, Math.ceil(durationSeconds / 60) - 1)),
-    });
-    if (creditError) console.error("Final credit reconciliation failed", creditError.code);
-  }
-  // Billing columns are service-key-only since 20260902000000. The session's
-  // ownership was already established by the RLS-bound select above.
+  // Reject the entire request, never silently acknowledge a truncated tail.
+  if (body.segments.length > (body.action === "save-final" ? 250 : 50_000)) return NextResponse.json({ code: "FINAL_BATCH_TOO_LARGE", error: current.isEnglish ? "Save the transcript in smaller batches." : "스크립트를 더 작은 묶음으로 저장해 주세요." }, { status: 413 });
+  if (body.action !== undefined && body.action !== "save-final") return NextResponse.json({ error: current.isEnglish ? "Invalid lecture request." : "수업 요청을 확인해 주세요." }, { status: 400 });
   const admin = createAdminClient();
-  if (!admin) {
-    console.error("Lecture completion has no admin client");
-    return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 503 });
+  if (!admin) return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture. Please retry." : "강의 기록을 저장하지 못했습니다. 다시 시도해 주세요." }, { status: 503 });
+  // Existing tabs still send a whole finish snapshot. Preserve that protocol
+  // within the HTTP size ceiling by acknowledging bounded DB batches before
+  // completing, with no provider work dispatched between them.
+  let result: {
+    data: { saved?: boolean; completed?: boolean; error?: string; acknowledgedSegmentIds?: string[]; [key: string]: unknown } | null;
+    error: { code?: string } | null;
+  } | undefined;
+  if (body.action !== "save-final" && body.segments.length > 250) {
+    for (let from = 0; from < body.segments.length; from += 250) {
+      const batch = body.segments.slice(from, from + 250);
+      result = await admin.rpc("save_lecture_final_service", {
+        p_session_id: body.sessionId, p_user_id: current.userId, p_segments: batch, p_complete: false,
+      });
+      if (result.error || result.data?.saved !== true) break;
+      const acknowledged = new Set(result.data.acknowledgedSegmentIds ?? []);
+      if (batch.some((segment) => !acknowledged.has(segment.id))) {
+        result = { data: null, error: { code: "INCOMPLETE_ACK" } };
+        break;
+      }
+    }
+    if (!result?.error && result?.data?.saved === true) {
+      result = await admin.rpc("save_lecture_final_service", {
+        p_session_id: body.sessionId, p_user_id: current.userId, p_segments: [], p_complete: true,
+      });
+      if (result.data?.saved === true) result.data.acknowledgedSegmentIds = body.segments.map((segment) => segment.id);
+    }
+  } else {
+    result = await admin.rpc("save_lecture_final_service", {
+      p_session_id: body.sessionId, p_user_id: current.userId,
+      p_segments: body.segments, p_complete: body.action !== "save-final",
+    });
   }
-  // Conditional on status so two concurrent PATCHes cannot both pass the
-  // check above and each run the embedding step — only the one that actually
-  // flips the row proceeds to index.
-  const { data: completedRow, error: updateError } = await admin.from("lecture_sessions").update({
-    status: "completed",
-    ended_at: new Date().toISOString(),
-    duration_seconds: durationSeconds,
-    recorded_ms: recordedSomething ? billableMs : 0,
-    recording_started_at: null,
-  }).eq("id", body.sessionId).eq("user_id", current.userId).in("status", ["recording", "paused"]).select("id").maybeSingle();
-  if (updateError) {
-    console.error("Lecture completion failed", updateError.code);
-    return NextResponse.json({ error: current.isEnglish ? "Could not finish saving the lecture." : "수업 저장을 마치지 못했습니다." }, { status: 500 });
+  const { data, error } = result!;
+  if (error || !data || data.error || data.saved !== true) {
+    if (error) console.error("Final transcript save failed", error.code);
+    const code = data?.error;
+    const message = code === "RECORDING_ALREADY_ACTIVE"
+      ? current.isEnglish ? "The recording connection is still active. Wait for it to close, or pause or end recording in the other tab or device." : "녹음 연결이 아직 활성 상태입니다. 연결 종료를 기다리거나 다른 탭·기기에서 녹음을 일시정지 또는 종료해 주세요."
+      : code === "RECOVERY_OUTSIDE_PAID_RECORDING"
+        ? current.isEnglish ? "These segments are outside this lecture's paid recording interval. The local recovery copy has been kept." : "이 구간은 수업의 결제된 녹음 시간에 포함되지 않습니다. 기기의 복구 사본을 보관했습니다."
+        : code === "SEGMENT_CONFLICT"
+          ? current.isEnglish ? "A saved segment differs from this recovery copy. The local copy has been kept." : "저장된 구간과 복구 사본의 내용이 다릅니다. 기기의 복구 사본을 보관했습니다."
+          : current.isEnglish ? "Could not finish saving the lecture. Please retry." : "강의 기록을 저장하지 못했습니다. 다시 시도해 주세요.";
+    return NextResponse.json({ error: message, ...(code ? { code } : {}) }, { status: code === "SESSION_NOT_FOUND" ? 404 : code ? 409 : 503 });
   }
-  if (!completedRow) return NextResponse.json({ completed: true, indexed: false });
-
-  // 색인은 요청 본문이 아니라 DB에서 읽는다. 클라이언트 payload는 5,000개에서
-  // 잘리는데, 그걸 그대로 색인하면 긴 강의 뒷부분이 검색에서 영영 빠진다 —
-  // 재색인 캐치업은 청크가 0개인 세션만 구제하기 때문이다.
-  const { rows: storedRows, error: storedError } = await fetchAllSegments(current.supabase, body.sessionId, 50_000);
-  const indexResult = await indexLectureChunks(current.supabase, [{
-    sessionId: body.sessionId,
-    classroomId: session.classroom_id,
-    userId: current.userId,
-    segments: storedError || !storedRows.length
-      ? segments
-      : storedRows.map((row) => ({ startMs: row.start_ms, endMs: row.end_ms, text: row.text })),
-  }]);
-  const indexed = indexResult.get(body.sessionId) ?? false;
-
-  return NextResponse.json({ completed: true, indexed });
+  if (data.completed && body.action !== "save-final") scheduleLectureIndex(admin, current.userId, [body.sessionId]);
+  return NextResponse.json({ ...data, indexed: false });
 }

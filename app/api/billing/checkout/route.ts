@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "../../../lib/auth";
 import { paddleRequest, PaddleApiError } from "../../../lib/billing";
 import { billingMode, purchasePriceId, sameOrigin } from "../../../lib/billing-config";
-import { PLANS, isPurchasePlan } from "../../../lib/plans";
+import { PLANS, ENTITLEMENT_VERSION, isPurchasePlan } from "../../../lib/plans";
 import { checkSharedRateLimit } from "../../../lib/rate-limit";
 import { createAdminClient } from "../../../lib/supabase/admin";
 
@@ -37,11 +37,13 @@ export async function POST(request: Request) {
     const { data: rows, error } = await admin.rpc("reserve_billing_order", {
       p_id: id, p_user_id: userId, p_plan: plan, p_price_id: priceId,
       p_credits: offer.credits, p_months: offer.months, p_environment: mode,
+      p_entitlement_version: ENTITLEMENT_VERSION,
     });
     if (error?.message.includes("ACTIVE_SUBSCRIPTION")) return fail(409, "Monthly를 이미 이용 중입니다. 결제 관리에서 확인해 주세요.", "Monthly is already active. Open billing management.");
+    if (error?.message.includes("ACTIVE_PLAN")) return fail(409, "이용 중인 플랜이 있습니다. credits가 부족하면 추가 충전을 이용해 주세요.", "You already have an active plan. Add credits if you need more before your next refill.");
     if (error || !rows?.[0]) throw new Error("ORDER_RESERVATION_FAILED");
     const order = rows[0];
-    if (order.price_id && (order.price_id !== priceId || order.credits !== offer.credits || order.months !== offer.months)) {
+    if (order.price_id && (order.price_id !== priceId || order.credits !== offer.credits || order.months !== offer.months || order.entitlement_version !== ENTITLEMENT_VERSION)) {
       return fail(409, "이전 가격으로 진행 중인 결제가 있습니다. 결제 상태를 먼저 확인해 주세요.", "A checkout at an earlier price is pending. Check its payment status first.");
     }
     if (order.id === id) reservedId = id;

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import CreditUsage, { type UsageStatus } from "./credit-usage";
+import { languageSwitchUrl } from "./lib/site-locale";
 
 import styles from "./landing.module.css";
 
@@ -17,15 +19,15 @@ function AvatarMark({ avatarUrl }: { avatarUrl: string | null }) {
 }
 
 export default function ProfileMenu({
-  locale, basePath, classroomPath, profile, planLabel, credits,
+  locale, basePath, classroomPath, profile, creditStatus,
 }: {
   locale: Locale;
   basePath: string;
   classroomPath: string;
   profile: Profile;
-  planLabel: string;
-  credits: number | null;
+  creditStatus: UsageStatus | null;
 }) {
+  const [usage, setUsage] = useState(creditStatus);
   const [open, setOpen] = useState(false);
   // 워크스페이스 설정과 같은 규칙: lecue-theme 저장, html의 data-theme 적용.
   const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
@@ -51,6 +53,10 @@ export default function ProfileMenu({
 
   useEffect(() => {
     if (!open) return;
+    const controller = new AbortController();
+    fetch("/api/credits", { cache: "no-store", signal: controller.signal })
+      .then(async response => { if (response.ok) setUsage(await response.json()); })
+      .catch(() => {});
     function handlePointerDown(event: PointerEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
     }
@@ -65,6 +71,7 @@ export default function ProfileMenu({
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      controller.abort();
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -95,11 +102,10 @@ export default function ProfileMenu({
           </div>
 
           <div className={styles.profilePlanRow}>
-            <span><small>{isEnglish ? "Plan" : "요금제"}</small><strong>{planLabel}</strong></span>
-            <span><small>{isEnglish ? "Credits" : "크레딧"}</small><strong>{credits !== null ? credits.toLocaleString(isEnglish ? "en-US" : "ko-KR") : "—"}</strong></span>
+            <CreditUsage status={usage} locale={locale} compact />
           </div>
 
-          <Link className={styles.profileLink} href={classroomPath} onClick={() => setOpen(false)}>
+          <Link className={styles.profileLink} href={languageSwitchUrl(classroomPath, locale)} prefetch={false} onClick={() => setOpen(false)}>
             {isEnglish ? "Go to classroom" : "강의실로 이동"}
           </Link>
           <Link className={styles.profileLink} href={`${basePath}/billing`} onClick={() => setOpen(false)}>

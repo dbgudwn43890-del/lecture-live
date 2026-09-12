@@ -6,9 +6,12 @@ import { hasRecordingConsents } from "../../lib/consent";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { bootstrapTerms } from "../../lib/bootstrap-terms";
 import { deepgramLanguage, listenUrl } from "../../lib/deepgram";
+import { isSpeechLanguage } from "../../lib/speech-languages";
 import { SONIOX_LISTEN_URL, sonioxStreamConfig } from "../../lib/soniox";
 import { mergeKeyterms, parseGlossary } from "../../lib/glossary";
 import { createClient } from "../../lib/supabase/server";
+import { createAdminClient } from "../../lib/supabase/admin";
+import { newRelayTicket, relayTicketHash, relayListenUrl } from "../../lib/stt-relay";
 
 export const runtime = "nodejs";
 
@@ -19,20 +22,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 });
   }
 
-  let body: { sessionId?: unknown; language?: unknown };
+  let body: { sessionId?: unknown; language?: unknown; transport?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
     return NextResponse.json({ error: isEnglish ? "Invalid lecture request." : "수업 요청을 확인해 주세요." }, { status: 400 });
   }
-  if (!isUuid(body.sessionId)) {
+  if (!body || typeof body !== "object" || Array.isArray(body) || !isUuid(body.sessionId)) {
     return NextResponse.json({ error: isEnglish ? "Invalid lecture session." : "수업 정보를 확인해 주세요." }, { status: 400 });
+  }
+  if (body.language != null && body.language !== "default" && !isSpeechLanguage(body.language)) {
+    return NextResponse.json({
+      error: isEnglish ? "Choose a supported transcription language." : "지원하는 받아쓰기 언어를 선택해 주세요.",
+    }, { status: 400 });
+  }
+  if (body.transport !== "pcm16") {
+    return NextResponse.json({ error: isEnglish ? "Refresh this page to reconnect recording." : "페이지를 새로고침한 뒤 녹음을 다시 시작해 주세요." }, { status: 409 });
   }
 
   // 지원 크레딧이 남아 있는 동안 Deepgram 사용료를 상계할 수 있다.
-  // ko/en은 Deepgram, 한·영 혼용은 Soniox로 간다. Soniox는 토큰 과금이며
+  // 단일 언어는 Deepgram, 한·영 혼용은 Soniox로 간다. Soniox는 토큰 과금이며
   // 약 $0.12/h는 참고치다. 실시간 강의 품질은 별도 평가가 필요하다.
-  let language = deepgramLanguage(body.language, "ko");
+  let language = deepgramLanguage(body.language, isEnglish ? "en" : "ko");
   const useSoniox = language === "multi" && Boolean(process.env.SONIOX_API_KEY);
   // Deepgram의 multi 모델은 한국어를 지원하지 않는다. Soniox 키가 없으면
   // 혼용 선택을 한국어 중심으로 낮춰서 영어 전용 소켓이 열리는 걸 막는다.
@@ -68,32 +79,30 @@ export async function POST(request: Request) {
     }, { status: 403 });
   }
 
-  // The grant is independent of our database. Mint it while the credit,
-  // glossary and transcript preflight run instead of adding another network
-  // round trip after them. An unused 30-second grant is never returned.
-  const grant = useSoniox
-    ? fetch("https://api.soniox.com/v1/auth/temporary-api-key", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ usage_type: "transcribe_websocket", expires_in_seconds: 60 }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(15_000),
-      })
-    : fetch("https://api.deepgram.com/v1/auth/grant", {
-        method: "POST",
-        headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ ttl_seconds: 30, scopes: ["listen"] }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(15_000),
-      });
-  const [{ data: statusData, error: statusError }, { data: sessionRow }, { data: spokenRows }, response] = await Promise.all([
+  const admin = createAdminClient();
+  const relayUrl = relayListenUrl();
+  // Issuing an opaque DB ticket does not use the relay's callback secret.
+  // That secret belongs to the Worker and its /api/stt/relay destination,
+  // which may be production even when this issuer runs on localhost.
+  if (!admin || !relayUrl) {
+    const missingKeys = !admin
+      ? ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"].filter(key => !process.env[key])
+      : [];
+    if (!relayUrl) missingKeys.push("STT_RELAY_URL");
+    console.error("Recording configuration unavailable", missingKeys);
+    return NextResponse.json({
+      code: "RECORDING_NOT_CONFIGURED", retryable: false,
+      error: isEnglish ? "The recording connection settings need to be checked." : "녹음 연결 설정을 확인해야 합니다.",
+    }, { status: 503 });
+  }
+  const [{ data: statusData, error: statusError }, { data: sessionRow }, { data: spokenRows }] = await Promise.all([
     supabase.rpc("get_credit_status"),
     supabase
       .from("lecture_sessions")
       // material_documents hangs off both tables now: directly from this
       // session, and from the classroom it belongs to. Reading both in the one
       // embed keeps the session's own material first without a second trip.
-      .select("classrooms(glossary, material_documents(keyterms)), material_documents(keyterms)")
+      .select("id,status,classrooms(glossary, material_documents!material_documents_classroom_id_fkey(keyterms)), material_documents!material_documents_session_id_fkey(keyterms)")
       .eq("id", body.sessionId)
       .maybeSingle(),
     // 재연결이거나 어휘 갱신이면 이 수업의 앞부분이 이미 쌓여 있다. 첫 연결이면
@@ -104,45 +113,39 @@ export async function POST(request: Request) {
       .eq("session_id", body.sessionId)
       .order("start_ms", { ascending: true })
       .limit(600),
-    grant,
   ]);
   const creditStatus = Array.isArray(statusData) ? statusData[0] : statusData;
   if (statusError) {
     console.error("Credit preflight failed", statusError.code);
     return NextResponse.json({ error: isEnglish ? "Credits are not configured yet." : "크레딧 기능이 아직 설정되지 않았습니다." }, { status: 503 });
   }
-  if (Number(creditStatus?.credits ?? 0) < 1) {
+  if (!sessionRow || sessionRow.status !== "recording") {
+    return NextResponse.json({ error: isEnglish ? "This lecture is not recording." : "기록 중인 수업을 확인해 주세요." }, { status: 409 });
+  }
+  // Fail before minting a ticket that the relay cannot open. Only another
+  // lecture blocks this preflight; same-session reconnects keep their path.
+  // The database's atomic lease check still handles simultaneous starts.
+  const { data: activeOtherSession, error: activeSessionError } = await admin.from("stt_relay_sessions")
+    .select("session_id").eq("user_id", userId).neq("session_id", body.sessionId)
+    .not("connection_id", "is", null).gt("expires_at", new Date().toISOString()).limit(1).maybeSingle();
+  if (activeSessionError) {
+    return NextResponse.json({ error: isEnglish
+      ? "Could not check your recording connection. Please try again shortly."
+      : "녹음 연결 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요." }, { status: 503 });
+  }
+  if (activeOtherSession) {
     return NextResponse.json({
-      error: isEnglish ? "You are out of credits. Choose a plan to start recording." : "남은 크레딧이 없습니다. 요금제를 선택해 주세요.",
-    }, { status: 402 });
+      code: "RECORDING_ALREADY_ACTIVE", retryable: false,
+      error: isEnglish
+        ? "Recording is already active in another tab or device. Pause or end that recording, then try again."
+        : "다른 탭이나 기기에서 녹음 중입니다. 해당 녹음을 일시정지하거나 종료한 뒤 다시 시작해 주세요.",
+    }, { status: 409, headers: { "Cache-Control": "no-store" } });
   }
-
-  if (!response.ok) {
-    console.error("STT token grant failed", useSoniox ? "soniox" : "deepgram", response.status);
-    return NextResponse.json({ error: "음성 인식 연결을 준비하지 못했습니다." }, { status: 502 });
-  }
-
-  const data = (await response.json()) as { access_token?: string; api_key?: string };
-  const accessToken = useSoniox ? data.api_key : data.access_token;
-  if (!accessToken) {
-    return NextResponse.json({ error: "음성 인식 토큰이 비어 있습니다." }, { status: 502 });
-  }
-
-  const { data: creditData, error: creditError } = await supabase.rpc("consume_lecture_credits", {
-    p_session_id: body.sessionId,
-    p_minute_index: 0,
-  });
-  if (creditError) {
-    console.error("Initial credit consumption failed", creditError.code);
-    // 다른 탭이 닫은 세션으로 연결을 시도한 경우다. "크레딧 미설정"이라는
-    // 엉뚱한 진단 대신 세션이 끝났다고 말한다.
-    if (String(creditError.message ?? "").includes("LECTURE_NOT_RECORDING")) {
-      return NextResponse.json({ error: isEnglish ? "This lecture is no longer recording." : "이 수업은 이미 종료되었습니다." }, { status: 409 });
-    }
-    return NextResponse.json({ error: isEnglish ? "Credits are not configured yet." : "크레딧 기능이 아직 설정되지 않았습니다." }, { status: 503 });
-  }
-  const credit = Array.isArray(creditData) ? creditData[0] : creditData;
-  if (!credit?.allowed) {
+  const { data: relayState, error: relayStateError } = await admin.from("stt_relay_sessions")
+    .select("processed_bytes,authorized_bytes,connection_id").eq("session_id", body.sessionId).eq("user_id", userId).maybeSingle();
+  if (relayStateError) return NextResponse.json({ error: "Recording unavailable" }, { status: 503 });
+  const reusablePrepaid = relayState && !relayState.connection_id && Number(relayState.authorized_bytes) > Number(relayState.processed_bytes);
+  if (Number(creditStatus?.credits ?? 0) < 1 && !reusablePrepaid) {
     return NextResponse.json({
       error: isEnglish ? "You are out of credits. Choose a plan to start recording." : "남은 크레딧이 없습니다. 요금제를 선택해 주세요.",
     }, { status: 402 });
@@ -169,36 +172,19 @@ export async function POST(request: Request) {
   const spoken = (spokenRows ?? []).map((row) => String((row as { text?: unknown }).text ?? "")).join(" ");
   const keyterms = mergeKeyterms(declared, bootstrapTerms(spoken, declared));
 
-  if (useSoniox) {
-    return NextResponse.json(
-      {
-        accessToken,
-        credits: Number(credit.remaining_credits),
-        // ponytail: 어휘 갱신 재접속은 Deepgram 경로에만 있다. Soniox context도
-        // 접속 시점에만 붙는다. 실제 입력은 공통 mergeKeyterms의 상한을 따른다.
-        // 용어 누락 신고가 쌓이면 같은 refreshInMs 경로를 여기에도 연다.
-        refreshInMs: null,
-        listenUrl: SONIOX_LISTEN_URL,
-        // 첫 소켓 메시지로 보낼 설정. 파라미터 주인은 서버라는 원칙 유지.
-        sonioxConfig: sonioxStreamConfig({ keyterms, sessionId: body.sessionId as string }),
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  }
-
-  return NextResponse.json(
-    {
-      accessToken,
-      credits: Number(credit.remaining_credits),
-      // 자료도 용어집도 없는 수업에만, 한 번. 그때쯤이면 무엇에 대한 수업인지
-      // 스크립트에 드러나 있고, 남은 시간이 갱신값을 회수할 만큼 길다.
-      refreshInMs: language === "default" || declared.length ? null : 600_000,
-      listenUrl: listenUrl({
-        language,
-        keyterms,
-        sessionId: body.sessionId,
-      }),
-    },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  const accessToken = newRelayTicket();
+  const configuration = useSoniox
+    ? { provider: "soniox", listenUrl: SONIOX_LISTEN_URL,
+        sonioxConfig: { ...sonioxStreamConfig({ keyterms, sessionId: body.sessionId }), audio_format: "pcm_s16le", sample_rate: 16_000, num_channels: 1 } }
+    : { provider: "deepgram", listenUrl: listenUrl({ language, keyterms, sessionId: body.sessionId, pcm: true }) };
+  const { error: ticketError } = await admin.from("stt_relay_tickets").insert({
+    token_hash: relayTicketHash(accessToken), user_id: userId, session_id: body.sessionId, configuration,
+    expires_at: new Date(Date.now() + 30_000).toISOString(),
+  });
+  if (ticketError) return NextResponse.json({ error: "Recording unavailable" }, { status: 503 });
+  return NextResponse.json({
+    accessToken, listenUrl: relayUrl, relay: true, provider: configuration.provider,
+    credits: Number(creditStatus?.credits ?? 0),
+    refreshInMs: useSoniox || language === "default" || declared.length ? null : 600_000,
+  }, { headers: { "Cache-Control": "no-store" } });
 }

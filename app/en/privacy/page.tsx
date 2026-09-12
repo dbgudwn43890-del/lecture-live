@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import LegalPage from "../../legal-page";
+import { formatLegalDate, PRIVACY_POLICY_DATES } from "../../lib/legal-date";
 import styles from "../../legal.module.css";
 
 export const metadata: Metadata = {
@@ -13,6 +14,7 @@ export default function EnglishPrivacyPage() {
     <LegalPage
       locale="en"
       title="Privacy Policy"
+      effectiveDate={PRIVACY_POLICY_DATES.effective}
       description="Lecue processes only the data needed for accounts, lecture records, answers, and payments. We do not use lecture content for targeted advertising."
     >
       <section><h2>1. Data and purposes</h2><div className={styles.tableWrap}><table>
@@ -78,6 +80,10 @@ export default function EnglishPrivacyPage() {
         <p>Users in Korea may also contact the privacy portal, the Korea Internet &amp; Security Agency privacy center at 118, or the Personal Information Dispute Mediation Committee at 1833-6972.</p>
         <p>We normally announce changes at least 7 days before they take effect. Material changes are announced at least 30 days in advance, and consent is obtained where required.</p>
       </div></section>
+      <section><h2>11. Change history</h2><div><ul>
+        <li><time dateTime={PRIVACY_POLICY_DATES.effective}>{formatLegalDate(PRIVACY_POLICY_DATES.effective, "en")}</time>: Privacy Policy effective date.</li>
+        <li><time dateTime={PRIVACY_POLICY_DATES.dateClarified}>{formatLegalDate(PRIVACY_POLICY_DATES.dateClarified, "en")}</time>: Clarified the effective date and added this change history. No change to the data handling terms.</li>
+      </ul></div></section>
     </LegalPage>
   );
 }

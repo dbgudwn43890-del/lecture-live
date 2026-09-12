@@ -45,9 +45,15 @@ export function segmentsInWindow(segments: SummarySegment[], windowIndex: number
 }
 
 /** Filter quiet windows before the batch limit so later lectures cannot starve. */
-export function pendingSummaryWindows(segments: SummarySegment[], existing: Iterable<number>, limit = 3) {
+export function pendingSummaryWindows(segments: SummarySegment[], existing: Iterable<number>, limit = 3, lectureCompleted = false) {
   if (!segments.length) return [];
-  return completedWindows(segments.at(-1)!.endMs, existing)
+  const done = new Set(existing);
+  const pending = completedWindows(segments.at(-1)!.endMs, done);
+  // An ended lecture has no growing tail. Persist its final window once too;
+  // active lectures retain the existing completed-window-only schedule.
+  const finalWindow = windowIndexOf(segments.at(-1)!.endMs);
+  if (lectureCompleted && !done.has(finalWindow)) pending.push(finalWindow);
+  return pending
     .map(windowIndex => ({ windowIndex, sourceText: segmentsInWindow(segments, windowIndex).map(segment => segment.text).join("\n") }))
     .filter(window => window.sourceText.length >= 400)
     .slice(0, limit);

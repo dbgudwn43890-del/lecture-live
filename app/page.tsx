@@ -10,12 +10,12 @@ export async function generateMetadata(): Promise<Metadata> {
   const isEnglish = (await headers()).get("x-site-locale") === "en";
   return isEnglish
     ? {
-        title: "Lecue | A live assistant for in-person lectures",
-        description: "Lecue transcribes in-person lectures in real time and answers questions using the lecture context captured so far.",
+        title: "Lecue | Ask about the lecture as you learn",
+        description: "Record your lecture, ask about the part you missed, and revisit your questions with the lecture context.",
       }
     : {
-        title: "Lecue | 현장 강의를 따라가는 실시간 조교",
-        description: "Lecue는 현장 강의를 실시간으로 기록하고, 질문한 시점까지의 강의 맥락으로 눈높이에 맞게 답하는 학습 서비스입니다.",
+        title: "Lecue | 지금 듣는 강의에 바로 물어보세요",
+        description: "강의를 기록하고, 놓친 설명을 물어보세요. Lecue가 지금까지의 강의 맥락으로 답하고 질문과 기록을 함께 남겨 줍니다.",
       };
 }
 

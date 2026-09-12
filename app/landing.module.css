@@ -68,15 +68,12 @@
 .headerAvatar img { width: 100%; height: 100%; object-fit: cover; }
 .headerAvatar svg { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 1.6; }
 .profileMenu { position: relative; }
-.profilePanel { position: absolute; top: calc(100% + 12px); right: 0; z-index: 40; width: 250px; display: flex; flex-direction: column; gap: 13px; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--pop-shadow); }
+.profilePanel { position: absolute; top: calc(100% + 12px); right: 0; z-index: 40; width: min(320px, calc(100vw - 32px)); max-height: calc(100dvh - 100px); overflow-y: auto; display: flex; flex-direction: column; gap: 13px; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--pop-shadow); }
 .profilePanelHeader { display: flex; align-items: center; gap: 10px; }
 .profilePanelHeader > span:last-child { min-width: 0; display: flex; flex-direction: column; }
 .profilePanelHeader strong { font-size: 13px; font-weight: 600; }
 .profilePanelHeader small { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.profilePlanRow { display: flex; gap: 16px; padding: 11px 0; border-block: 1px solid var(--line); }
-.profilePlanRow span { display: flex; flex-direction: column; gap: 3px; }
-.profilePlanRow small { color: var(--muted); font-size: 10px; }
-.profilePlanRow strong { font-size: 13px; font-weight: 600; }
+.profilePlanRow { padding: 14px 0; border-block: 1px solid var(--line); }
 .profileLink { font-size: 12.5px; font-weight: 500; color: var(--muted); }
 .profileLink:hover { color: var(--signal); }
 .profileSignout button { width: 100%; padding: 9px 0; color: var(--muted); background: transparent; border: 1px solid var(--line-strong); border-radius: 10px; font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; }

@@ -209,29 +209,120 @@ const scenarios = [
       ["외부 출처", (data) => data.sources.length > 0],
     ],
   },
+  {
+    name: "학습 구조 · 개념과 구체적 예시",
+    body: {
+      question: "과적합이 뭔지 쉽게 설명해 줘.",
+      questionAtMs: 45_000,
+      segments: [segment(35_000, "과적합은 훈련 데이터에 너무 잘 맞아서 새로운 데이터에서는 성능이 떨어지는 현상입니다.")],
+    },
+    checks: [
+      ["핵심 정의", (data) => /(새로운|처음|시험|보지 못한).*(성능|틀리|못|잘)/s.test(data.answer)],
+      ["구체적 예시", (data) => /예시|예를 들어|가령/.test(data.answer)],
+      ["학습 구조", hasLearningStructure],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
+    name: "학습 구조 · 비교표",
+    body: {
+      question: "주식과 채권은 무슨 차이가 있어?",
+      questionAtMs: 45_000,
+      segments: [segment(35_000, "주식은 회사 소유권의 일부이고 채권은 빌려준 돈을 약속대로 돌려받을 권리입니다. 주주는 배당을 받을 수 있고 채권자는 약정된 이자를 받습니다.")],
+    },
+    checks: [
+      ["주식과 채권 설명", (data) => /주식/.test(data.answer) && /채권/.test(data.answer)],
+      ["비교표", hasComparisonTable],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
+    name: "학습 구조 · 계산 단계와 수식",
+    body: {
+      question: "f(x)=3x^2일 때 x=2에서의 순간 변화율을 구하는 과정을 알려 줘.",
+      questionAtMs: 45_000,
+      segments: [segment(35_000, "거듭제곱 미분법은 x의 n제곱을 미분하면 n 곱하기 x의 n 마이너스 1제곱이 되는 것입니다.")],
+    },
+    checks: [
+      ["정답 12", (data) => /12/.test(data.answer)],
+      ["번호 단계", (data) => /^\s*1[.)]\s+.+\n[\s\S]*?^\s*2[.)]\s+/m.test(data.answer)],
+      ["수식 구분자", (data) => /\$\$[^$]+\$\$/.test(data.answer)],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
+    name: "학습 구조 · 영어 확인 문제",
+    body: {
+      locale: "en",
+      question: "Give me one quick practice question to check that I understand overfitting, with its answer and a short reason.",
+      questionAtMs: 45_000,
+      segments: [segment(35_000, "Overfitting happens when a model learns training examples too closely and performs poorly on unseen data.")],
+    },
+    checks: [
+      ["확인 문제 섹션", (data) => /^### Check yourself\s*$/m.test(data.answer)],
+      ["접을 정답 섹션", (data) => /^### Answer\s*\n\S/m.test(data.answer)],
+      ["정답 순서", (data) => data.answer.indexOf("### Answer") > data.answer.indexOf("### Check yourself")],
+      ["영어 유지", (data) => !/[가-힣]/.test(data.answer)],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
+    name: "학습 구조 · 한국어 확인 문제",
+    body: {
+      question: "주식과 채권의 차이를 이해했는지 확인하는 문제 하나 내줘. 정답과 이유도 알려줘.",
+      questionAtMs: 45_000,
+      segments: [segment(35_000, "주식은 회사 소유권의 일부이고 채권은 빌려준 돈을 약속대로 돌려받을 권리입니다.")],
+    },
+    checks: [
+      ["확인 문제 섹션", (data) => /^### 확인 질문\s*$/m.test(data.answer)],
+      ["접을 정답 섹션", (data) => /^### 정답\s*\n\S/m.test(data.answer)],
+      ["정답 순서", (data) => data.answer.indexOf("### 정답") > data.answer.indexOf("### 확인 질문")],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
+    name: "학습 구조 · 단답에 불필요한 구성 없음",
+    body: {
+      question: "과제 제출 형식만 알려줘.",
+      questionAtMs: 45_000,
+      segments: [segment(35_000, "과제는 PDF 형식으로 제출해야 합니다.")],
+    },
+    checks: [
+      ["사실 유지", (data) => /PDF/.test(data.answer)],
+      ["짧은 단답", (data) => data.answer.length <= 120],
+      ["억지 구성 없음", (data) => !/^#{1,6}\s|^\s*\d+[.)]\s|\|.*\|/m.test(data.answer)],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
+  {
+    name: "학습 구조 · 방금 놓친 구간은 짧게 유지",
+    body: {
+      mode: "catchup",
+      questionAtMs: 150_000,
+      segments: [
+        segment(10_000, "오늘의 출석 번호는 947입니다."),
+        segment(130_000, "과적합은 훈련 데이터에 너무 잘 맞아서 새로운 데이터에서는 성능이 떨어지는 현상입니다."),
+        segment(140_000, "훈련 데이터와 검증 데이터를 나눠서 이 문제를 확인할 수 있습니다."),
+      ],
+    },
+    checks: [
+      ["최근 흐름 복원", (data) => /과적합/.test(data.answer) && /검증/.test(data.answer)],
+      ["이전 구간 제외", (data) => !/947/.test(data.answer)],
+      ["짧게 유지", (data) => data.answer.length <= 600],
+      ["불필요한 확인 문제 없음", (data) => !/^### (?:확인 질문|Check yourself)/m.test(data.answer)],
+      ["검색 안 함", noWebSearch],
+    ],
+  },
 ];
 
 scenarios.push(...anchorScenarios);
 
-/**
- * /api/ask는 줄마다 하나씩 {"delta"}를 흘리고 마지막에 {"done"}으로 닫는다.
- * 마지막 done 프레임이 정리된 답과 출처, 사용량을 모두 담고 있다.
- */
-async function readNdjsonAnswer(response) {
-  const body = await response.text();
-  let done = null;
-  for (const line of body.split("\n")) {
-    if (!line.trim()) continue;
-    let frame;
-    try {
-      frame = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (frame.error) return { error: frame.error };
-    if (frame.done) done = frame.done;
-  }
-  return done ?? { error: "no done frame" };
+function hasLearningStructure(data) {
+  return /^###\s|^\s*(?:\d+[.)]|[-*])\s|\|.*\|/m.test(data.answer);
+}
+
+function hasComparisonTable(data) {
+  return /^\|.+\|\s*\n\|[ :|-]+\|\s*\n\|.+\|/m.test(data.answer);
 }
 
 function noWebSearch(data) {
@@ -247,33 +338,29 @@ if (!authCookie) {
   process.exit(1);
 }
 
-// GPT-5.6 Luna 표준 토큰 가격(2026-08-22); 웹 검색 호출 요금은 제외한다.
-function estimateTokenCost(usage) {
-  if (!usage) return 0;
-  const uncached = Math.max(
-    0,
-    usage.inputTokens - usage.cachedInputTokens - usage.cacheWriteTokens,
-  );
-  return (
-    (uncached * 0.2 + usage.cachedInputTokens * 0.02 + usage.cacheWriteTokens * 0.25 +
-      usage.outputTokens * 1.2) /
-    1_000_000
-  );
-}
-
 let passed = 0;
 let totalCost = 0;
 let totalLatency = 0;
+const selectedScenarios = process.env.ASK_EVAL_FILTER
+  ? scenarios.filter((scenario) => scenario.name.includes(process.env.ASK_EVAL_FILTER))
+  : scenarios;
+if (!selectedScenarios.length) {
+  console.error("ASK_EVAL_FILTER에 해당하는 평가 시나리오가 없습니다.");
+  process.exit(1);
+}
 
-for (const scenario of scenarios) {
+for (const scenario of selectedScenarios) {
   const startedAt = performance.now();
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: authCookie },
     body: JSON.stringify(scenario.body),
   });
+  let firstTokenMs = null;
+  const data = response.ok
+    ? await readNdjsonAnswer(response, () => { firstTokenMs = Math.round(performance.now() - startedAt); })
+    : await response.json().catch(() => ({}));
   const latencyMs = Math.round(performance.now() - startedAt);
-  const data = response.ok ? await readNdjsonAnswer(response) : await response.json().catch(() => ({}));
   totalLatency += latencyMs;
 
   if (!response.ok || typeof data.answer !== "string" || !Array.isArray(data.sources)) {
@@ -285,6 +372,7 @@ for (const scenario of scenarios) {
   const failedChecks = scenario.checks
     .filter(([, check]) => !check(data))
     .map(([label]) => label);
+  if (/<\/?(?:script|iframe|img|svg)\b/i.test(data.answer)) failedChecks.push("허용하지 않은 HTML 없음");
   const latencyLimitMs = scenario.latencyLimitMs ?? 10_000;
   if (latencyMs > latencyLimitMs) failedChecks.push(`완료 ${latencyLimitMs / 1_000}초 이내`);
 
@@ -294,16 +382,17 @@ for (const scenario of scenarios) {
   if (failedChecks.length === 0) {
     passed += 1;
     console.log(
-      `PASS ${scenario.name} | ${latencyMs}ms | ${data.usage.inputTokens}/${data.usage.outputTokens} tokens | $${cost.toFixed(6)}`,
+      `PASS ${scenario.name} | first ${firstTokenMs ?? "n/a"}ms / complete ${latencyMs}ms | ${data.usage?.inputTokens ?? "n/a"}/${data.usage?.outputTokens ?? "n/a"} tokens | $${cost.toFixed(6)}`,
     );
   } else {
-    console.error(`FAIL ${scenario.name} | ${failedChecks.join(", ")} | ${latencyMs}ms`);
+    console.error(`FAIL ${scenario.name} | ${failedChecks.join(", ")} | first ${firstTokenMs ?? "n/a"}ms / complete ${latencyMs}ms`);
     console.error(`  ${data.answer.replaceAll("\n", " ")}`);
   }
 }
 
 console.log(
-  `\n${passed}/${scenarios.length} passed | average ${Math.round(totalLatency / scenarios.length)}ms | estimated token cost $${totalCost.toFixed(6)} (web search fees excluded)`,
+  `\n${passed}/${selectedScenarios.length} passed | average completion ${Math.round(totalLatency / selectedScenarios.length)}ms | estimated token cost $${totalCost.toFixed(6)} (web search fees excluded)`,
 );
 
-if (passed !== scenarios.length) process.exitCode = 1;
+if (passed !== selectedScenarios.length) process.exitCode = 1;
+import { estimateTokenCost, readNdjsonAnswer } from "./eval-ask-helpers.mjs";

@@ -1,5 +1,6 @@
-import LoginPage from "../../login/page";
+import LoginClient from "../../login/login-client";
+import { getSiteRegion } from "../../lib/site-region";
 
-export default function EnglishLoginPage() {
-  return <LoginPage locale="en" />;
+export default async function EnglishLoginPage() {
+  return <LoginClient locale="en" region={await getSiteRegion()} />;
 }

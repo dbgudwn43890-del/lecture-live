@@ -1,0 +1,169 @@
+/* A readable note with a quiet contents margin; colors inherit Lecue's theme. */
+.workspace-dialog .review-note-panel { width: min(1040px, 100%); border-color: var(--line); }
+.workspace-dialog .review-note-panel.is-preparing { width: min(540px, 100%); height: auto; overflow-y: auto; }
+.workspace-dialog .review-note-panel .note-topbar { min-height: 58px; padding: 10px 24px; background: var(--surface); }
+.review-note-panel .note-topbar > div { justify-content: flex-end; }
+.review-note-panel.is-preparing .note-topbar > div { flex-wrap: nowrap; }
+.review-note-panel.is-preparing .note-quota { flex-basis: auto; }
+.review-note-panel .note-topbar > strong { font-weight: 550; font-size: 13px; }
+.review-note-panel .note-regenerate { min-height: 36px; font-weight: 500; border-color: var(--line); border-radius: 5px; }
+.review-note-panel .note-quota { font-size: 11px; }
+.review-note-panel .note-update-message { margin: 18px 24px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.review-note-panel .note-update-message strong { display: block; color: var(--ink); font-weight: 550; }
+.note-body.note-reading,
+.workspace-dialog .note-body.note-reading { display: grid; grid-template-columns: minmax(0, 680px) 168px; justify-content: center; align-items: start; gap: 48px; padding: 36px 40px 64px; min-width: 0; min-height: 0; font-size: 14px; line-height: 1.85; overflow-wrap: anywhere; scrollbar-gutter: stable; }
+.note-reading .note-document { min-width: 0; }
+.note-reading .note-cover { margin: 0 0 24px; padding: 0; border: 0; background: none; }
+.note-reading .note-cover h1,
+.workspace-dialog .note-reading .note-cover h1 { margin: 0; color: var(--ink); font-size: 27px; font-weight: 620; line-height: 1.4; letter-spacing: -.035em; word-break: keep-all; text-wrap: balance; }
+.note-reading .note-one-line-summary { margin-top: 20px; color: var(--muted); line-height: 1.75; }
+.note-reading .note-one-line-summary > span { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 500; }
+.note-reading .note-one-line-summary .answer-markdown { color: var(--ink); font-size: 14px; }
+.note-reading .note-key-points { margin-bottom: 30px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.note-reading .note-key-points h2 { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 550; line-height: 1.5; }
+.note-reading .note-key-points ul { margin: 0; padding-left: 17px; }
+.note-reading .note-key-points li { margin: 5px 0; padding-left: 4px; line-height: 1.65; }
+.note-reading .note-key-points[data-kind="topics"] ul { padding-left: 0; list-style: none; }
+.note-reading .note-key-points[data-kind="topics"] li { padding-left: 0; }
+.note-reading .note-key-points li::marker { color: var(--signal); font-size: .75em; }
+.note-reading .note-key-points strong { font-weight: inherit; }
+.note-reading summary { width: fit-content; display: flex; align-items: center; gap: 7px; color: var(--muted); list-style: none; cursor: pointer; font-size: 12px; font-weight: 500; }
+.note-reading summary::-webkit-details-marker { display: none; }
+.note-reading summary:hover { color: var(--ink); }
+.note-reading summary svg { flex-shrink: 0; transition: transform 160ms ease; }
+.note-reading details[open] > summary svg { transform: rotate(180deg); }
+.note-reading .note-overview-details { margin-top: 16px; }
+.note-reading .note-overview-details > .answer-markdown { margin-top: 12px; color: var(--muted); font-size: 13px; }
+.note-reading .note-outline { position: sticky; top: 0; min-width: 0; max-height: calc(100dvh - 200px); overflow-y: auto; scrollbar-width: thin; padding-top: 7px; }
+.note-reading .note-outline h2,
+.note-reading .note-mobile-outline h2 { margin: 0 0 12px; color: var(--muted); font-size: 11px; line-height: 1.5; font-weight: 500; }
+.note-reading .note-outline a,
+.note-reading .note-mobile-outline a { display: block; padding: 6px 0; color: var(--muted); font-size: 12px; line-height: 1.7; text-decoration: none; word-break: keep-all; }
+.note-reading .note-outline a:hover,
+.note-reading .note-mobile-outline a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.note-reading .note-outline a[aria-current], .note-reading .note-mobile-outline a[aria-current] { color: var(--ink); font-weight: 600; }
+.note-reading .note-question-nav { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+.note-reading .note-mobile-outline { display: none; }
+.note-reading .note-section { padding: 0; margin-top: 36px; scroll-margin-top: 24px; }
+.note-reading .note-section h2,
+.workspace-dialog .note-reading .note-section h2 { display: block; padding: 0; margin: 0 0 16px; border: 0; color: var(--ink); font-size: 20px; font-weight: 620; line-height: 1.5; letter-spacing: -.025em; }
+.note-reading .note-block + .note-block { margin-top: 18px; }
+.note-reading .note-block { scroll-margin-top: 24px; }
+.note-reading .answer-markdown { font-size: inherit; line-height: inherit; }
+.note-reading .answer-markdown p { margin: 0; }
+.note-reading .answer-markdown > * + * { margin-top: 12px; }
+.note-reading .note-list,
+.note-reading .note-steps { margin: 0; padding-left: 22px; }
+.note-reading .note-list > li,
+.note-reading .note-steps > li { margin: 8px 0; padding-left: 4px; }
+.note-reading .note-list ul,
+.note-reading .note-steps ul { margin: 6px 0 0; padding-left: 20px; list-style-type: circle; }
+.note-reading .note-list ul li,
+.note-reading .note-steps ul li { margin: 5px 0; padding-left: 2px; }
+.note-reading .note-steps > li::marker { font-weight: 600; }
+.note-reading .note-callout { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+.note-reading .note-qa { margin: 0; padding: 16px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+.note-reading .note-block-title { margin-bottom: 6px; font-weight: 600; }
+.note-reading .note-callout .note-block-title { font-size: 13px; }
+.note-reading .note-block-title .answer-markdown p { color: var(--ink); }
+.note-reading .note-block-title strong,
+.note-reading .note-callout .answer-markdown strong,
+.note-reading .note-qa .answer-markdown strong { display: inline; margin: 0; font-size: inherit; letter-spacing: normal; }
+.note-reading .note-block-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.note-reading .note-original-questions { margin-top: 12px; }
+.note-reading .note-answer-provenance { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.note-reading .note-original-answer + .note-original-answer { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.note-reading .note-original-questions ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+.note-reading .note-original-questions li { margin-top: 6px; padding-left: 3px; }
+.review-note-panel .note-generating { padding: 54px 24px 48px; }
+.review-note-panel .note-generating > p { margin-top: 10px; }
+.review-note-panel .note-generating .note-wait-detail { display: block; margin-top: 16px; font-variant-numeric: tabular-nums; }
+.review-note-panel .note-generating .note-generation-reassurance { max-width: 320px; margin: 28px auto 0; font-size: 12px; line-height: 1.75; text-wrap: balance; }
+.review-note-panel .note-generation-error { max-width: 360px; margin-inline: auto; }
+.note-reading .note-check { padding: 18px 0 0; border-top: 1px solid var(--line); }
+.note-reading .note-check-question { color: var(--ink); font-weight: 550; }
+.note-reading .note-check details { margin-top: 12px; }
+.note-reading .note-check details > .answer-markdown { margin-top: 10px; }
+.note-reading .note-check-solution { margin-top: 12px; padding: 12px 14px; background: var(--paper); border-radius: 5px; }
+.note-reading .note-table { margin: 0; }
+.note-reading .note-table > figcaption { margin-bottom: 8px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.note-reading .note-table-scroll { max-width: 100%; overflow-x: auto; border-block: 1px solid var(--line); scrollbar-width: thin; }
+.note-reading .note-table table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; line-height: 1.7; }
+.note-reading .note-table th,
+.note-reading .note-table td { min-width: 100px; padding: 11px 12px; vertical-align: top; border: 0; border-bottom: 1px solid var(--line); word-break: keep-all; overflow-wrap: normal; }
+.note-reading .note-table th { background: var(--paper); font-weight: 550; }
+.note-reading .note-table tr:last-child td { border-bottom: 0; }
+.note-reading .note-caption { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.note-reading .note-formula { margin: 0; padding: 14px 0; border: 0; border-radius: 0; background: none; overflow-x: auto; }
+.note-reading .note-diagram { margin: 0; text-align: left; }
+.note-reading .note-diagram figcaption { margin: 0; text-align: left; color: var(--ink); font-size: inherit; }
+.note-reading .note-diagram-details { margin-top: 8px; }
+.note-reading .note-diagram-details > div { margin-top: 16px; text-align: center; overflow-x: auto; }
+.note-reading .note-material { margin: 12px 0 0; border: 1px solid var(--line); border-radius: 5px; box-shadow: none; }
+.note-reading .note-material figcaption { background: var(--paper); }
+.note-reading .note-material-fallback { margin-top: 10px; color: var(--muted); font-size: 12px; }
+.note-reading .note-material-fallback > p { margin: 0 0 6px; }
+.note-reading .note-block-sources { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+.note-reading .note-block-sources > button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 0; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
+.note-reading .note-block-sources > button:hover { color: var(--signal); text-decoration: underline; text-underline-offset: 3px; }
+.note-reading .note-source-material { min-width: 0; max-width: 100%; }
+.note-reading .note-source-material[open] { flex-basis: 100%; }
+.note-reading .note-source-material > summary { color: var(--muted); font-size: 11px; }
+.note-reading :is(summary, a, button, .note-table-scroll):focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; border-radius: 3px; }
+.note-reading :is(.note-section, .note-block):focus { outline: none; }
+.note-reading :is(.note-section, .note-block):focus-visible { outline: 2px solid var(--signal); outline-offset: 5px; border-radius: 3px; }
+@media (max-width: 900px) {
+  .note-body.note-reading,
+  .workspace-dialog .note-body.note-reading { display: block; padding: 28px 32px 48px; }
+  .note-reading .note-outline { display: none; }
+  .note-reading .note-mobile-outline { display: block; position: sticky; top: 0; z-index: 2; margin-bottom: 24px; border-bottom: 1px solid var(--line); background: var(--surface); }
+  .note-reading .note-mobile-outline > summary { width: 100%; min-height: 44px; padding: 8px 0; color: var(--signal); }
+  .note-reading .note-mobile-outline > summary > span:first-child { flex-shrink: 0; }
+  .note-reading .note-current-section { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); text-align: right; }
+  .note-reading .note-mobile-outline nav { max-height: min(50dvh, 360px); overflow-y: auto; overscroll-behavior: contain; padding-block: 8px 12px; }
+  .note-reading .note-mobile-outline a { min-height: 44px; padding-block: 11px; }
+  /* Include the reading pane's top padding as well as the sticky contents bar. */
+  .note-reading :is(.note-section, .note-block) { scroll-margin-top: 88px; }
+  .note-reading .note-mobile-outline h2 { margin-top: 18px; }
+}
+@media (max-width: 640px) {
+  .workspace-dialog .review-note-panel .note-topbar { padding: 10px 16px; gap: 8px; }
+  .review-note-panel .note-topbar > div { gap: 6px; }
+  .review-note-panel .note-regenerate, .workspace-dialog .review-note-panel .banner-dismiss { min-width: 44px; min-height: 44px; }
+  .note-reading summary, .note-reading .note-block-sources > button { min-height: 44px; }
+  .review-note-panel .note-quota { flex-basis: 100%; text-align: right; }
+  .workspace-dialog .review-note-panel:not(.is-preparing) .note-topbar { display: grid; grid-template-columns: 1fr auto auto; grid-template-areas: "title title close" "quota pdf regenerate"; gap: 6px; }
+  .review-note-panel:not(.is-preparing) .note-topbar > strong { grid-area: title; }
+  .review-note-panel:not(.is-preparing) .note-topbar > div { display: contents; }
+  .review-note-panel:not(.is-preparing) .note-quota { grid-area: quota; text-align: left; }
+  .review-note-panel:not(.is-preparing) .note-regenerate:first-of-type { grid-area: pdf; }
+  .review-note-panel:not(.is-preparing) .note-regenerate:nth-of-type(2) { grid-area: regenerate; }
+  .review-note-panel:not(.is-preparing) .banner-dismiss { grid-area: close; justify-self: end; }
+  .note-body.note-reading,
+  .workspace-dialog .note-body.note-reading { padding: 24px 22px 40px; }
+  .note-reading .note-cover h1,
+  .workspace-dialog .note-reading .note-cover h1 { font-size: 23px; }
+  .note-reading .note-section h2,
+  .workspace-dialog .note-reading .note-section h2 { font-size: 19px; }
+  .note-reading .note-list,
+  .note-reading .note-steps { padding-left: 18px; }
+  .note-reading .note-list ul,
+  .note-reading .note-steps ul { padding-left: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .note-reading summary svg { transition: none; } }
+@media print {
+  .review-note-panel .note-update-message,
+  .note-reading .note-outline,
+  .note-reading .note-mobile-outline { display: none; }
+  .note-body.note-reading,
+  .workspace-dialog .note-body.note-reading { display: block; padding: 0; overflow: visible; font-size: 11pt; }
+  .note-reading summary svg,
+  .note-reading .note-block-sources > button svg { display: none; }
+  .note-reading .note-check { break-inside: avoid; }
+  .note-reading .note-check-solution { padding: 8px 0; background: none; }
+  .note-reading .note-table-scroll { overflow: visible; }
+  .note-reading .note-table table { font-size: 10pt; }
+  .note-reading .note-table th,
+  .note-reading .note-table td { min-width: 0; }
+  .note-reading .note-block-sources { color: #555; }
+}

@@ -27,26 +27,30 @@ export default function EnglishTermsPage() {
       <section><h2>5. AI answers and personal AI</h2><div><ol><li>Speech recognition and AI answers may omit, mishear, or inaccurately explain information.</li><li>Answers are study aids, not the lecturer's official statement, an exam answer, or legal, medical, tax, or investment advice.</li><li>Important decisions should be checked against original and independently reliable sources.</li><li>A personal AI connection sends the necessary lecture context and question to the provider selected by the member. That provider's terms, privacy policy, limits, and charges apply.</li><li>Members may use only keys validly issued to them and may replace or delete a saved key at any time.</li></ol></div></section>
 
       <section><h2>6. Plans and credits</h2><div>
-        <div className={styles.tableWrap}><table><thead><tr><th>Plan</th><th>Term</th><th>Credits</th><th>Billing</th></tr></thead><tbody>
-          <tr><td>Free trial</td><td>{STARTER_DAYS} days</td><td>{STARTER_CREDITS} credits · once per account</td><td>No card or automatic payment</td></tr>
-          <tr><td>Monthly</td><td>1 month</td><td>{PLANS.monthly.credits.toLocaleString()} each billing period</td><td>Renews monthly until cancelled</td></tr>
-          <tr><td>Semester</td><td>{PLANS.semester.months} months</td><td>{PLANS.semester.credits.toLocaleString()}</td><td>One-time purchase; no renewal</td></tr>
-          <tr><td>Annual</td><td>{PLANS.annual.months} months</td><td>{PLANS.annual.credits.toLocaleString()}</td><td>One-time purchase; no renewal</td></tr>
-          <tr><td>Top-up</td><td>{PLANS.topup.months} months</td><td>{PLANS.topup.credits.toLocaleString()}</td><td>One-time purchase; stacks with any plan</td></tr>
+        <div className={styles.tableWrap}><table><thead><tr><th>Plan</th><th>Credit schedule</th><th>Credits</th><th>Billing</th></tr></thead><tbody>
+          <tr><td>Free trial</td><td>Once when the trial starts</td><td>{STARTER_CREDITS} credits · once per account</td><td>No card or automatic payment</td></tr>
+          <tr><td>Monthly</td><td>After each monthly payment</td><td>{PLANS.monthly.monthlyCredits.toLocaleString()} credits each month</td><td>Renews monthly until cancelled</td></tr>
+          <tr><td>Semester</td><td>Monthly for {PLANS.semester.months} months</td><td>{PLANS.semester.monthlyCredits.toLocaleString()} credits × {PLANS.semester.installmentCount} grants · {PLANS.semester.credits.toLocaleString()} total</td><td>Full amount paid once upfront; no renewal</td></tr>
+          <tr><td>Half-year</td><td>Monthly for {PLANS.halfyear.months} months</td><td>{PLANS.halfyear.monthlyCredits.toLocaleString()} credits × {PLANS.halfyear.installmentCount} grants · {PLANS.halfyear.credits.toLocaleString()} total</td><td>Full amount paid once upfront; no renewal</td></tr>
+          <tr><td>Annual</td><td>Monthly for {PLANS.annual.months} months</td><td>{PLANS.annual.monthlyCredits.toLocaleString()} credits × {PLANS.annual.installmentCount} grants · {PLANS.annual.credits.toLocaleString()} total</td><td>Full amount paid once upfront; no renewal</td></tr>
+          <tr><td>Top-up</td><td>Immediately after payment</td><td>{PLANS.topup.credits.toLocaleString()}</td><td>One-time purchase; no renewal</td></tr>
         </tbody></table></div>
         <ul>
           <li>Checkout shows the actual price, tax, promotion, first charge date, and renewal amount.</li>
-          <li>The trial ends after {STARTER_DAYS} days or when all {STARTER_CREDITS} credits are used. It does not convert to a paid plan automatically. Previously granted credits and existing purchases keep their original entitlement and expiry.</li>
+          <li>Trial credits are valid for {STARTER_DAYS} days from the start of the trial. The trial does not convert to a paid plan automatically.</li>
+          <li>Semester, Half-year, and Annual provide the first monthly grant after payment completes, followed by the remaining grants on their monthly release dates. Future grants cannot be used before their release dates.</li>
           <li>One credit is charged for each started recording minute. A partial minute costs one credit, and the same minute in the same lecture is not charged twice.</li>
           <li>Each lecture may record for up to 3 hours. A new lecture may be started while credits remain.</li>
-          <li>Monthly credits do not roll over. Semester credits expire four months after purchase; Annual and Top-up credits expire after twelve months.</li>
+          <li>Monthly grants from Monthly, Semester, Half-year, and Annual do not roll over. Unused credits from each grant expire at the next monthly expiry date. The final grant expires when the plan's grant period ends.</li>
+          <li>Top-up credits remain valid for {PLANS.topup.months} months from purchase and can be used without an active subscription. Buying a Top-up does not change another plan's grant dates or end date.</li>
+          <li>A new payment or monthly grant does not extend any existing balance's expiry, including free trial credits. Expired, used, or revoked credits are not restored. Purchases made before this monthly-expiry policy keep their original quantities, release schedules, and expiry dates.</li>
           <li>Questions, AI answers, and necessary web search use no separate credit while recording.</li>
           <li>A personal AI connection follows the same Lecue credit rule. The external provider may charge the member separately.</li>
           <li>Recording stops when credits are exhausted, but existing records remain available.</li>
         </ul>
       </div></section>
 
-      <section><h2>7. Payment and renewal</h2><div><ol><li>Paddle handles sale, payment, tax, recurring billing, and refunds. Paddle's buyer terms and privacy notice also apply at checkout.</li><li>Monthly renews at the amount and date shown at checkout. The card-free trial and Semester do not renew automatically.</li><li>Members must review the product, amount, renewal cycle, and cancellation terms before purchase.</li><li>A subscription may be cancelled at any time through billing management. Cancellation stops the next charge; an already-paid period does not end immediately unless a refund is approved.</li></ol></div></section>
+      <section><h2>7. Payment and renewal</h2><div><ol><li>Paddle handles sale, payment, tax, recurring billing, and refunds. Paddle's buyer terms and privacy notice also apply at checkout.</li><li>Monthly renews at the amount and date shown at checkout. The card-free trial, Semester, Half-year, Annual, and Top-up do not renew automatically.</li><li>Members must review the product, amount, renewal cycle, and cancellation terms before purchase.</li><li>A subscription may be cancelled at any time through billing management. Cancellation stops the next charge; an already-paid period does not end immediately unless a refund is approved.</li></ol></div></section>
 
       <section><h2>8. Cancellation and refunds</h2><div><ol><li>A payment may be fully refunded within 7 days if none of that paid period's credits have been used.</li><li>After partial use, a refund may deduct the service and credits already supplied to the extent allowed by applicable law.</li><li>If our fault prevents delivery or the Service is materially different from its description, we provide the remedy required by law.</li><li>Mandatory consumer rights in a member's country override any less favorable term here.</li><li>Refund requests go to our support contact. An approved refund is posted according to Paddle and the payment method's processing time.</li></ol></div></section>
 

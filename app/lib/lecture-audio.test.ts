@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { callbackToken, callbackTokenMatches, prerecordedUrl, segmentsFromPrerecorded } from "./lecture-audio.ts";
+import { SPEECH_LANGUAGES } from "./speech-languages.ts";
 
 test("utterances become one segment each, in lecture-clock milliseconds", () => {
   const segments = segmentsFromPrerecorded({
@@ -82,4 +83,20 @@ test("default transcription keeps only callback delivery settings", () => {
   assert.equal(url.searchParams.get("model"), null);
   assert.equal(url.searchParams.get("language"), null);
   assert.equal(url.searchParams.get("keyterm"), null);
+});
+
+test("each single-language upload retains its language, vocabulary, and callback", () => {
+  for (const { code } of SPEECH_LANGUAGES.filter(({ code }) => code !== "multi")) {
+    const url = new URL(prerecordedUrl({
+      language: code,
+      keyterms: ["Lecue", "Fourier transform"],
+      callbackUrl: "https://lecue.test/callback?token=example",
+      sessionId: "languages",
+    }));
+    assert.equal(url.searchParams.get("language"), code);
+    assert.equal(url.searchParams.get("model"), "nova-3");
+    assert.equal(url.searchParams.get("utterances"), "true");
+    assert.equal(url.searchParams.get("callback"), "https://lecue.test/callback?token=example");
+    assert.deepEqual(url.searchParams.getAll("keyterm"), ["Lecue", "Fourier transform"]);
+  }
 });

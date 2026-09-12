@@ -9,11 +9,19 @@ export function preferredSiteLocale(choice: string | undefined, country: string 
   }).filter(item => ["ko", "en"].includes(item.language) && item.weight > 0 && item.weight <= 1).sort((a, b) => b.weight - a.weight);
   const preferred = languages[0]?.language;
   if (preferred === "ko" || preferred === "en") return preferred;
-  return path === "/en" || path.startsWith("/en/") ? "en" : "ko";
+  return "en";
+}
+
+/** Region controls which choices are prominent, independently of UI language. */
+export function siteRegion(country: string | null, acceptLanguage: string): "kr" | "global" {
+  return preferredSiteLocale(undefined, country, acceptLanguage, "/") === "ko" ? "kr" : "global";
 }
 
 export function languageSwitchUrl(href: string, locale: "ko" | "en") {
-  const url = new URL(href);
+  // Public /ko and /en pages can differ from the stored preference. Their
+  // app-entry links carry the displayed language through the existing explicit
+  // choice flow; the proxy's default preference order stays unchanged.
+  const url = new URL(href, "https://lecue.app");
   url.searchParams.set("lang", locale);
   return `${url.pathname}${url.search}${url.hash}`;
 }

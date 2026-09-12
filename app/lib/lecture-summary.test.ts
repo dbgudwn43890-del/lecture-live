@@ -37,6 +37,20 @@ test("only windows that have finished are queued for summarising", () => {
   assert.deepEqual(completedWindows(5 * 60_000, []), []);
 });
 
+test("a completed short lecture can fold its final window once, but a live lecture cannot", () => {
+  const segments = [line(60_000, "스택과 큐의 정의와 예시. ".repeat(50))];
+  assert.deepEqual(pendingSummaryWindows(segments, []), []);
+  assert.deepEqual(pendingSummaryWindows(segments, [], 3, true).map(row => row.windowIndex), [0]);
+  assert.deepEqual(pendingSummaryWindows(segments, [0], 3, true), []);
+});
+
+test("completed final windows still honor the batch limit and skip silent windows", () => {
+  const segments = Array.from({ length: 5 }, (_, index) => line(index * SUMMARY_WINDOW_MS, "정의와 근거 ".repeat(100)));
+  assert.deepEqual(pendingSummaryWindows(segments, [], 3, true).map(row => row.windowIndex), [0, 1, 2]);
+  assert.deepEqual(pendingSummaryWindows(segments, [0, 1, 2], 3, true).map(row => row.windowIndex), [3, 4]);
+  assert.deepEqual(pendingSummaryWindows([line(0, "안녕하세요")], [], 3, true), []);
+});
+
 test("a segment belongs to exactly one window", () => {
   const segments = [line(0, "가"), line(SUMMARY_WINDOW_MS - 1, "나"), line(SUMMARY_WINDOW_MS, "다")];
   assert.deepEqual(segmentsInWindow(segments, 0).map((row) => row.text), ["가", "나"]);

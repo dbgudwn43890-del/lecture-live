@@ -1,0 +1,50 @@
+.experience .listening-indicator { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 8px 0 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; text-align: left; }
+.experience .listening-indicator:hover, .experience .listening-indicator[aria-expanded="true"] { color: var(--signal); }
+.experience .listening-indicator:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+.experience .listening-indicator[data-live="true"] { color: var(--signal); }
+.experience .listening-indicator small { font-size: 11px; line-height: 1.5; font-weight: 450; letter-spacing: normal; }
+.listening-orbit { width: 32px; height: 32px; flex: 0 0 32px; overflow: visible; fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; }
+.listening-track { opacity: .18; }
+.listening-arcs { transform-origin: 14px 14px; opacity: .45; }
+.listening-inner { transform-origin: 14px 14px; opacity: .65; transform: rotate(35deg); }
+.listening-chevron { opacity: .65; transition: transform 160ms ease-out; }
+.listening-indicator[aria-expanded="true"] .listening-chevron { transform: rotate(180deg); }
+.listening-core { fill: currentColor; stroke: none; transform-origin: 14px 14px; }
+.listening-indicator[data-live="true"] .listening-arcs { animation: listening-orbit-turn 9s linear infinite; opacity: .85; }
+.listening-indicator[data-live="true"] .listening-inner { animation: listening-orbit-turn 13s linear infinite reverse; }
+/* Reuse the recorder's existing meter; never open another audio connection. */
+.listening-indicator[data-live="true"] .listening-core { transform: scale(calc(1 + var(--mic-level, 0) * .8)); transition: transform 120ms ease-out; }
+.listening-indicator[data-visible="false"] :is(.listening-arcs, .listening-inner) { animation-play-state: paused; }
+.lecture-flow-popover { position: fixed; inset: auto; left: var(--flow-left, 16px); top: var(--flow-top, 140px); width: min(420px, calc(100vw - 32px)); max-height: min(440px, var(--flow-height, 65dvh)); margin: 0; padding: 0; border: 0; border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 40px -12px #14231940; overflow: hidden; }
+.lecture-flow-popover:popover-open { display: flex; flex-direction: column; }
+.lecture-flow-popover::backdrop { background: transparent; }
+.lecture-flow-heading { display: flex; flex-shrink: 0; justify-content: space-between; align-items: start; gap: 16px; padding: 20px 20px 16px; border-bottom: 1px solid var(--line); }
+.lecture-flow-heading h2 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+.lecture-flow-heading button { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; margin: -4px -4px 0 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.lecture-flow-heading button:hover { background: var(--tint); color: var(--ink); }
+.lecture-flow-popover button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lecture-flow-body { padding: 20px; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.lecture-flow-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.live-script-view { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.live-script-scroll { min-height: 0; overflow-y: auto; overflow-anchor: none; scroll-behavior: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.live-script-scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.live-script-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.live-script-lines > li { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.live-script-lines p { margin: 0; font-size: 14px; line-height: 1.75; white-space: pre-line; }
+.live-script-lines mark { background: transparent; color: var(--signal); font-weight: 600; }
+.live-script-working { margin: 16px 0 0 48px; color: var(--muted); font-size: 12px; }
+/* The follow control must not resize the viewport when it appears or hides. */
+.live-script-latest { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 6px; width: max-content; max-width: calc(100% - 32px); min-height: 36px; padding: 8px 12px; border: 0; border-radius: 6px; background: var(--surface); color: var(--signal); box-shadow: 0 3px 14px #14231926; font-size: 12px; cursor: pointer; }
+.live-script-latest:hover { background: var(--tint); }
+.lecture-flow-empty { padding: 12px 0 20px; }
+.lecture-flow-empty strong { font-size: 14px; font-weight: 550; }
+.lecture-flow-empty p { margin: 8px 0 0; color: var(--muted); max-width: 32ch; }
+.lecture-flow-feedback { margin: 0; color: var(--muted); font-size: 12px; }
+.lecture-flow-feedback button { border: 0; border-bottom: 1px solid var(--line-strong); background: transparent; color: var(--signal); padding: 6px 0; cursor: pointer; }
+@media (pointer: coarse) { .lecture-flow-heading button { width: 44px; height: 44px; } .live-script-latest { min-height: 44px; } }
+@keyframes listening-orbit-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .listening-indicator[data-live="true"] :is(.listening-arcs, .listening-inner) { animation: none; }
+  .listening-chevron { transition: none; }
+  .listening-indicator[data-live="true"] .listening-core { transform: none; transition: none; }
+}

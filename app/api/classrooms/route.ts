@@ -1,41 +1,44 @@
 import { NextResponse } from "next/server";
+import { hasVerifiedEmail } from "../../lib/verified-email";
 
 import { isUuid } from "../../lib/billing";
 import { getClassroomData } from "../../lib/classroom-data";
 import { parseGlossary } from "../../lib/glossary";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
 import { createClient } from "../../lib/supabase/server";
+import { requestTiming } from "../../lib/request-timing";
 
 export const runtime = "nodejs";
 
 async function context(request: Request) {
+  const timing = requestTiming();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await timing.measure("auth", () => supabase.auth.getUser());
   const isEnglish = request.headers.get("x-site-locale") === "en";
-  if (!user) {
+  if (authError || !hasVerifiedEmail(user)) {
     return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
   }
-  const rateLimit = await checkSharedRateLimit(`classrooms:${user.id}`, 60, 60_000);
+  const rateLimit = await timing.measure("limit", () => checkSharedRateLimit(`classrooms:${user.id}`, 60, 60_000));
   if (!rateLimit.allowed) {
     return { response: NextResponse.json(
       { error: isEnglish ? "Too many requests. Try again shortly." : "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
       { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
     ) };
   }
-  return { user, userId: user.id, supabase, isEnglish };
+  return { user, userId: user.id, supabase, isEnglish, timing };
 }
 
 export async function GET(request: Request) {
   const current = await context(request);
   if ("response" in current) return current.response;
 
-  const data = await getClassroomData(current.supabase, current.user);
+  const data = await current.timing.measure("read", () => getClassroomData(current.supabase, current.user));
   if ("error" in data) {
     console.error("Classroom read failed", data.error);
     return NextResponse.json({ error: current.isEnglish ? "Could not load classrooms." : "강의실을 불러오지 못했습니다." }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json(data, { headers: current.timing.headers() });
 }
 
 export async function POST(request: Request) {
@@ -55,13 +58,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: current.isEnglish ? "Enter a classroom name up to 80 characters." : "강의실 이름을 1~80자로 입력해 주세요." }, { status: 400 });
   }
 
-  const { data, error } = await current.supabase.from("classrooms").insert({ user_id: current.userId, title, locale }).select("id,title,locale,glossary,created_at,updated_at").single();
+  const { data, error } = await current.timing.measure("write", () => current.supabase.from("classrooms").insert({ user_id: current.userId, title, locale }).select("id,title,locale,glossary,created_at,updated_at").single());
   if (error) {
     console.error("Classroom create failed", error.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not create the classroom." : "강의실을 만들지 못했습니다." }, { status: 500 });
   }
 
-  return NextResponse.json({ classroom: { ...data, sessions: [] } }, { status: 201 });
+  return NextResponse.json({ classroom: { ...data, sessions: [] } }, { status: 201, headers: current.timing.headers() });
 }
 
 export async function PATCH(request: Request) {
@@ -90,7 +93,7 @@ export async function PATCH(request: Request) {
   // what the transcription hint will carry — not their raw spacing.
   const glossary = editsGlossary ? parseGlossary(body.glossary).join(", ") : null;
 
-  const { data, error } = await current.supabase
+  const { data, error } = await current.timing.measure("write", () => current.supabase
     .from("classrooms")
     .update({
       ...(editsTitle ? { title } : {}),
@@ -99,11 +102,11 @@ export async function PATCH(request: Request) {
     })
     .eq("id", classroomId)
     .select("id,title,locale,glossary,created_at,updated_at")
-    .maybeSingle();
+    .maybeSingle());
   if (error || !data) {
     if (error) console.error("Classroom update failed", error.code);
     return NextResponse.json({ error: current.isEnglish ? "Could not save the classroom." : "강의실 정보를 저장하지 못했습니다." }, { status: 500 });
   }
 
-  return NextResponse.json({ classroom: data });
+  return NextResponse.json({ classroom: data }, { headers: current.timing.headers() });
 }

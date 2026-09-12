@@ -57,7 +57,8 @@
   padding: 64px 0 120px;
 }
 
-.content section { display: grid; grid-template-columns: 250px 1fr; gap: 54px; padding: 42px 0; border-bottom: 1px solid var(--legal-line); }
+.content section { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 54px; padding: 42px 0; border-bottom: 1px solid var(--legal-line); }
+.content section > div { min-width: 0; }
 .content h2 { margin: 0; font-size: 21px; line-height: 1.4; letter-spacing: -.025em; }
 .content h3 { margin: 30px 0 10px; font-size: 15px; }
 .content h3:first-child { margin-top: 0; }
@@ -99,7 +100,7 @@
   .hero > div { grid-template-columns: 1fr; gap: 34px; margin-top: 34px; }
   .hero dl { min-width: 0; }
   .content { width: calc(100% - 32px); padding: 42px 0 80px; }
-  .content section { grid-template-columns: 1fr; gap: 20px; padding: 34px 0; }
+  .content section { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 34px 0; }
   .content h2 { font-size: 20px; }
   .footer { grid-template-columns: 1fr; padding: 42px 16px; }
   .footer div { justify-self: start; flex-wrap: wrap; }

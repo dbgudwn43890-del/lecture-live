@@ -24,7 +24,8 @@ async function entitlement(admin: NonNullable<ReturnType<typeof createAdminClien
       if (!original.subscription_id) throw new Error("Subscription still attaching");
       if (original.subscription_id !== (subscription ? data.id : data.subscription_id) || original.customer_id !== data.customer_id) return null;
     }
-    return { userId: order.user_id, plan: order.plan_code, credits: order.credits, months: order.months, trial: false };
+    return { userId: order.user_id, plan: order.plan_code, credits: order.credits, months: order.months,
+      entitlementVersion: order.entitlement_version ?? "upfront_v2", orderId, trial: false };
   }
   // Existing purchases keep the old entitlement, but only a previously bound
   // customer may receive legacy renewal events. New checkout never uses these IDs.
@@ -37,7 +38,7 @@ async function entitlement(admin: NonNullable<ReturnType<typeof createAdminClien
   const { data: account, error } = await admin.from("billing_accounts").select("paddle_customer_id,paddle_subscription_id").eq("user_id", custom.lecue_user_id).maybeSingle();
   if (error) throw new Error("Legacy account lookup failed");
   if (!account || account.paddle_customer_id !== data.customer_id || (plan === "monthly" && account.paddle_subscription_id !== (subscription ? data.id : data.subscription_id))) return null;
-  return { userId: custom.lecue_user_id, plan, credits: PLAN_CREDITS[plan], months: plan === "monthly" ? 1 : plan === "term" ? 4 : 6, trial: true };
+  return { userId: custom.lecue_user_id, plan, credits: PLAN_CREDITS[plan], months: plan === "monthly" ? 1 : plan === "term" ? 4 : 6, entitlementVersion: "upfront_v2", orderId: null, trial: true };
 }
 
 export async function POST(request: Request) {
@@ -60,10 +61,23 @@ export async function POST(request: Request) {
       const subtotal = totalBeforeDiscount !== null && discount !== null ? totalBeforeDiscount - discount : null;
       const total = amount(data.details?.totals?.grand_total);
       if (owner && typeof data.id === "string" && subtotal && subtotal > 0 && total) {
+        // Invoice and subscription dates can precede successful collection.
+        // New allocations start at capture; existing orders keep their original dates.
+        const captured = (Array.isArray(data.payments) ? data.payments : [])
+          .filter((payment: Data) => payment?.status === "captured" && validDate(payment.captured_at)
+            && Date.parse(payment.captured_at) <= Date.parse(event.occurred_at))
+          .map((payment: Data) => payment.captured_at as string)
+          .sort((a: string, b: string) => Date.parse(b) - Date.parse(a));
+        const paidAt = captured[0] ?? event.occurred_at;
         const start = validDate(data.billing_period?.starts_at) ? data.billing_period.starts_at : validDate(data.billed_at) ? data.billed_at : event.occurred_at;
         const end = owner.plan === "monthly" && validDate(data.billing_period?.ends_at) ? data.billing_period.ends_at : addUtcMonths(start, owner.months);
+        const firstExpiry = owner.plan === "monthly" && validDate(data.billing_period?.ends_at)
+          && Date.parse(data.billing_period.ends_at) > Date.parse(paidAt)
+          ? data.billing_period.ends_at : addUtcMonths(paidAt, owner.plan === "topup" ? 12 : 1);
         grant = { user_id: owner.userId, source_type: "payment", source_id: data.id, plan_code: owner.plan,
-          credits: owner.credits, starts_at: start, expires_at: end, paid_subtotal: subtotal };
+          credits: owner.credits, months: owner.months, entitlement_version: owner.entitlementVersion, order_id: owner.orderId,
+          starts_at: owner.entitlementVersion === "monthly_v1" ? paidAt : start,
+          expires_at: owner.entitlementVersion === "monthly_v1" ? firstExpiry : end, paid_at: paidAt, paid_subtotal: subtotal };
         if (typeof data.customer_id === "string") account = { user_id: owner.userId, customer_id: data.customer_id };
         if (account && owner.plan === "monthly" && typeof data.subscription_id === "string") {
           account = { ...account, subscription_id: data.subscription_id, status: "active", period_starts_at: start, period_ends_at: end,

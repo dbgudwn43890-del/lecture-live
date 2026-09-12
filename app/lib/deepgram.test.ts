@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SPEECH_LANGUAGES } from "./speech-languages.ts";
 
 import {
   KEYTERM_CHARACTER_BUDGET,
@@ -93,11 +94,22 @@ test("builds a listen url with repeated keyterm and no encoding", () => {
 
 test("accepts multilingual recognition and rejects unknown language values", () => {
   assert.equal(deepgramLanguage("multi", "ko"), "multi");
-  assert.equal(deepgramLanguage("fr", "ko"), "ko");
-  assert.equal(deepgramLanguage("fr", "multi"), "multi");
+  assert.equal(deepgramLanguage("unsupported", "ko"), "ko");
+  assert.equal(deepgramLanguage("unsupported", "multi"), "multi");
   const url = listenUrl({ language: "multi", keyterms: ["Lecue"], sessionId: "multi" });
   assert.ok(url.includes("language=multi"));
   assert.ok(url.includes("endpointing=100"));
+});
+
+test("every product language survives parsing and reaches the Nova-3 socket", () => {
+  for (const { code } of SPEECH_LANGUAGES) {
+    assert.equal(deepgramLanguage(code, "ko"), code);
+    const url = new URL(listenUrl({ language: code, keyterms: ["Lecue", "Fourier transform"], sessionId: "languages" }));
+    assert.equal(url.searchParams.get("language"), code);
+    assert.equal(url.searchParams.get("model"), "nova-3");
+    assert.deepEqual(url.searchParams.getAll("keyterm"), ["Lecue", "Fourier transform"]);
+    assert.equal(url.searchParams.get("encoding"), null);
+  }
 });
 
 test("uses the bare Deepgram endpoint in default mode", () => {

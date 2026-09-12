@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasVerifiedEmail } from "../../lib/verified-email";
 
 import { CONSENT_TYPES, CONSENT_VERSION, isConsentType } from "../../lib/consent";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
@@ -8,9 +9,9 @@ export const runtime = "nodejs";
 
 async function context(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   const isEnglish = request.headers.get("x-site-locale") === "en";
-  if (!user) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
+  if (authError || !hasVerifiedEmail(user)) return { response: NextResponse.json({ error: isEnglish ? "Sign-in is required." : "로그인이 필요합니다." }, { status: 401 }) };
   const rateLimit = await checkSharedRateLimit(`consents:${user.id}`, 30, 60_000);
   if (!rateLimit.allowed) {
     return { response: NextResponse.json(

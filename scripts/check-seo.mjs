@@ -23,6 +23,12 @@ for (const lang of ['ko', 'en']) {
   const { html } = await page('/', { cookie: `site-locale-choice=${lang}` });
   assert.ok(html.includes(`rel="canonical" href="${origin}/${lang}"`));
 }
+for (const path of ['/월', '/4개월', '/month']) {
+  const response = await fetch(new URL(path, base), { redirect: 'manual' });
+  assert.equal(response.status, 308, `${path}: expected a permanent redirect`);
+  assert.equal(new URL(response.headers.get('location'), base).pathname, '/billing');
+  console.log(`PASS retired pricing link ${path}`);
+}
 const login = await page('/en/login?next=/en/classroom', { cookie: 'site-locale-choice=en' });
 assert.match(login.html, /name="robots" content="noindex, follow"/);
 const robots = await page('/robots.txt');

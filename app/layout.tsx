@@ -41,7 +41,9 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: "Lecue",
     title: "Lecue",
     description,
+    twitter: { card: "summary_large_image", title: "Lecue", description, images: ["/brand/lecue-social-b.png"] },
     openGraph: {
+      images: [{ url: "/brand/lecue-social-b.png", width: 1200, height: 630, alt: "Lecue" }],
       type: "website",
       siteName: "Lecue",
       title: "Lecue",

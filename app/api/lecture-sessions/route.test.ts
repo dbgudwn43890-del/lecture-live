@@ -76,7 +76,7 @@ function queryBuilder(table: string) {
 const USER_ID = "2f4fd830-c135-4ab7-bd81-6d060b5625b9";
 
 const supabaseStub = {
-  auth: { getUser: () => Promise.resolve({ data: { user: { id: USER_ID } } }) },
+  auth: { getUser: () => Promise.resolve({ data: { user: { id: USER_ID, email: "learner@example.test", email_confirmed_at: "2026-09-07T00:00:00Z" } } }) },
   from: queryBuilder,
   rpc(name: string, params: unknown) {
     const call: Call = { table: `rpc:${name}`, op: "rpc", payload: params, filters: [] };
@@ -129,7 +129,7 @@ class FakeOpenAI {
   embeddings = {
     create: (params: EmbeddingsCall) => {
       embeddingsCalls.push(params);
-      return Promise.resolve({ data: params.input.map((_, index) => ({ embedding: [index] })) });
+      return Promise.resolve({ data: params.input.map((_, index) => ({ embedding: [index], index })) });
     },
   };
   constructor(_options: unknown) {}
@@ -137,7 +137,13 @@ class FakeOpenAI {
 
 mock.module("openai", { defaultExport: FakeOpenAI });
 
-const { GET, POST, PATCH } = await import("./route.ts");
+let afterCallbacks: Array<() => Promise<void>> = [];
+mock.module("next/server", { namedExports: {
+  NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) },
+  after: (callback: () => Promise<void>) => afterCallbacks.push(callback),
+} });
+const { GET, POST, PATCH, DELETE } = await import("./route.ts");
+async function runAfter() { for (const callback of afterCallbacks.splice(0)) await callback(); }
 
 function request(url: string, init?: RequestInit) {
   return new Request(url, init);
@@ -145,7 +151,17 @@ function request(url: string, init?: RequestInit) {
 
 test.beforeEach(() => {
   calls = [];
-  outcomes = {};
+  afterCallbacks = [];
+  outcomes = {
+    "rpc:reserve_lecture_index.rpc": { data: { allowed: true, claim_token: "index-claim" }, error: null },
+    "rpc:finish_lecture_index.rpc": { data: true, error: null },
+    "rpc:replace_lecture_index_service.rpc": { data: true, error: null },
+    "rpc:save_lecture_final_service.rpc": call => {
+      const value = call.payload as { p_session_id: string; p_segments: Array<{id:string}>; p_complete: boolean };
+      return { data: { saved: true, completed: value.p_complete, acknowledgedSegmentIds: value.p_segments.map(segment => segment.id),
+        session: { id: value.p_session_id, status: value.p_complete ? "completed" : "paused" }, indexingPending: value.p_complete } };
+    },
+  };
   segmentsBySession = {};
   embeddingsCalls = [];
   process.env.OPENAI_API_KEY = "sk-test";
@@ -243,224 +259,92 @@ test("GET pages through more than 1,000 transcript segments instead of truncatin
   assert.equal(body.segments.length, rowCount);
 });
 
-test("reconcile indexes the sessions it recovers so they don't vanish from RAG", async () => {
+test("reconcile records completion through the shared-lock RPC and dispatches durable jobs after response", async () => {
   const sessionId = randomUUID();
-  const classroomId = randomUUID();
-  outcomes["lecture_sessions.select"] = {
-    data: [{ id: sessionId, classroom_id: classroomId, user_id: USER_ID }],
-    error: null,
-  };
-  segmentsBySession[sessionId] = [
-    { client_id: "a", start_ms: 0, end_ms: 1_000, text: "안녕하세요, 오늘 수업을 시작하겠습니다." },
-    { client_id: "b", start_ms: 1_000, end_ms: 2_000, text: "지난 시간에 배운 내용을 복습해봅시다." },
-  ];
-  outcomes["lecture_chunks.select"] = { data: [], error: null }; // nothing indexed yet
-  outcomes["lecture_chunks.insert"] = { data: null, error: null };
-
-  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
-    method: "POST",
-    body: JSON.stringify({ action: "reconcile" }),
-  }));
-
-  assert.ok(response);
-  assert.equal(response.status, 200);
-  const body = await response.json() as { reconciled: number; indexed: number; indexingDeferred: number; hasMore: boolean };
-  assert.equal(body.reconciled, 1);
-  assert.equal(body.indexed, 1);
-  assert.equal(body.indexingDeferred, 0);
-  assert.equal(body.hasMore, false);
-
-  assert.equal(embeddingsCalls.length, 1, "embeds the recovered session's transcript in one call");
-
-  const completedUpdate = calls.find((call) => call.table === "lecture_sessions" && call.op === "update");
-  assert.ok(completedUpdate, "the stale session must be marked completed");
-  assert.equal((completedUpdate!.payload as { status: string }).status, "completed");
-
-  const chunkInsert = calls.find((call) => call.table === "lecture_chunks" && call.op === "insert");
-  assert.ok(chunkInsert, "the recovered session's chunks must be saved");
-  const insertedRows = chunkInsert!.payload as { session_id: string }[];
-  assert.ok(insertedRows.every((row) => row.session_id === sessionId));
-});
-
-test("reconcile skips re-embedding a session that already has chunks", async () => {
-  const sessionId = randomUUID();
-  outcomes["lecture_sessions.select"] = {
-    data: [{ id: sessionId, classroom_id: null, user_id: USER_ID }],
-    error: null,
-  };
-  segmentsBySession[sessionId] = [
-    { client_id: "a", start_ms: 0, end_ms: 1_000, text: "이미 인덱싱된 강의입니다." },
-  ];
-  outcomes["lecture_chunks.select"] = { data: [{ session_id: sessionId }], error: null };
-
-  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
-    method: "POST",
-    body: JSON.stringify({ action: "reconcile" }),
-  }));
-
-  assert.ok(response);
-  assert.equal(response.status, 200);
-  assert.equal(embeddingsCalls.length, 0);
-  const body = await response.json() as { indexed: number };
-  assert.equal(body.indexed, 0);
-});
-
-test("reconcile indexes a completed lecture that never got chunks, and stops once it has them", async () => {
-  const sessionId = randomUUID();
-  const classroomId = randomUUID();
-  // Nothing is stuck in "recording" — this lecture ended normally, but its
-  // indexing run failed or was deferred, so it has no chunks and the stale
-  // branch will never look at it again.
-  outcomes["lecture_sessions.select"] = (call) =>
-    call.filters.includes("in:status=recording,paused")
-      ? { data: [], error: null }
-      : { data: [{ id: sessionId, classroom_id: classroomId, user_id: USER_ID }], error: null };
-  segmentsBySession[sessionId] = [
-    { client_id: "a", start_ms: 0, end_ms: 1_000, text: "인덱싱이 빠진 채로 끝난 수업입니다." },
-    { client_id: "b", start_ms: 1_000, end_ms: 2_000, text: "다음 질문에서 검색되지 않으면 영구 누락입니다." },
-  ];
-  outcomes["lecture_chunks.select"] = { data: [], error: null };
-  outcomes["lecture_chunks.insert"] = { data: null, error: null };
-
-  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
-    method: "POST",
-    body: JSON.stringify({ action: "reconcile" }),
-  }));
-
-  assert.ok(response);
-  const body = await response.json() as { reconciled: number; indexed: number };
-  assert.equal(body.reconciled, 0, "nothing was stuck recording");
-  assert.equal(body.indexed, 1, "the un-indexed completed lecture is picked up anyway");
+  outcomes["lecture_sessions.select"] = call => ({ data: call.filters.includes("in:status=recording,paused") ? [{ id: sessionId }] : { id: sessionId, classroom_id: null, status: "completed" } });
+  outcomes["lecture_index_queue.select"] = { data: [{ session_id: sessionId }] };
+  segmentsBySession[sessionId] = [{ client_id: "tail", start_ms: 0, end_ms: 1000, text: "Recovered transcript" }];
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", { method: "POST", body: JSON.stringify({ action: "reconcile" }) }));
+  assert.equal(response?.status, 200);
+  assert.deepEqual(await response!.json(), { reconciled: 1, indexed: 0, indexingDeferred: 1, hasMore: false });
+  assert.equal(embeddingsCalls.length, 0, "saving must return before the provider request");
+  assert.deepEqual(calls.find(call => call.table === "rpc:save_lecture_final_service")?.payload,
+    { p_session_id: sessionId, p_user_id: USER_ID, p_segments: [], p_complete: true });
+  await runAfter();
   assert.equal(embeddingsCalls.length, 1);
-
-  const catchUpSelect = calls.find((call) =>
-    call.table === "lecture_sessions" && call.op === "select" && call.filters.includes("eq:status=completed"));
-  assert.ok(catchUpSelect, "the catch-up query must be bounded by a recency window");
-  assert.ok(catchUpSelect!.filters.some((filter) => filter.startsWith("gt:ended_at=")));
-  assert.ok(catchUpSelect!.filters.includes("gt:duration_seconds=0"));
+  assert.ok(calls.some(call => call.table === "rpc:replace_lecture_index_service"));
+  assert.equal(calls.some(call => call.table === "lecture_chunks" && call.op === "delete"), false);
 });
 
-test("reconcile leaves an already-indexed completed lecture alone", async () => {
+test("recovery indexes all 50,000 stored segments even when partial chunks already exist", async () => {
   const sessionId = randomUUID();
-  outcomes["lecture_sessions.select"] = (call) =>
-    call.filters.includes("in:status=recording,paused")
-      ? { data: [], error: null }
-      : { data: [{ id: sessionId, classroom_id: null, user_id: USER_ID }], error: null };
-  segmentsBySession[sessionId] = [
-    { client_id: "a", start_ms: 0, end_ms: 1_000, text: "이미 인덱싱된 수업입니다." },
-  ];
-  outcomes["lecture_chunks.select"] = { data: [{ session_id: sessionId }], error: null };
-
-  const response = await POST(request("https://lecue.test/api/lecture-sessions", {
-    method: "POST",
-    body: JSON.stringify({ action: "reconcile" }),
-  }));
-
-  assert.ok(response);
-  assert.equal(embeddingsCalls.length, 0, "no transcript read, no embedding, for a lecture that already has chunks");
-  const transcriptReads = calls.filter((call) => call.table === "transcript_segments");
-  assert.deepEqual(transcriptReads, []);
+  outcomes["lecture_sessions.select"] = call => ({ data: call.filters.includes("in:status=recording,paused") ? [] : { id: sessionId, classroom_id: null, status: "completed" } });
+  outcomes["lecture_index_queue.select"] = { data: [{ session_id: sessionId }] };
+  outcomes["lecture_chunks.select"] = { data: [{ session_id: sessionId }] };
+  segmentsBySession[sessionId] = Array.from({ length: 50_000 }, (_, index) => ({ client_id: String(index), start_ms: index * 100, end_ms: (index + 1) * 100, text: index === 49_999 ? "LAST RECOVERED SENTENCE" : "x" }));
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", { method: "POST", body: JSON.stringify({ action: "reconcile" }) }));
+  assert.equal(response?.status, 200);
+  await runAfter();
+  assert.ok(embeddingsCalls[0].input.some(text => text.includes("LAST RECOVERED SENTENCE")));
+  assert.equal((calls.find(call => call.table === "rpc:replace_lecture_index_service")?.payload as { p_segment_count: number }).p_segment_count, 50_000);
 });
 
-test("completing a lecture that is already completed neither charges nor re-embeds", async () => {
+test("already completed retries still send missing segments to the atomic save RPC", async () => {
   const sessionId = randomUUID();
-  outcomes["lecture_sessions.select"] = {
-    data: { id: sessionId, classroom_id: null, started_at: "2026-08-27T00:00:00.000Z", status: "completed" },
-    error: null,
-  };
-
-  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
-    method: "PATCH",
-    body: JSON.stringify({
-      sessionId,
-      durationMs: 0,
-      segments: Array.from({ length: 50 }, (_, index) => ({ id: `pad-${index}`, startMs: 0, endMs: 1_000, text: "x".repeat(200) })),
-    }),
-  }));
-
-  assert.ok(response);
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { completed: true, indexed: false });
+  const segment = { id: "missing", startMs: 1000, endMs: 2000, text: "The missing paid sentence" };
+  outcomes["lecture_sessions.select"] = { data: { id: sessionId, status: "completed" } };
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", { method: "PATCH", body: JSON.stringify({ sessionId, durationMs: 2000, segments: [segment] }) }));
+  assert.equal(response?.status, 200);
+  assert.deepEqual((await response!.json()).acknowledgedSegmentIds, ["missing"]);
+  assert.deepEqual(calls.find(call => call.table === "rpc:save_lecture_final_service")?.payload,
+    { p_session_id: sessionId, p_user_id: USER_ID, p_segments: [segment], p_complete: true });
   assert.equal(embeddingsCalls.length, 0);
-  assert.equal(calls.filter((call) => call.op === "rpc").length, 0);
-  assert.equal(calls.filter((call) => call.table === "transcript_segments" && call.op === "upsert").length, 0);
-  assert.equal(calls.filter((call) => call.table === "lecture_sessions" && call.op === "update").length, 0);
 });
 
-test("a start that failed before the first sample is closed at zero and costs no credit", async () => {
-  const sessionId = randomUUID();
-  outcomes["lecture_sessions.select"] = {
-    // started_at is a minute old: billing off the clock alone would charge one
-    // lecture-minute for a lecture that never recorded a sample.
-    data: { id: sessionId, classroom_id: null, started_at: new Date(Date.now() - 60_000).toISOString(), status: "recording" },
-    error: null,
-  };
-  outcomes["transcript_segments.select"] = { data: null, error: null, count: 0 };
-  outcomes["lecture_sessions.update"] = { data: null, error: null };
+for (const count of [251, 5001]) {
+  test(`a legacy finish preserves all ${count} segments through bounded RPC batches`, async () => {
+    const segments = Array.from({ length: count }, (_, index) => ({ id: String(index), startMs: index, endMs: index + 1, text: "tail" }));
+    const response = await PATCH(request("https://lecue.test/api/lecture-sessions", { method: "PATCH", body: JSON.stringify({ sessionId: randomUUID(), durationMs: count, segments }) }));
+    assert.equal(response?.status, 200);
+    const saves = calls.filter(call => call.table === "rpc:save_lecture_final_service").map(call => call.payload as { p_segments: typeof segments; p_complete: boolean });
+    assert.ok(saves.every(save => save.p_segments.length <= 250));
+    assert.deepEqual(saves.flatMap(save => save.p_segments), segments);
+    assert.equal(saves.at(-1)?.p_complete, true);
+    assert.ok(saves.slice(0, -1).every(save => !save.p_complete));
+    assert.equal((await response!.json()).acknowledgedSegmentIds.length, count);
+  });
+}
 
-  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
-    method: "PATCH",
-    body: JSON.stringify({ sessionId, durationMs: 0, segments: [] }),
-  }));
-
-  assert.ok(response);
-  assert.equal(response.status, 200);
-  assert.equal(calls.filter((call) => call.table === "rpc:consume_lecture_credits").length, 0);
-  const update = calls.find((call) => call.table === "lecture_sessions" && call.op === "update");
-  assert.equal((update?.payload as { duration_seconds: number }).duration_seconds, 0);
-  assert.equal((update?.payload as { status: string }).status, "completed");
+test("an oversized explicit batch rejects every segment without a partial acknowledgement", async () => {
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", { method: "PATCH", body: JSON.stringify({ action: "save-final", sessionId: randomUUID(), durationMs: 251,
+    segments: Array.from({ length: 251 }, (_, index) => ({ id: String(index), startMs: index, endMs: index + 1, text: "tail" })) }) }));
+  assert.equal(response?.status, 413);
+  assert.equal(calls.some(call => call.table === "rpc:save_lecture_final_service"), false);
 });
 
-test("a lecture whose transcript is already in the database still reconciles its credits", async () => {
+for (const code of ["RECORDING_ALREADY_ACTIVE", "RECOVERY_OUTSIDE_PAID_RECORDING", "SEGMENT_CONFLICT"]) {
+  test(`final save preserves recovery data when the atomic guard reports ${code}`, async () => {
+    outcomes["rpc:save_lecture_final_service.rpc"] = { data: { error: code } };
+    const response = await PATCH(request("https://lecue.test/api/lecture-sessions", { method: "PATCH", body: JSON.stringify({ sessionId: randomUUID(), durationMs: 0, segments: [] }) }));
+    assert.equal(response?.status, 409);
+    assert.equal((await response!.json()).code, code);
+    assert.equal(afterCallbacks.length, 0);
+  });
+}
+
+test("recover reports an active lease without calling ordinary pause or changing the row", async () => {
   const sessionId = randomUUID();
-  outcomes["lecture_sessions.select"] = {
-    // 30s past the minute, not on it: the billable minute is derived with
-    // Math.ceil, so an exact boundary lands on either side of it depending on
-    // how long the test itself takes.
-    data: { id: sessionId, classroom_id: null, started_at: new Date(Date.now() - (90 * 60_000 + 30_000)).toISOString(), status: "recording" },
-    error: null,
-  };
-  // The client under-reports: durationMs 0 and an empty segment list. The rows
-  // it saved live during the lecture are what the server counts instead.
-  outcomes["transcript_segments.select"] = { data: null, error: null, count: 120 };
-  outcomes["lecture_sessions.update"] = { data: null, error: null };
-
-  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
-    method: "PATCH",
-    body: JSON.stringify({ sessionId, durationMs: 0, segments: [] }),
-  }));
-
-  assert.ok(response);
-  assert.equal(response.status, 200);
-  const charge = calls.find((call) => call.table === "rpc:consume_lecture_credits");
-  assert.ok(charge, "a 90-minute lecture with a stored transcript must still be charged");
-  assert.equal((charge.payload as { p_minute_index: number }).p_minute_index, 90);
-  const update = calls.find((call) => call.table === "lecture_sessions" && call.op === "update");
-  const stored = (update?.payload as { duration_seconds: number }).duration_seconds;
-  assert.ok(stored >= 5_430 && stored < 5_440, `duration_seconds ${stored} should track the elapsed 90m30s`);
+  outcomes["rpc:recover_lecture_session_service.rpc"] = { data: { status: "recording", recordedMs: 60000, activeRecording: true } };
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", { method: "POST", body: JSON.stringify({ action: "recover", sessionId }) }));
+  assert.deepEqual(await response!.json(), { status: "recording", recordedMs: 60000, activeRecording: true });
+  assert.deepEqual(calls.find(call => call.table === "rpc:recover_lecture_session_service")?.payload, { p_session_id: sessionId, p_user_id: USER_ID });
+  assert.equal(calls.some(call => call.table === "rpc:pause_lecture_session" || call.op === "update"), false);
 });
 
-test("a silently dead recorder is billed to its last transcript minute, not the wall clock", async () => {
-  const sessionId = randomUUID();
-  outcomes["lecture_sessions.select"] = {
-    // 90분 동안 '기록 중'이었지만 스크립트는 10분에서 끊겼다.
-    data: { id: sessionId, classroom_id: null, started_at: new Date(Date.now() - 90 * 60_000).toISOString(), status: "recording" },
-    error: null,
-  };
-  outcomes["transcript_segments.select"] = { data: { end_ms: 600_000 }, error: null, count: 120 };
-  outcomes["lecture_sessions.update"] = { data: null, error: null };
-
-  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
-    method: "PATCH",
-    body: JSON.stringify({ sessionId, durationMs: 0, segments: [] }),
-  }));
-
-  assert.ok(response);
-  assert.equal(response.status, 200);
-  const charge = calls.find((call) => call.table === "rpc:consume_lecture_credits");
-  assert.ok(charge, "the recorded 10 minutes still get billed");
-  // 10분 + 1분 여유 = 11번째 분(index 10)까지. 90분 벽시계가 아니다.
-  assert.equal((charge.payload as { p_minute_index: number }).p_minute_index, 10);
+test("recover returns the server-owned paused clock for an inactive session", async () => {
+  outcomes["rpc:recover_lecture_session_service.rpc"] = { data: { status: "paused", recordedMs: 62000, activeRecording: false } };
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", { method: "POST", body: JSON.stringify({ action: "recover", sessionId: randomUUID() }) }));
+  assert.deepEqual(await response!.json(), { status: "paused", recordedMs: 62000, activeRecording: false });
 });
 
 test("segment save charges the lecture before writing, and refuses to write when credits run out", async () => {
@@ -589,15 +473,66 @@ test("a start request id that is not a uuid is rejected", async () => {
   assert.equal(response?.status, 400);
 });
 
-test("failed final transcript write leaves the lecture retryable", async () => {
-  const sessionId = randomUUID();
-  outcomes["lecture_sessions.select"] = { data: { id: sessionId, classroom_id: null, status: "recording", started_at: new Date().toISOString() }, error: null };
-  outcomes["transcript_segments.upsert"] = { data: null, error: { code: "DB_UNAVAILABLE" } };
-  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", {
-    method: "PATCH", body: JSON.stringify({ sessionId, durationMs: 1000, segments: [{ id: "tail", startMs: 0, endMs: 1000, text: "unsaved tail" }] }),
-  }));
+test("a database failure during final save returns retryable failure and schedules no provider work", async () => {
+  outcomes["rpc:save_lecture_final_service.rpc"] = { error: { code: "DB_UNAVAILABLE" } };
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", { method: "PATCH", body: JSON.stringify({ sessionId: randomUUID(), durationMs: 1000, segments: [{ id: "tail", startMs: 0, endMs: 1000, text: "unsaved tail" }] }) }));
   assert.equal(response?.status, 503);
-  assert.equal(calls.filter(call => call.table === "lecture_sessions" && call.op === "update").length, 0);
-  assert.equal(calls.filter(call => call.table === "rpc:consume_lecture_credits").length, 0);
+  assert.equal(afterCallbacks.length, 0);
+});
+
+test("a completed recovery batch ACK does not dispatch indexing until the final empty confirmation", async () => {
+  const sessionId = randomUUID();
+  const segments = [{ id: "tail", startMs: 0, endMs: 1000, text: "new tail" }];
+  outcomes["rpc:save_lecture_final_service.rpc"] = { data: { saved: true, completed: true, acknowledgedSegmentIds: ["tail"] } };
+  const response = await PATCH(request("https://lecue.test/api/lecture-sessions", { method: "PATCH", body: JSON.stringify({ action: "save-final", sessionId, durationMs: 1000, segments }) }));
+  assert.equal(response?.status, 200);
+  assert.equal(afterCallbacks.length, 0);
+  assert.equal((calls.find(call => call.table === "rpc:save_lecture_final_service")?.payload as { p_complete: boolean }).p_complete, false);
+});
+
+test("daily budget, paid interval, and claim denials prevent deferred embeddings", async () => {
+  for (const reason of ["daily_budget", "unfunded_input", "already_claimed"]) {
+    const sessionId = randomUUID();
+    outcomes["lecture_sessions.select"] = { data: { id: sessionId, classroom_id: null, status: "completed" } };
+    outcomes["rpc:reserve_lecture_index.rpc"] = { data: { allowed: false, reason } };
+    segmentsBySession[sessionId] = [{ client_id: "paid", start_ms: 0, end_ms: 1000, text: "Transcript" }];
+    const response = await PATCH(request("https://lecue.test/api/lecture-sessions", { method: "PATCH", body: JSON.stringify({ sessionId, durationMs: 1000, segments: [] }) }));
+    assert.equal(response?.status, 200);
+    assert.equal((await response!.json()).completed, true);
+    await runAfter();
+  }
   assert.equal(embeddingsCalls.length, 0);
+});
+
+test("relay delayed last transcript saves with zero credit without extra elapsed charge", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = { data: { classroom_id: null, status: "recording" } };
+  outcomes["stt_relay_sessions.select"] = { data: { processed_bytes: 1920000, authorized_bytes: 1920000 } };
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", { method: "POST", body: JSON.stringify({ action: "segment", sessionId, segment: { id: "last", startMs: 59000, endMs: 60000, text: "Paid final sentence" } }) }));
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  assert.equal(calls.filter(call => call.table === "rpc:consume_lecture_credits_elapsed").length, 0);
+});
+
+test("session deletion retains cleanup work in cascade triggers and drains through service owner scope", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.delete"] = { data: { id: sessionId } };
+  outcomes["rpc:claim_storage_deletions.rpc"] = { data: [] };
+  const response = await DELETE(request(`https://lecue.test/api/lecture-sessions?sessionId=${sessionId}`, { method: "DELETE" }));
+  assert.ok(response);
+  assert.equal(response.status, 200);
+  const deletion = calls.find(call => call.table === "lecture_sessions" && call.op === "delete");
+  assert.ok(deletion?.filters.includes(`eq:user_id=${USER_ID}`));
+  assert.equal(calls.filter(call => call.table === "material_documents").length, 0);
+  assert.deepEqual(calls.find(call => call.table === "rpc:claim_storage_deletions")?.payload, { p_limit: 50, p_user_id: USER_ID });
+});
+
+
+test("reconcile leaves an active relay alone when completion refuses it", async () => {
+  const sessionId = randomUUID();
+  outcomes["lecture_sessions.select"] = { data: [{ id: sessionId }] };
+  outcomes["rpc:save_lecture_final_service.rpc"] = { data: { error: "RECORDING_ALREADY_ACTIVE" } };
+  const response = await POST(request("https://lecue.test/api/lecture-sessions", { method: "POST", body: JSON.stringify({ action: "reconcile" }) }));
+  assert.equal((await response!.json()).reconciled, 0);
+  assert.equal(calls.some(call => call.table === "lecture_sessions" && call.op === "update"), false);
 });

@@ -1,25 +1,22 @@
 /**
- * 판매 플랜. 원칙: 자동 갱신은 Monthly 하나뿐, 선결제할수록 크레딧당 단가가
- * 내려가는 사다리(Top-up > Monthly > Semester > Annual), 헤비유저는 Top-up.
- * list*는 "프로모션 종료 후 예정가" — 취소선 앵커. 실제 청구는 usd/krw.
+ * Monthly renews automatically; Semester/Annual prepay monthly installments.
+ * credits is the total purchased entitlement, not the amount available today.
+ * Existing orders keep their immutable price/quantity/version snapshot.
  * Paddle 카탈로그와 반드시 일치해야 한다(checkout이 CATALOG_MISMATCH로 막는다).
  */
 export const PLANS = {
-  monthly: { name: "Monthly", credits: 2_400, months: 1, usd: 9.99, krw: 13_900, listUsd: 15.99, listKrw: 22_900, recurring: true },
-  semester: { name: "Semester", credits: 10_000, months: 4, usd: 33.99, krw: 46_900, listUsd: 56.99, listKrw: 79_000, recurring: false },
-  annual: { name: "Annual", credits: 24_000, months: 12, usd: 78.99, krw: 109_000, listUsd: 135.99, listKrw: 189_000, recurring: false },
-  topup: { name: "Top-up", credits: 1_000, months: 12, usd: 4.29, krw: 5_900, listUsd: 6.99, listKrw: 9_900, recurring: false },
+  monthly: { name: "Monthly", credits: 2_400, monthlyCredits: 2_400, installmentCount: 1, months: 1, usd: 9.99, krw: 7_900, recurring: true },
+  semester: { name: "Semester", credits: 9_600, monthlyCredits: 2_400, installmentCount: 4, months: 4, usd: 35.99, krw: 27_900, recurring: false },
+  halfyear: { name: "Half-year", credits: 14_400, monthlyCredits: 2_400, installmentCount: 6, months: 6, usd: 51.99, krw: 39_900, recurring: false },
+  annual: { name: "Annual", credits: 28_800, monthlyCredits: 2_400, installmentCount: 12, months: 12, usd: 99.99, krw: 74_900, recurring: false },
+  topup: { name: "Top-up", credits: 1_000, monthlyCredits: null, installmentCount: 1, months: 12, usd: 5.99, krw: 5_900, recurring: false },
 } as const;
 export type PurchasePlan = keyof typeof PLANS;
 export const PURCHASE_PLANS = Object.keys(PLANS) as PurchasePlan[];
+export const ENTITLEMENT_VERSION = "monthly_v1";
 export function isPurchasePlan(value: unknown): value is PurchasePlan {
   // `in`은 프로토타입 체인("__proto__", "constructor")까지 통과시킨다.
   return typeof value === "string" && Object.hasOwn(PLANS, value);
-}
-/** 취소선 대비 할인율(%). 표시 전용. */
-export function discountPercent(plan: PurchasePlan) {
-  const { krw, listKrw } = PLANS[plan];
-  return Math.round((1 - krw / listKrw) * 100);
 }
 export const STARTER_CREDITS = 600;
 export const STARTER_DAYS = 14;

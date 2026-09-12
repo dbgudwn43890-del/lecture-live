@@ -1,0 +1,68 @@
+LECUE — ALREADY LISTENING
+US ENGLISH / REVISION 2
+
+POSITIONING
+AI that listens with you.
+
+30-SECOND VOICEOVER
+Missed that last part?
+Lecue listens to your lecture with you.
+So when something doesn't click, just ask.
+Clear explanations. Visuals that help it click.
+[Pause, 16.5–21 seconds]
+All while recording.
+Lecue. AI that listens with you.
+Try the 30-second demo.
+
+15-SECOND VOICEOVER
+Missed that last part?
+Ask the AI that's listening with you.
+[Pause, 7–11 seconds]
+Lecue. Try the demo.
+
+6-SECOND VOICEOVER
+Lecue. AI that listens with you.
+
+ON-SCREEN EDITORIAL COPY
+Wait. What?
+AI that listens with you.
+Stay with the lecture.
+Try the 30-second demo
+lecue.app
+No signup needed
+
+SHORT CTA
+Try the demo
+
+READABLE USER QUESTION
+Can you explain that last part?
+
+VISUAL ANSWER — SYNTHETIC EXAMPLE
+Same total. Different mix.
+The total stays the same. The parts change.
+Example values
+Group A / Group B
+Part 1 / Part 2
+70 : 30 / 30 : 70
+Compare the totals.
+Both add up to 100.
+Look at the parts.
+The proportions change.
+
+ACTUAL ENGLISH UI LABELS
+Recording
+Listening along with you
+Ask about this lecture
+Send question
+Lecture assistant · Default AI
+
+OPTIONAL EXAMPLE SESSION TITLE
+Today's lecture
+
+DISCLOSURE FOR RECONSTRUCTED / TIME-EDITED INTERACTION
+Illustrative UI. Timing condensed.
+
+VOICE DIRECTION
+Natural US English. Calm, conversational adult voice.
+One narrator. No instructor audio. Do not read the question aloud.
+Use owner-approved Lecue pronunciation; provisional scratch guide: leh-kyoo.

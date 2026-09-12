@@ -1,0 +1,164 @@
+{
+  "createdAt": "2026-09-07T05:30:28.516Z",
+  "productionPromptSha256": "30cfafed5686ae71fbf6ef404e3a9e96cd2ad798449a202a5d0b8631c4fa2d5e",
+  "settings": {
+    "model": "gpt-5.6-luna",
+    "reasoning": {
+      "effort": "low"
+    },
+    "store": false,
+    "max_output_tokens": 800,
+    "max_tool_calls": 2,
+    "text": {
+      "verbosity": "low"
+    },
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "type": "web_search",
+        "search_context_size": "low"
+      }
+    ],
+    "include": [
+      "web_search_call.action.sources"
+    ],
+    "stream": true
+  },
+  "scenarios": [
+    {
+      "name": "한국어 비교",
+      "locale": "ko",
+      "question": "주식과 채권은 무슨 차이가 있어?",
+      "lecture": "주식은 회사 소유권의 일부이고 채권은 빌려준 돈을 약속대로 돌려받을 권리입니다. 주주는 배당을 받을 수 있고 채권자는 약정된 이자를 받습니다.",
+      "answer": "**주식**은 회사의 **소유권 일부**를 사는 것이고, **채권**은 회사나 정부에 돈을 **빌려준 뒤 돌려받을 권리**를 사는 것입니다.\n\n| 구분 | 주식 | 채권 |\n|---|---|---|\n| 투자자의 지위 | 회사의 공동 소유자 | 돈을 빌려준 채권자 |\n| 받는 돈 | 배당금: 회사 실적에 따라 달라짐 | 이자: 약속된 조건에 따라 지급 |\n| 원금 상환 | 보통 정해진 상환일 없음 | 만기에 원금 상환 |\n| 위험과 수익 | 손실·수익 변동이 큼 | 상대적으로 예측 가능하지만 발행자가 못 갚을 위험은 있음 |\n\n예를 들어 회사가 100만 원어치 **주식**을 발행하면 투자자는 회사의 일부를 소유합니다. **채권**을 사면 회사에 100만 원을 빌려주고, 약속된 이자와 만기의 원금 상환을 기대합니다.",
+      "responseStatus": "completed",
+      "firstTokenMs": 3251,
+      "completedMs": 5519,
+      "usage": {
+        "input_tokens": 6125,
+        "input_tokens_details": {
+          "cache_write_tokens": 6057,
+          "cached_tokens": 0
+        },
+        "output_tokens": 242,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 6367
+      },
+      "webSearchCalls": 0,
+      "checks": {
+        "table": true,
+        "bothTerms": true
+      },
+      "manualReview": "Explains ownership versus creditor rights, uses a compact comparison table, and adds a concrete amount example. No material factual issue found in this sample."
+    },
+    {
+      "name": "풀이와 수식",
+      "locale": "ko",
+      "question": "f(x)=3x^2일 때 x=2에서의 순간 변화율을 구하는 과정을 알려 줘.",
+      "lecture": "거듭제곱 미분법은 x의 n제곱을 미분하면 n 곱하기 x의 n 마이너스 1제곱이 되는 것입니다.",
+      "answer": "순간 변화율은 **도함수에 해당 값을 대입**해서 구합니다.\n\n1. 거듭제곱 미분법을 적용합니다.\n   $$f(x)=3x^2$$\n   $$f'(x)=3\\cdot 2x^{2-1}=6x$$\n\n2. $$x=2$$를 대입합니다.\n   $$f'(2)=6\\cdot2=12$$\n\n따라서 **x=2에서의 순간 변화율은 12**입니다.",
+      "responseStatus": "completed",
+      "firstTokenMs": 2972,
+      "completedMs": 3878,
+      "usage": {
+        "input_tokens": 6129,
+        "input_tokens_details": {
+          "cache_write_tokens": 95,
+          "cached_tokens": 5966
+        },
+        "output_tokens": 115,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 6244
+      },
+      "webSearchCalls": 0,
+      "checks": {
+        "correctValue": true,
+        "mathDelimiters": true,
+        "steps": true
+      },
+      "manualReview": "Derivative 6x and value 12 are correct. Numbered steps and double-dollar formula delimiters present."
+    },
+    {
+      "name": "영어 확인 문제",
+      "locale": "en",
+      "question": "Give me one quick practice question to check that I understand overfitting, with its answer and a short reason.",
+      "lecture": "Overfitting happens when a model learns training examples too closely and performs poorly on unseen data.",
+      "answer": "### Check yourself\n\nA model gets 99% accuracy on training data but only 60% on unseen test data. Is this likely overfitting?\n\n### Answer\n\n**Yes.** The large performance gap suggests the model memorized training examples instead of learning patterns that generalize.",
+      "responseStatus": "completed",
+      "firstTokenMs": 804,
+      "completedMs": 1512,
+      "usage": {
+        "input_tokens": 5540,
+        "input_tokens_details": {
+          "cache_write_tokens": 5472,
+          "cached_tokens": 0
+        },
+        "output_tokens": 61,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 5601
+      },
+      "webSearchCalls": 0,
+      "checks": {
+        "questionHeading": true,
+        "answerHeading": true,
+        "answerAfterQuestion": true,
+        "english": true
+      },
+      "manualReview": "Question comes before Answer without exposing the solution in introductory text. Uses likely and suggests rather than treating a performance gap as definitive proof."
+    },
+    {
+      "name": "짧은 사실 질문",
+      "locale": "ko",
+      "question": "과제 제출 형식만 알려줘.",
+      "lecture": "과제는 PDF 형식으로 제출해야 합니다.",
+      "answer": "PDF 형식입니다.",
+      "responseStatus": "completed",
+      "firstTokenMs": 2299,
+      "completedMs": 2540,
+      "usage": {
+        "input_tokens": 6084,
+        "input_tokens_details": {
+          "cache_write_tokens": 50,
+          "cached_tokens": 5966
+        },
+        "output_tokens": 9,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 6093
+      },
+      "webSearchCalls": 0,
+      "checks": {
+        "fact": true,
+        "brief": true,
+        "noExtraStructure": true
+      },
+      "manualReview": "Only states the requested PDF format; no forced heading, table, or quiz."
+    }
+  ],
+  "status": "completed",
+  "providerRequestsExecuted": 4,
+  "clientMaxRetries": 0,
+  "summary": {
+    "completedResponses": 4,
+    "allFormatChecksPassed": true,
+    "averageFirstTokenMs": 2331.5,
+    "averageCompletionMs": 3362.25,
+    "webSearchCalls": 0,
+    "usage": {
+      "inputTokens": 23878,
+      "outputTokens": 427,
+      "cachedInputTokens": 11932,
+      "cacheWriteTokens": 11674
+    },
+    "estimatedTokenCostUsd": 0.0037239400000000002,
+    "costNote": "Uses the existing local evaluation harness rate estimate; not verified billing. Web search calls were zero.",
+    "limits": "Four synthetic samples, one run each. Does not establish general answer accuracy, production latency, or learning effectiveness."
+  }
+}

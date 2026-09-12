@@ -1,5 +1,6 @@
 // New accounts receive a card-free starter grant. Existing grants are never reset.
 import { STARTER_CREDITS, STARTER_DAYS } from "./plans";
+import { hasVerifiedEmail } from "./verified-email";
 export const FREE_PILOT = false;
 export const FREE_PILOT_CREDITS = STARTER_CREDITS;
 
@@ -13,6 +14,15 @@ export async function ensureFreePilotGrant(userId: string): Promise<boolean> {
   const { createAdminClient } = await import("./supabase/admin");
   const admin = createAdminClient();
   if (!admin) return false;
+  // This service-role write bypasses RLS. Recheck the authoritative Auth user
+  // before a first grant so a pending signup can never receive starter credits.
+  // This runs only when the classroom found no existing grant.
+  try {
+    const { data: { user }, error } = await admin.auth.admin.getUserById(userId);
+    if (error || !hasVerifiedEmail(user) || user.id !== userId) return false;
+  } catch {
+    return false;
+  }
   const now = Date.now();
   const { error } = await admin.from("credit_grants").upsert({
     user_id: userId,

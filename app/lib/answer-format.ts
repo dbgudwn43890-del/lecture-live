@@ -1,5 +1,10 @@
 export type AnswerSource = { title: string; url: string };
 
+/** Persist Markdown, including code indentation and emphasis. Rendering owns safety. */
+export function cleanAnswerMarkdown(text: string) {
+  return text.replace(/\uE200(?:cite|filecite)\uE202[^\uE201]*\uE201/g, "").trim();
+}
+
 export function cleanAnswerText(text: string) {
   return text
     .replace(/\s*\(\s*\[[^\]\n]*\]\(https?:\/\/[^)\n]+\)\s*\)/gi, "")

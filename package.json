@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node build-tools/prepare-pdf-worker.mjs",
     "dev": "next dev",
+    "prebuild": "node build-tools/prepare-pdf-worker.mjs",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "check:recording": "node scripts/check-recording.mjs",
     "test": "node --experimental-strip-types --experimental-test-module-mocks --test proxy.test.ts \"app/**/*.test.ts\"",
-    "test:auth": "node --experimental-strip-types --test proxy.test.ts",
+    "test:auth": "node --experimental-strip-types --experimental-test-module-mocks --test proxy.test.ts",
     "test:bootstrap-terms": "node --experimental-strip-types --test app/lib/bootstrap-terms.test.ts",
     "test:rate-limit": "node scripts/test-rate-limit.mjs",
     "test:chunks": "node --experimental-strip-types --test app/lib/chunk-transcript.test.ts",
@@ -28,24 +31,37 @@
     "lab:keyterm": "node scripts/keyterm-limit.mjs",
     "test:webhook": "node --experimental-test-module-mocks --test app/api/billing/webhook/route.test.ts",
     "test:ask": "node --experimental-strip-types --experimental-test-module-mocks --test app/api/ask/route.test.ts",
-    "test:lecture-sessions": "node --experimental-test-module-mocks --test app/api/lecture-sessions/route.test.ts"
+    "test:lecture-sessions": "node --experimental-test-module-mocks --test app/api/lecture-sessions/route.test.ts",
+    "postinstall": "node build-tools/install-audio-ffmpeg.mjs"
   },
   "dependencies": {
     "@dnd-kit/react": "^0.5.0",
+    "@streamdown/cjk": "^1.0.3",
+    "@streamdown/math": "^1.0.2",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "katex": "^0.18.5",
     "lucide-react": "^1.39.0",
+    "marked": "^17.0.6",
     "mermaid": "^11.17.2",
-    "next": "^16.3.2",
+    "next": "16.3.3",
     "openai": "^7.5.0",
     "pdfjs-dist": "^6.3.289",
+    "qrcode": "^1.5.4",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "streamdown": "^2.6.0",
+    "tus-js-client": "^4.3.1"
+  },
+  "overrides": {
+    "rehype-katex": {
+      "katex": "$katex"
+    }
   },
   "devDependencies": {
     "@types/katex": "^0.16.8",
     "@types/node": "^26.2.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "babel-plugin-react-compiler": "^1.0.0",

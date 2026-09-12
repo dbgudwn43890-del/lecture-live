@@ -1,10 +1,14 @@
+import { getSiteRegion } from "../lib/site-region";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import LectureWorkspace from "./workspace-client";
 import { getClassroomData } from "../lib/classroom-data";
 import { getCreditStatus } from "../lib/credit-status";
 import { ensureFreePilotGrant } from "../lib/free-pilot";
 import { createClient } from "../lib/supabase/server";
+import { hasVerifiedEmail } from "../lib/verified-email";
+import { canUseLiveAssist } from "../lib/live-assist-access";
 
 export default async function ClassroomPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // The proxy resolves locale from the site-locale cookie and the root layout
@@ -12,8 +16,11 @@ export default async function ClassroomPage({ searchParams }: { searchParams: Pr
   // lang attribute wrapping an entirely Korean workspace.
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "ko";
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return <LectureWorkspace locale={locale} />;
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !hasVerifiedEmail(user)) {
+    const prefix = locale === "en" ? "/en" : "";
+    redirect(`${prefix}/login?${user && !authError ? "error=unverified&" : ""}next=${encodeURIComponent(`${prefix}/classroom`)}`);
+  }
 
   let [data, creditStatus] = await Promise.all([
     getClassroomData(supabase, user),
@@ -32,7 +39,9 @@ export default async function ClassroomPage({ searchParams }: { searchParams: Pr
 
   return (
     <LectureWorkspace
+      region={await getSiteRegion()}
       locale={locale}
+      liveAssistAvailable={canUseLiveAssist(user)}
       restoreSessionId={restoreSessionId}
       initial={{
         profile: "error" in data ? null : data.profile,
