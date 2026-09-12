@@ -164,6 +164,20 @@ function fixture(t: TestContext, handler?: Handler) {
   let mounted = true;
   let tree: unknown;
   const calls: RequestCall[] = [];
+  // Web Crypto finishes on a worker thread, outside the microtask/immediate
+  // queue. Await its real promise before assertions or restoring global mocks.
+  const digests = new Set<Promise<ArrayBuffer>>();
+  const digest = crypto.subtle.digest.bind(crypto.subtle);
+  t.mock.method(crypto.subtle, "digest", (...args: Parameters<SubtleCrypto["digest"]>) => {
+    const pending = digest(...args);
+    digests.add(pending);
+    void pending.finally(() => digests.delete(pending)).catch(noop);
+    return pending;
+  });
+  const settle = async () => {
+    await flush();
+    while (digests.size) { await Promise.allSettled([...digests]); await flush(); }
+  };
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   const memory = new Map<string, string>();
   const environment = {
@@ -206,7 +220,7 @@ function fixture(t: TestContext, handler?: Handler) {
   t.after(async () => {
     mounted = false;
     for (const slot of slots) slot.cleanup?.();
-    await flush();
+    await settle();
     for (const [key, descriptor] of original) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);
       else Reflect.deleteProperty(globalThis, key);
@@ -217,7 +231,7 @@ function fixture(t: TestContext, handler?: Handler) {
     assert.ok(element, "Expected element was not rendered");
     return element;
   };
-  return { calls, find, all: () => descendants(tree),
+  return { calls, find, settle, all: () => descendants(tree),
     title: () => find(element => element.type === "input" && element.props["aria-label"] === "Lecture name"),
     composer: () => find(element => element.type === "textarea" && element.props.id === "question"),
     async typeTitle(value: string) { invoke(this.title(), "onChange", { target: { value } }); await flush(); },
@@ -500,8 +514,32 @@ async function chooseAudio(view: ReturnType<typeof fixture>) {
   const input = view.find(element => element.type === "input" && element.props.type === "file" && String(element.props.accept).includes(".wav"));
   assert.equal(input.props.disabled, false);
   invoke(input, "onChange", { target: { files: [new File(["recording bytes"], "recording.wav", { type: "audio/wav", lastModified: 100 })], value: "" } });
-  for (let index = 0; index < 20; index++) await flush();
+  await view.settle();
 }
+
+test("audio assertions wait for delayed native hashing before advancing to the next fixture", async t => {
+  const hashing = deferred<void>();
+  const digest = crypto.subtle.digest.bind(crypto.subtle);
+  t.mock.method(crypto.subtle, "digest", async (...args: Parameters<SubtleCrypto["digest"]>) => {
+    await hashing.promise;
+    return digest(...args);
+  });
+  const view = fixture(t, call => allowAudio(call) ?? (call.body.action === "prepare"
+    ? Response.json({ upload: audioRow, readyToComplete: true })
+    : call.body.action === "complete" ? Response.json({ upload: { ...audioRow, status: "processing" } }) : undefined));
+  await flush();
+  let settled = false;
+  const chosen = chooseAudio(view).then(() => { settled = true; });
+  try {
+    // Exceed the former twenty-immediate budget while hashing is still held.
+    for (let index = 0; index < 25; index++) await flush();
+    assert.equal(settled, false);
+    assert.equal(view.calls.filter(call => call.body.action === "prepare").length, 0);
+  } finally { hashing.resolve(); }
+  await chosen;
+  assert.deepEqual(view.calls.filter(call => call.url === "/api/lecture-audio" && call.method === "POST").map(call => call.body.action), ["prepare", "complete"]);
+  assert.match(view.text(), /Transcribing\. You can leave this page/);
+});
 
 test("recording upload prepares a scoped transfer then completes through JSON without sending the file to Next", async t => {
   const view = fixture(t, call => allowAudio(call) ?? (call.url === "/api/lecture-audio" && call.body.action === "prepare"

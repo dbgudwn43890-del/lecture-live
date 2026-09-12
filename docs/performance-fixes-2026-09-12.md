@@ -17,7 +17,8 @@ The review covered commit `2533c17`. The owner approved fixing every finding and
 
 ## Validation
 
-- Final production Turbopack build, TypeScript check and all 945 application tests passed. Separate recording-preflight/relay tests: 54 passed. Build helper tests: 16 passed.
+- Final production Turbopack build, TypeScript check and all 946 application tests passed (full suite on Node 24). Separate recording-preflight/relay tests: 54 passed. Build helper tests: 16 passed.
+- The first clean GitHub run exposed two upload test timing failures: twenty event-loop turns did not guarantee native SHA-256 completion, allowing unfinished work to enter the next fixture. Fixtures now await the real digest before assertions and cleanup; a delayed-digest regression preserves request-order and exact-count checks. The focused 19 tests passed on Node 24 and 26, including a single-thread worker pool. Application upload behavior was unchanged.
 - Local recording baseline: the server was initially absent; relay health passed. Started a new local server without restarting another process, then all actual local HTTP recording preflight checks passed before editing and after changes. Production HTTP recording preflight also passed.
 - Disabled live assist, 60 simulated clock updates: zero transcript/history reads and zero state publications after initialization. Enable/session-switch/pending-answer regressions passed.
 - Actual loopback HTTP tests cover stalled headers and partial JSON bodies; additional tests cover the combined deadline, late completion, retry and disposal.
