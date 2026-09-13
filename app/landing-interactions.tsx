@@ -44,7 +44,7 @@ export default function LandingInteractions({ locale, children }: { locale: "ko"
       byId("total-b").classList.toggle("winning", b > a);
       byId("total-label").textContent = t(equal ? "반반씩 섞으면" : "합치면");
       byId("table-footnote").textContent = t(equal ? "PC·모바일 비중을 50%씩 맞춘 비교예요." : "PC에서도, 모바일에서도 B가 높은데 합계는 반대예요.");
-      byId("equalize-button").textContent = t(equal ? "원래 강의 데이터로 돌아가기 ↶" : "PC·모바일을 반반씩 비교하면? →");
+      byId("equalize-button").textContent = t(equal ? "원래 강의 데이터로 돌아가기" : "PC·모바일을 반반씩 비교하면?");
       byId("equalize-button").setAttribute("aria-pressed", String(equal));
       byId("what-if-result").hidden = !equal;
     }
@@ -54,7 +54,7 @@ export default function LandingInteractions({ locale, children }: { locale: "ko"
       byId("demo-answer").hidden = true;
       byId("earlier-context").hidden = true;
       ["source-button", "explain-button", "mobile-explain"].forEach(id => byId(id).setAttribute("aria-expanded", "false"));
-      byId("source-button").textContent = t("↖ 37:05 · 앞에서 설명한 근거 보기");
+      byId("source-button").textContent = t("37:05 · 앞에서 설명한 근거 보기");
       byId("demo-announcement").textContent = "";
       byId("demo-footer-copy").textContent = t("예시 데이터로 잠깐 체험 중이에요.");
       setWeights(false);
@@ -116,7 +116,7 @@ export default function LandingInteractions({ locale, children }: { locale: "ko"
         const earlier = byId("earlier-context");
         earlier.hidden = !earlier.hidden;
         byId("source-button").setAttribute("aria-expanded", String(!earlier.hidden));
-        byId("source-button").textContent = t(earlier.hidden ? "↖ 37:05 · 앞에서 설명한 근거 보기" : "37:05 · 강의 근거 접기");
+        byId("source-button").textContent = t(earlier.hidden ? "37:05 · 앞에서 설명한 근거 보기" : "37:05 · 강의 근거 접기");
         if (!earlier.hidden) {
           appear(earlier);
           earlier.scrollIntoView({ block: "nearest", behavior: reduceMotion.matches ? "instant" : "smooth" });
@@ -149,7 +149,7 @@ export default function LandingInteractions({ locale, children }: { locale: "ko"
     }, { signal });
     note.addEventListener("toggle", () => {
       byId("preview-note-button").setAttribute("aria-expanded", String(note.open));
-      byId("preview-note-button").textContent = t(note.open ? "복습 노트 접기 ↙" : "복습 노트 한 장 펼쳐보기 ↗");
+      byId("preview-note-button").textContent = t(note.open ? "복습 노트 접기" : "복습 노트 한 장 펼쳐보기");
     }, { signal });
     const observer = new MutationObserver(themeLabel);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

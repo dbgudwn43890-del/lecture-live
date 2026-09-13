@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowRight, Check, RotateCcw, X } from "lucide-react";
+import { Check, RotateCcw, X } from "lucide-react";
 import QRCode from "qrcode";
 import WorkspaceDialog from "./workspace-dialog";
 import { createDesktopPhoneMic, type DesktopPhoneMic, type PhoneState } from "../lib/phone-mic-client";
@@ -110,7 +110,7 @@ function PairingDialog({ locale, onClose, onReady, onPause }: Props) {
         {local && <p className="phone-pair-local">{en ? "A phone cannot open this localhost address. Use this feature on the deployed Lecue site." : "휴대폰은 이 로컬 주소를 열 수 없어요. 배포된 Lecue에서 연결해 주세요."}</p>}
         <footer className="phone-pair-actions">
           {expired || failure ? <button className="phone-pair-primary" type="button" onClick={() => setAttempt(value => value + 1)}><RotateCcw size={17} aria-hidden="true" />{en ? "Create new QR code" : "새 QR 만들기"}</button>
-            : <button className="phone-pair-primary" type="button" disabled={!ready} onClick={begin}>{en ? "Start with this microphone" : "이 마이크로 시작"}<ArrowRight size={18} aria-hidden="true" /></button>}
+            : <button className="phone-pair-primary" type="button" disabled={!ready} onClick={begin}>{en ? "Start with this microphone" : "이 마이크로 시작"}</button>}
           <p>{en ? "Keep your phone’s screen open while recording." : "녹음 중에는 휴대폰 화면을 열어 두세요."}</p>
         </footer>
       </section>
