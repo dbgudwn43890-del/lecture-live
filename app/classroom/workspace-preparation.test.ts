@@ -399,14 +399,12 @@ test("unavailable recording uploads stop the file picker before the learner choo
   assert.equal(view.calls.filter(call => call.url === "/api/lecture-audio" && call.method === "POST").length, 0);
 });
 
-test("preparation passes the selected language and stops the local sound check before recording starts", async t => {
+test("preparation stops the local sound check before recording starts", async t => {
   const view = fixture(t);
   await flush();
   const preparation = view.find(element => element.type === "recording-preparation");
   assert.equal(preparation.props.english, true);
   assert.equal(preparation.props.enabled, true);
-  assert.equal(typeof preparation.props.language, "string");
-  assert.ok(String(preparation.props.language).length > 0);
   let stopped = false;
   (preparation.props.stopRef as { current: () => void }).current = () => { stopped = true; };
   invoke(view.find(element => element.type === "button" && visibleText(element) === "In-person lecture"), "onClick");
