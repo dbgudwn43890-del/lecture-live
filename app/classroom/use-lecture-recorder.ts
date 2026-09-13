@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { createPcmRecorder, type PcmRecorder } from "./pcm-recorder";
 
+import { trackAnalyticsEvent } from "../lib/analytics";
 import type { DeepgramFinal, DeepgramLanguage } from "../lib/deepgram";
 import { utteranceOverflowed, utteranceSegment } from "../lib/deepgram";
 import { acquireLectureInput, waitForConsentedInput, LectureInputError, type LectureInput, type LectureInputSource } from "../lib/lecture-input";
@@ -1096,6 +1097,12 @@ export function useLectureRecorder(options: RecorderOptions) {
       await connectDeepgram(stream);
       if (operationIdRef.current !== operationId) throw STALE;
       if (!captureMatches(stream, externalSource ?? null) || !socketOpenedRef.current) throw new LectureInputError("failed");
+      // Count only a newly created session whose capture and relay socket both
+      // reached the recording state. Resume and reconnect paths do not pass here.
+      trackAnalyticsEvent("recording_started", {
+        locale,
+        input_source: source === "browser-tab" ? "browser_tab" : "microphone",
+      });
     } catch (caught) {
       const stale = operationIdRef.current !== operationId;
       if (startedSessionId && (stale || !socketOpenedRef.current)) {

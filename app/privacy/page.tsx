@@ -28,6 +28,7 @@ export default function PrivacyPage() {
               <tr><td>음성</td><td>마이크 음성 스트림, 온라인 강의에서 이용자가 선택한 브라우저 탭의 오디오 스트림</td><td>실시간 음성 인식</td><td>기록 중</td></tr>
               <tr><td>개인 AI 연결</td><td>선택한 공급자·모델, 이용자가 입력한 API 키</td><td>이용자가 선택한 AI 공급자의 답변 제공</td><td>해당 기능 선택 시</td></tr>
               <tr><td>서비스 이용</td><td>IP 주소, 브라우저·기기 정보, 접속 일시, 쿠키, 오류·보안 로그</td><td>서비스 보안, 부정 이용 방지, 오류 대응</td><td>접속·이용 과정에서 자동 생성</td></tr>
+              <tr><td>선택 분석</td><td>정적 페이지 분류·제목, 알려진 유입 사이트 출처, 브라우저·기기 정보, 허용 목록에 있는 제품 이벤트와 언어·위치·입력 방식 분류, 형식을 검증한 광고 클릭 또는 알려진 캠페인 값</td><td>제품 분석과 광고 성과 측정. 맞춤 광고에는 이용하지 않음</td><td>분석에 명시적으로 동의한 뒤</td></tr>
               <tr><td>결제</td><td>상품, 금액, 결제·구독·환불 상태, 결제 사업자가 제공하는 고객·거래 식별자, 잔여 크레딧</td><td>결제, 구독, 크레딧과 환불 관리</td><td>체험·결제·환불 시</td></tr>
               <tr><td>문의</td><td>이메일, 문의 내용, 답변 기록</td><td>문의 처리와 분쟁 대응</td><td>문의 시</td></tr>
             </tbody>
@@ -77,12 +78,12 @@ export default function PrivacyPage() {
             <table>
               <thead><tr><th>받는 사업자</th><th>목적·항목</th><th>국가·시점·기간</th></tr></thead>
               <tbody>
-                <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>계정 인증과 서비스 데이터 보관: 이메일, 계정 정보, 강의 기록, 저장을 선택한 암호화된 API 키</td><td>대한민국(AWS 서울 리전) / 가입·저장 시 / 삭제 또는 탈퇴 시까지</td></tr>
+                <tr><td><a href="https://supabase.com/privacy" target="_blank" rel="noreferrer">Supabase, Inc.</a></td><td>계정 인증과 서비스 데이터 보관: 이메일, 계정 정보, 강의 기록, 업로드한 강의 자료, 저장을 선택한 암호화된 API 키</td><td>대한민국(AWS 서울 리전) / 가입·저장 시 / 삭제 또는 탈퇴 시까지</td></tr>
                 <tr><td><a href="https://soniox.com/privacy" target="_blank" rel="noreferrer">Soniox, Inc.</a></td><td>한국어 수업 실시간 음성 인식: 마이크 음성, 선택한 탭 오디오</td><td>미국 / 기록 중 / 사업자 정책에 따른 처리 기간</td></tr>
                 <tr><td><a href="https://deepgram.com/privacy" target="_blank" rel="noreferrer">Deepgram, Inc.</a></td><td>영어 수업 실시간 음성 인식과 녹음 파일 변환: 마이크 음성, 선택한 탭 오디오, 업로드한 녹음</td><td>미국 / 기록·변환 중 / 사업자 정책에 따른 처리 기간</td></tr>
                 <tr><td><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">OpenAI, L.L.C.</a></td><td>AI 답변, 필요한 웹 검색과 관련 강의 내용 확인: 스크립트, 질문, 관련 강의 기록</td><td>미국 등 사업자 처리 국가 / 질문 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">Anthropic, PBC</a></td><td>이용자가 선택한 AI 답변: 스크립트, 질문, 개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
-                <tr><td><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google LLC</a></td><td>Google 로그인 또는 이용자가 선택한 AI 답변: 계정 정보 또는 스크립트·질문·개인 API 키</td><td>미국 등 사업자 처리 국가 / 해당 기능 이용 시 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
+                <tr><td><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google LLC</a></td><td>Google 로그인, 이용자가 선택한 AI 답변 또는 동의한 Google Analytics·Google Ads 측정: 선택 기능에 따라 계정 정보, 스크립트·질문·개인 API 키 또는 정제한 페이지·허용 이벤트·유입 정보</td><td>미국 등 사업자 처리 국가 / 해당 기능 선택 시 또는 분석 동의 후 / 사업자 정책과 계정 설정에 따른 기간</td></tr>
                 <tr><td><a href="https://www.paddle.com/legal/privacy" target="_blank" rel="noreferrer">Paddle 관계사</a></td><td>결제, 정기결제, 세금, 환불과 부정결제 방지: 이름, 이메일, 청구·구매 정보</td><td>영국, 미국, 캐나다 등 / 결제 이용 시 / 법적 의무와 분쟁 대응에 필요한 기간</td></tr>
               </tbody>
             </table>
@@ -92,10 +93,13 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>6. 쿠키</h2>
+        <h2>6. 쿠키와 선택 분석</h2>
         <div>
-          <p>로그인 상태 유지와 보안을 위해 필수 인증 쿠키를 사용합니다. 브라우저에서 차단하면 로그인 기능이 동작하지 않을 수 있습니다.</p>
-          <p>현재 맞춤 광고 쿠키나 제3자 광고 추적 도구는 사용하지 않습니다. 분석 도구를 추가하면 수집 항목과 거부 방법을 이 방침에 공개합니다.</p>
+          <p>로그인 상태 유지와 보안을 위해 필수 인증 쿠키를 사용합니다. 브라우저에서 차단하면 로그인 기능이 동작하지 않을 수 있습니다. 자사 <code>lecue-analytics-consent</code> 쿠키는 분석 선택을 기억하기 위해 “granted” 또는 “denied”를 최대 1년간 저장합니다. 값이 없거나 올바르지 않으면 거부로 처리합니다.</p>
+          <p>이용자가 동의하면 제품 분석과 광고 성과 측정을 위해 Google Analytics 4를 불러옵니다. 분석·광고 저장은 이때만 허용하고, 이 동의 후에만 광고 클릭과 가입 전환을 연결하기 위한 광고 측정 데이터를 Google Ads와 공유할 수 있습니다. 광고 개인 최적화는 계속 거부하고 Google Signals, 리마케팅 잠재고객과 맞춤 광고는 사용하지 않습니다. 향상된 전환을 위한 이메일 등 이용자 제공 데이터도 보내지 않습니다. 거부하면 Google 태그를 불러오지 않고 쿠키 없는 분석 신호도 보내지 않습니다.</p>
+          <p>페이지 조회는 알려진 정적 경로 분류, 고정된 페이지 제목과 알려진 유입 사이트 출처(자사 경로는 정제한 경로)로 줄여 보냅니다. 임의 경로 조각과 쿼리 값은 제거하며, 형식을 검증한 Google 광고 클릭 식별자와 허용 목록에 있는 UTM 출처·매체·캠페인·소재 값만 남길 수 있습니다. 이 개인정보 보호 범위 때문에 유입·광고 기여도 통계는 불완전할 수 있습니다.</p>
+          <p>허용 이벤트는 랜딩 주요 버튼 클릭, Google 또는 이메일 인증 시작, 실제 기록 시작, 최종 답변 성공, 새로 생성한 복습 노트 완료, Lecue 서버가 원자적으로 가입 대상이라고 확인한 가입으로 제한합니다. 이벤트 부가 정보도 미리 정한 언어, 위치, 입력 방식 또는 가입 방식 값만 사용합니다. GA4는 자체 가명 브라우저·분석 세션 식별자를 사용합니다. Lecue의 이메일, 이용자·계정·강의 세션 식별자, 강의실·수업 이름, 질문, 답변, 스크립트와 원본 주소는 분석으로 보내지 않습니다.</p>
+          <p>화면에 계속 표시되는 ‘분석 설정’에서 언제든 선택을 다시 열거나 동의를 철회할 수 있습니다. 철회하면 동의를 거부로 바꾸고 접근 가능한 Google Analytics 쿠키를 삭제하며 앱 이벤트를 중단한 뒤, 이미 불러온 태그가 더 작동하지 않도록 페이지를 새로고침합니다. 브라우저나 네트워크 설정에 따라 Google Analytics 전송 자체가 차단될 수도 있습니다.</p>
         </div>
       </section>
 

@@ -5,17 +5,22 @@ function origin(value: string | undefined) {
 }
 const supabaseOrigin = origin(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const supabaseStorageOrigin = supabaseOrigin.replace(/\.supabase\.co$/, ".storage.supabase.co");
+// Permit only GA's required transport hosts when configured. This is not
+// consent: the client provider still prevents loading/sending until opt-in.
+const ga4Enabled = /^G-[A-Z0-9]{6,20}$/.test(process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID ?? "");
+const ga4Script = ga4Enabled ? "https://www.googletagmanager.com" : "";
+const ga4Transport = ga4Enabled ? "https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://www.googletagmanager.com" : "";
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
   // Next's static HTML contains hydration scripts; a nonce would require dynamic rendering.
-  `script-src 'self' 'unsafe-inline' ${process.env.NODE_ENV === "development" ? "'unsafe-eval'" : ""} https://cdn.paddle.com https://challenges.cloudflare.com`,
+  `script-src 'self' 'unsafe-inline' ${process.env.NODE_ENV === "development" ? "'unsafe-eval'" : ""} https://cdn.paddle.com https://challenges.cloudflare.com ${ga4Script}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: https://*.googleusercontent.com ${supabaseOrigin} https://*.paddle.com`,
+  `img-src 'self' data: blob: https://*.googleusercontent.com ${supabaseOrigin} https://*.paddle.com ${ga4Transport}`,
   "font-src 'self' data:",
-  `connect-src 'self' ${supabaseOrigin} ${supabaseStorageOrigin} ${supabaseOrigin.replace(/^https:/, "wss:")} ${origin(process.env.STT_RELAY_URL)} ${origin(process.env.PHONE_MIC_RELAY_URL).replace(/^https:/, "wss:")} https://*.paddle.com https://challenges.cloudflare.com ${process.env.NODE_ENV === "development" ? "ws://localhost:3000" : ""}`,
+  `connect-src 'self' ${supabaseOrigin} ${supabaseStorageOrigin} ${supabaseOrigin.replace(/^https:/, "wss:")} ${origin(process.env.STT_RELAY_URL)} ${origin(process.env.PHONE_MIC_RELAY_URL).replace(/^https:/, "wss:")} https://*.paddle.com https://challenges.cloudflare.com ${ga4Transport} ${process.env.NODE_ENV === "development" ? "ws://localhost:3000" : ""}`,
   `media-src 'self' blob: ${supabaseOrigin}`,
   "worker-src 'self' blob:",
   "frame-src 'self' blob: https://*.paddle.com https://challenges.cloudflare.com",

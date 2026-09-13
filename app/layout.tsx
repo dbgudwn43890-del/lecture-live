@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Geist, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import AnalyticsProvider from "./components/analytics-provider";
 import { pageSearchMetadata } from "./lib/site-seo";
 // Pretendard as ~92 unicode-range subsets instead of one 2 MB file: a Korean page
 // pulls only the ranges it actually renders (tens of KB), and the browser fetches
@@ -65,7 +66,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             __html: `try{var t=localStorage.getItem("lecue-theme");document.documentElement.dataset.theme=t==="dark"||t==="light"?t:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){document.documentElement.dataset.theme="light"}`,
           }}
         />
-        {children}
+        <AnalyticsProvider locale={locale}>{children}</AnalyticsProvider>
       </body>
     </html>
   );

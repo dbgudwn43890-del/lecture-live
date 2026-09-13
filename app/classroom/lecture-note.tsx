@@ -21,10 +21,11 @@ import { renderMaterialPdfPage } from "./material-pdf";
 
 /** The workspace owns generation state, so closing the dialog does not reset it. */
 export default function LectureNotePanel({
-  state, isEnglish, languagePreference, systemLanguage, outputLanguage, onLanguageChange, onClose,
+  state, isEnglish, languagePreference, systemLanguage, outputLanguage, onLanguageChange, onGenerate, onClose,
 }: { state: ReturnType<typeof useLectureNote>; isEnglish: boolean; languagePreference: NoteLanguagePreference;
-  systemLanguage: NoteLanguage; outputLanguage: NoteLanguage; onLanguageChange(value: NoteLanguagePreference): void; onClose: () => void }) {
-  const { phase, note, message, remaining, startedAt, generate, reload } = state;
+  systemLanguage: NoteLanguage; outputLanguage: NoteLanguage; onLanguageChange(value: NoteLanguagePreference): void;
+  onGenerate(force: boolean): Promise<void>; onClose: () => void }) {
+  const { phase, note, message, remaining, startedAt, reload } = state;
   return (
     <WorkspaceDialog label={isEnglish ? "Review note" : "복습 노트"} onClose={onClose}>
       <div className={`note-panel review-note-panel${!note || phase === "generating" ? " is-preparing" : ""}`}>
@@ -40,7 +41,7 @@ export default function LectureNotePanel({
               </button>
             )}
             {note && phase !== "generating" && (
-              <button type="button" className="note-regenerate" onClick={() => phase === "error" ? void reload() : void generate(true)} disabled={phase !== "error" && remaining === 0}>
+              <button type="button" className="note-regenerate" onClick={() => phase === "error" ? void reload() : void onGenerate(true)} disabled={phase !== "error" && remaining === 0}>
                 {phase === "error" ? (isEnglish ? "Check status" : "상태 다시 확인") : (isEnglish ? "Regenerate" : "다시 만들기")}
               </button>
             )}
@@ -64,7 +65,7 @@ export default function LectureNotePanel({
             <p>{isEnglish
               ? "Create a note with the main points, explanations, and your questions."
               : "핵심 내용과 필요한 설명, 수업 중 했던 질문을 정리합니다."}</p>
-            <button type="button" className="note-create-button" disabled={remaining === 0} onClick={() => void generate(false)}>
+            <button type="button" className="note-create-button" disabled={remaining === 0} onClick={() => void onGenerate(false)}>
               {isEnglish ? "Create note" : "노트 만들기"}
             </button>
           </div>
@@ -74,7 +75,7 @@ export default function LectureNotePanel({
           <div className="note-empty">
             <span className="note-mark" aria-hidden="true">✎</span>
             <p>{message || (isEnglish ? "Could not create the note." : "노트를 만들지 못했습니다.")}</p>
-            <button type="button" className="note-create-button" disabled={phase === "failed" && remaining === 0} onClick={() => phase === "error" ? void reload() : void generate(true)}>
+            <button type="button" className="note-create-button" disabled={phase === "failed" && remaining === 0} onClick={() => phase === "error" ? void reload() : void onGenerate(true)}>
               {phase === "error" ? (isEnglish ? "Reload note" : "노트 다시 불러오기") : (isEnglish ? "Try again" : "다시 시도")}
             </button>
           </div>

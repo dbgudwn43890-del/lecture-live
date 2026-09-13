@@ -80,6 +80,7 @@ function SegmentedControl<T extends string>({ label, value, options, onChange, d
   );
 }
 
+import { trackAnalyticsEvent } from "../lib/analytics";
 import { mergeListedSession, patchListedSession } from "../lib/classroom-session-list";
 import { cleanAnswerMarkdown, cleanSources } from "../lib/answer-format";
 import { CONSENT_COPY } from "../lib/consent";
@@ -1660,6 +1661,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
       : isEnglish ? "Lecture assistant · Default AI" : "강의 조교 · 기본 AI";
 
     const askedAt = atMs;
+    const inputSource = mode === "catchup" ? "catchup" : fromComposer ? "composer" : "example";
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
@@ -1775,6 +1777,9 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
             : message,
         ),
       );
+      // The stream must deliver its terminal done record before this event.
+      // Partial output and error paths never count as answered.
+      trackAnalyticsEvent("question_answered", { locale, input_source: inputSource });
     } catch (caught) {
       const reason = caught instanceof Error && caught.message
         ? caught.message
@@ -1799,7 +1804,49 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
   const [noteOpen, setNoteOpen] = useState(false);
   const noteLanguage = useNoteLanguage(locale);
   const noteState = useLectureNote(status === "ended" && !isFinalizing ? activeSessionId : null, isEnglish, noteLanguage.language);
-  useEffect(() => { setNoteOpen(false); }, [activeSessionId]);
+  const noteAnalyticsRef = useRef<{
+    sessionId: string;
+    placement: "create" | "regenerate";
+    requestedAt: number;
+    startedAt: string | null;
+  } | null>(null);
+
+  function generateNote(force: boolean) {
+    noteAnalyticsRef.current = {
+      sessionId: activeSessionId,
+      placement: force && Boolean(noteState.note) ? "regenerate" : "create",
+      requestedAt: Date.now(),
+      startedAt: null,
+    };
+    return noteState.generate(force);
+  }
+
+  useEffect(() => {
+    const pending = noteAnalyticsRef.current;
+    if (!pending || pending.sessionId !== activeSessionId) return;
+    if (noteState.phase === "generating" && noteState.startedAt) {
+      const started = Date.parse(noteState.startedAt);
+      // A newly accepted request receives a fresh server timestamp. An older
+      // job observed from another tab must not be attributed to this click.
+      if (Number.isFinite(started) && started >= pending.requestedAt) pending.startedAt = noteState.startedAt;
+      return;
+    }
+    if (noteState.phase === "ready") {
+      if (pending.startedAt && !noteState.message) {
+        trackAnalyticsEvent("review_note_ready", { locale, placement: pending.placement });
+      }
+      noteAnalyticsRef.current = null;
+      return;
+    }
+    if (noteState.phase === "none" || noteState.phase === "failed" || noteState.phase === "error") {
+      noteAnalyticsRef.current = null;
+    }
+  }, [activeSessionId, locale, noteState.message, noteState.phase, noteState.startedAt]);
+
+  useEffect(() => {
+    noteAnalyticsRef.current = null;
+    setNoteOpen(false);
+  }, [activeSessionId]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 새로고침 직후, URL의 세션을 다시 여는 동안. 빈 새 수업 화면 대신 베일을 덮는다.
   const [restoring, setRestoring] = useState(Boolean(restoreSessionId));
@@ -2487,7 +2534,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
         {noteOpen && activeSessionId && (
           <LectureNotePanel state={noteState} isEnglish={isEnglish} languagePreference={noteLanguage.preference}
             systemLanguage={noteLanguage.systemLanguage} outputLanguage={noteLanguage.language}
-            onLanguageChange={noteLanguage.change} onClose={() => setNoteOpen(false)} />
+            onLanguageChange={noteLanguage.change} onGenerate={generateNote} onClose={() => setNoteOpen(false)} />
         )}
 
         {/* 사이드바 팝오버는 좁아서 잘렸다. 설정은 화면 가운데 모달로 연다. */}

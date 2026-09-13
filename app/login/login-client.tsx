@@ -13,6 +13,7 @@ import {
 import { languageSwitchUrl } from "../lib/site-locale";
 import SiteLanguageMenu from "../site-language-menu";
 import { createClient } from "../lib/supabase/client";
+import { trackAnalyticsEvent } from "../lib/analytics";
 import "./login.css";
 
 type Mode = "login" | "signup" | "verify-signup" | "reset" | "verify-recovery" | "new-password" | "complete";
@@ -264,8 +265,14 @@ export default function LoginClient({ locale = "ko", region }: { locale?: "ko" |
     event.preventDefault();
     void runAction("submit", () => {
       const client = createClient();
-      if (mode === "signup") return signupWithEmail(client, { email, password, redirectTo: redirectTo() });
-      if (mode === "login") return signInWithEmail(client, { email, password });
+      if (mode === "signup") {
+        trackAnalyticsEvent("auth_started", { locale, placement: "login" });
+        return signupWithEmail(client, { email, password, redirectTo: redirectTo() });
+      }
+      if (mode === "login") {
+        trackAnalyticsEvent("auth_started", { locale, placement: "login" });
+        return signInWithEmail(client, { email, password });
+      }
       if (mode === "reset") return requestPasswordReset(client, { email, redirectTo: redirectTo(true) });
       if (mode === "verify-signup") return verifySignupCode(client, { email, code });
       if (mode === "verify-recovery") return verifyRecoveryCode(client, { email, code });
@@ -277,7 +284,23 @@ export default function LoginClient({ locale = "ko", region }: { locale?: "ko" |
         clearMailStep();
         setPassword("");
         setMode("complete");
-      } else continueToClassroom();
+      } else {
+        if (mode === "verify-signup") {
+          // Code confirmation happens here, not in /auth/callback. Only the
+          // server's auth.users marker can identify a real new account. Never
+          // pass email, verification code or a client-selected user ID.
+          const controller = new AbortController();
+          const timeout = window.setTimeout(() => controller.abort(), 5000);
+          try {
+            await fetch("/api/analytics/signup/finalize", {
+              method: "POST", credentials: "same-origin", signal: controller.signal,
+            });
+          } catch { /* Optional measurement must not block successful sign-in. */ }
+          finally { window.clearTimeout(timeout); }
+          if (!alive.current) return;
+        }
+        continueToClassroom();
+      }
     });
   }
 

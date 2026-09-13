@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { SIGNUP_CONSENT_TYPES, CONSENT_VERSION } from "../../lib/consent";
 import { createClient } from "../../lib/supabase/server";
 import { getSafeAuthNext } from "../../lib/auth-redirect";
+import { finalizeSignupAnalytics, SIGNUP_ANALYTICS_CONSENT_COOKIE } from "../../lib/signup-analytics";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -43,6 +44,16 @@ export async function GET(request: NextRequest) {
       // failed write costs one extra dialog rather than an unrecorded consent.
       if (error) console.error("Signup consent save failed", error.code);
     }
+  }
+
+  if (!result.error) {
+    // Only a database-created marker can become a signup conversion. This
+    // callback also handles returning users, so OAuth success alone is not one.
+    await finalizeSignupAnalytics(
+      supabase,
+      request.cookies.get(SIGNUP_ANALYTICS_CONSENT_COOKIE)?.value,
+      process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID,
+    );
   }
 
   // nextPath can include a lecture or plan query. Assigning it to pathname
