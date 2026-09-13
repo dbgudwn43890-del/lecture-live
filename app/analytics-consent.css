@@ -1,4 +1,6 @@
-.analytics-settings { position: fixed; inset-inline-start: 16px; bottom: 12px; z-index: 80; min-height: 44px; padding: 8px 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; }
+.analytics-close { position: absolute; top: 6px; right: 8px; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; background: transparent; color: var(--muted); border: 0; border-radius: 4px; font: inherit; font-size: 24px; cursor: pointer; }
+.analytics-choice .analytics-copy { padding-inline-end: 20px; }
+.analytics-choice .analytics-actions { margin-inline-end: 20px; }
 .analytics-choice { position: fixed; inset-inline-start: 16px; bottom: 16px; z-index: 81; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 24px; align-items: center; width: min(820px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; box-sizing: border-box; padding: 18px 20px; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 12px; font-size: 14px; line-height: 1.55; }
 .analytics-copy > strong { font-size: 16px; font-weight: 600; }
 .analytics-copy > p { margin: 5px 0 0; }
@@ -10,9 +12,13 @@
 .analytics-details p { max-width: 72ch; margin: 14px 0 0; }
 .analytics-details strong { font-weight: 600; }
 .analytics-choice a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.analytics-actions button:hover, .analytics-settings:hover { background: var(--tint); }
-.analytics-actions button:focus-visible, .analytics-settings:focus-visible, .analytics-details summary:focus-visible, .analytics-choice a:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.analytics-actions button:hover, .analytics-close:hover { background: var(--tint); }
+.analytics-actions button:focus-visible, .analytics-close:focus-visible, .analytics-details summary:focus-visible, .analytics-choice a:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 @media (max-width: 640px) {
   .analytics-choice { inset-inline-start: 12px; bottom: 12px; width: calc(100vw - 24px); grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px; }
   .analytics-actions { width: 100%; }
+}
+@media (max-width: 800px) {
+  .experience .footnote .footnote-links { display: flex; }
+  .experience .footnote .footnote-links > :not([data-analytics-settings]) { display: none; }
 }

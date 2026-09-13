@@ -2378,7 +2378,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
               maxLength={80}
               aria-describedby={activeSessionId ? "lecture-title-save-status" : undefined}
             />
-            {activeSessionId && <small id="lecture-title-save-status" className="lecture-title-save-status" role="status">
+            {activeSessionId && <small id="lecture-title-save-status" className={titleSaveStatus === "error" ? "lecture-title-save-status" : "sr-only"} role="status">
               {titleSaveStatus === "saving" ? (isEnglish ? "Saving name…" : "이름 저장 중…")
                 : titleSaveStatus === "saved" ? (isEnglish ? "Name saved" : "이름 저장됨")
                 : titleSaveStatus === "error" ? <button type="button" onClick={() => void renameSession(activeSessionId, lectureTitleRef.current)}>{isEnglish ? "Name not saved · Retry" : "이름 저장 실패 · 다시 저장"}</button> : ""}
@@ -2421,7 +2421,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
             <div className="lecture-controls">
               {/* UPL-01. A lecture already recorded on a phone takes the same
                   path as a live one; it just arrives all at once. */}
-              <label className="audio-upload-button" aria-disabled={!audioAvailability?.available || audioAvailabilityChecking || audioBusy || isFinalizing}>
+              <label className="audio-upload-button" aria-disabled={!audioAvailability?.available || audioAvailabilityChecking || audioBusy || isFinalizing} title={audioAvailability?.available ? (isEnglish ? `Maximum file size: ${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))} MB` : `파일당 최대 ${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))}MB`) : undefined}>
                 <input
                   ref={audioUploadInputRef}
                   type="file"
@@ -2464,7 +2464,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
         </header>
 
         {status !== "recording" && status !== "connecting" && status !== "paused" && !audioBusy && (
-          <p id="audio-upload-availability" className="audio-upload-availability" role="status">
+          <p id="audio-upload-availability" className={audioAvailabilityChecking || audioAvailability?.available ? "sr-only" : "audio-upload-availability"} role="status">
             {audioAvailabilityChecking ? (isEnglish ? "Checking recording upload availability…" : "녹음 파일 업로드 가능 여부를 확인하고 있어요…")
               : audioAvailability?.available ? (isEnglish ? `Recording uploads: up to ${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))} MB per file.` : `녹음 파일은 ${Math.floor(audioAvailability.maxFileBytes / (1024 * 1024))}MB까지 올릴 수 있어요.`)
               : audioAvailability ? (isEnglish ? "Recording uploads are currently unavailable on our service. You can still record a live lecture or add materials." : "현재 서비스에서 녹음 파일 업로드를 사용할 수 없습니다. 실시간 강의 기록과 자료 추가는 이용할 수 있어요.")
@@ -2692,7 +2692,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
           <div
             className="messages"
             ref={messagesScrollRef}
-            tabIndex={0}
+            tabIndex={messages.length > 0 ? 0 : undefined}
             aria-label={isEnglish ? "Conversation" : "대화 내용"}
           >
             {messages.length === 0 ? (
@@ -2839,6 +2839,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
         <footer className="footnote">
           <Link href={basePath || "/"}><ChevronLeft size={12} aria-hidden="true" />{isEnglish ? "Lecue home" : "Lecue 홈으로"}</Link>
           <span className="footnote-links">
+            <a href={`${basePath}/privacy#cookies`} data-analytics-settings>{isEnglish ? "Cookie settings" : "쿠키 설정"}</a>
             <Link href={`${basePath}/privacy`}>{isEnglish ? "Privacy Policy" : "개인정보처리방침"}</Link>
             <Link href={`${basePath}/terms`}>{isEnglish ? "Terms of Service" : "이용약관"}</Link>
             <Link href={`${basePath}/policy`}>{isEnglish ? "Classroom use policy" : "강의 사용 정책"}</Link>

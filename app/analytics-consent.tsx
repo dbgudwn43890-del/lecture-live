@@ -11,12 +11,20 @@ export default function AnalyticsConsent({ locale }: { locale: "en" | "ko" }) {
   const en = locale === "en";
   const [choice, setChoice] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
   const ready = useRef(false);
   const pending = useRef<Array<{ event: AnalyticsEvent; location: string }>>([]);
   const signupCheck = useRef(false);
   const page = useRef("");
+  const settingsTrigger = useRef<HTMLElement | null>(null);
+  const showNotice = open || (choice === null && !dismissed && ["/", "/en", "/ko", "/login", "/en/login"].includes(path));
+
+  function closeNotice() {
+    setOpen(false); setDismissed(true);
+    settingsTrigger.current?.focus();
+  }
 
   function send(event: AnalyticsEvent) {
     try {
@@ -75,8 +83,11 @@ export default function AnalyticsConsent({ locale }: { locale: "en" | "ko" }) {
       if (name !== "sign_up" && ANALYTICS_EVENTS.includes(name)) send(name);
     };
     const click = (event: MouseEvent) => {
+      const settings = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-analytics-settings]') : null;
+      if (settings) { event.preventDefault(); settingsTrigger.current = settings; setOpen(true); return; }
       if (event.target instanceof Element && event.target.closest('[data-analytics-signup="true"]')) send("signup_click");
     };
+    const keydown = (event: KeyboardEvent) => { if (event.key === "Escape" && document.getElementById("analytics-choice")) closeNotice(); };
     window.addEventListener("storage", sync);
     let consentChannel: BroadcastChannel | null = null;
     try { consentChannel = new BroadcastChannel(ANALYTICS_CONSENT); } catch { /* Unsupported or blocked browser storage. */ }
@@ -84,14 +95,17 @@ export default function AnalyticsConsent({ locale }: { locale: "en" | "ko" }) {
     window.addEventListener("message", receive);
     window.addEventListener("lecue:analytics", product);
     document.addEventListener("click", click, true);
+    document.addEventListener("keydown", keydown);
     return () => {
       window.removeEventListener("storage", sync); window.removeEventListener("message", receive);
       consentChannel?.close();
+      document.removeEventListener("keydown", keydown);
       window.removeEventListener("lecue:analytics", product); document.removeEventListener("click", click, true);
     };
   }, []); // Listeners read current consent and refs, never an initial consent value.
 
   useEffect(() => {
+    setOpen(false);
     if (choice === "granted" && enabled) { view(); void signup(); }
   }, [path, choice, enabled]);
 
@@ -124,8 +138,8 @@ export default function AnalyticsConsent({ locale }: { locale: "en" | "ko" }) {
 
   return <>
     {choice === "granted" && enabled && <iframe ref={frame} src="/api/analytics/frame" title="Optional analytics" hidden referrerPolicy="no-referrer" />}
-    {!(open || choice === null) && <button className="analytics-settings" type="button" onClick={() => setOpen(true)} aria-expanded={false} aria-controls="analytics-choice">{en ? "Cookie settings" : "쿠키 설정"}</button>}
-    {(open || choice === null) && <section id="analytics-choice" className="analytics-choice" aria-label={en ? "Cookie settings" : "쿠키 설정"}>
+    {showNotice && <section id="analytics-choice" className="analytics-choice" role="dialog" aria-label={en ? "Cookie settings" : "쿠키 설정"}>
+      <button type="button" className="analytics-close" aria-label={en ? "Close cookie settings" : "쿠키 설정 닫기"} onClick={closeNotice}><span aria-hidden="true">×</span></button>
       <div className="analytics-copy">
         <strong>{en ? "Cookies on Lecue" : "Lecue의 쿠키 사용"}</strong>
         <p>{en ? "Essential cookies keep you signed in. Optional cookies let Google Analytics and Google Ads measure visits, signups and feature use. Analytics is off until you allow it." : "로그인 유지에는 필수 쿠키를 사용해요. 선택 쿠키는 Google Analytics·Google Ads의 방문·가입·기능 사용 측정에 쓰이며, 허용하기 전까지 꺼져 있어요."}</p>
