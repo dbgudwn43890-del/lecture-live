@@ -22,3 +22,19 @@ test("analytics frame can load in its own origin while product pages reject fram
     assert.match(headers(path).get("Content-Security-Policy")!, /frame-ancestors 'none';/);
   }
 });
+
+// Regression: the live Google tag selected analytics.google.com/g/collect,
+// which is a different origin from google-analytics.com.
+test("analytics frame permits the observed GA4 collector without audience endpoints", async () => {
+  const rules = await config.headers!();
+  const policy = rules.find(rule => rule.source === "/api/analytics/frame")!.headers
+    .find(header => header.key === "Content-Security-Policy")!.value;
+  const directives = new Map(policy.split(";").map(value => {
+    const [name, ...sources] = value.trim().split(/\s+/);
+    return [name, sources];
+  }));
+  for (const name of ["connect-src", "img-src"]) {
+    assert.ok(directives.get(name)!.includes("https://analytics.google.com/g/collect"));
+    assert.ok(directives.get(name)!.every(source => !source.includes("*") && !source.includes("doubleclick") && !source.includes("google.co.kr") && !source.includes("www.google.com")));
+  }
+});
