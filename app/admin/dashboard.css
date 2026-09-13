@@ -1,0 +1,27 @@
+.admin-dashboard { max-width: 1320px; }
+.admin-dashboard h2 { font-size: 18px; margin: 0 0 18px; }
+.admin-dashboard section { margin-top: 32px; }
+.admin-toolbar,.admin-controls,.admin-pagination { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.admin-toolbar { justify-content: space-between; }
+.admin-dashboard input,.admin-dashboard select,.admin-dashboard button { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; padding: 9px 12px; }
+.admin-dashboard button { cursor: pointer; }
+.admin-dashboard button:hover:not(:disabled) { background: var(--bg); border-color: var(--ink); }
+.admin-dashboard button:disabled { opacity: .5; cursor: default; }
+.admin-dashboard :is(button,input,select,a):focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.admin-metrics { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 28px; }
+.admin-metrics section { border-top: 1px solid var(--line-strong); padding-top: 22px; }
+.admin-metrics dl { margin: 0; }
+.admin-metrics dl div { display: flex; gap: 16px; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.admin-metrics dt { color: var(--muted); font-size: 14px; }
+.admin-metrics dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.admin-dashboard .admin-table { font-variant-numeric: tabular-nums; }
+.admin-dashboard .admin-table small { display: block; color: var(--muted); margin-top: 5px; }
+.admin-pagination { justify-content: flex-end; margin-top: 16px; }
+.admin-attention { padding: 0; list-style: none; }
+.admin-attention li { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 8px 0; }
+.admin-grant-form,.admin-grant-review { border: 1px solid var(--line-strong); border-radius: 8px; padding: 24px; }
+.admin-grant-form form { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.admin-grant-form label { display: grid; gap: 8px; }
+.admin-grant-review p { overflow-wrap: anywhere; }
+.admin-grant-review button { margin-right: 12px; }
+@media (max-width: 850px) { .admin-metrics { grid-template-columns: 1fr; gap: 0; } .admin-dashboard { padding: 24px 16px 60px; } .admin-controls { width: 100%; } .admin-controls input { min-width: 0; flex: 1; } }

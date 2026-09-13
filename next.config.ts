@@ -52,7 +52,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
           // 마이크·탭 오디오 캡처(display-capture)는 워크스페이스가 쓰고, 나머지 강력 권한은 어디서도 안 쓴다.
-          { key: "Permissions-Policy", value: "camera=(), geolocation=(), display-capture=(self), payment=(self https://buy.paddle.com https://sandbox-buy.paddle.com)" },
+          { key: "Permissions-Policy", value: 'camera=(), geolocation=(), display-capture=(self), payment=(self "https://buy.paddle.com" "https://sandbox-buy.paddle.com")' },
         ],
       },
       {
