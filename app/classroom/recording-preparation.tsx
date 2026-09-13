@@ -5,8 +5,8 @@ import { Mic } from "lucide-react";
 import { startMicrophoneCheck } from "./microphone-check";
 import "./recording-preparation.css";
 
-export default function RecordingPreparation({ english, language, deviceId, deviceLabel, enabled, stopRef }: {
-  english: boolean; language: string; deviceId: string; deviceLabel?: string; enabled: boolean;
+export default function RecordingPreparation({ english, deviceId, deviceLabel, enabled, stopRef }: {
+  english: boolean; deviceId: string; deviceLabel?: string; enabled: boolean;
   stopRef: MutableRefObject<() => void>;
 }) {
   const [state, setState] = useState<"idle" | "checking" | "ready" | "error">("idle");
@@ -56,7 +56,5 @@ export default function RecordingPreparation({ english, language, deviceId, devi
     </div>
     <div className="recording-preparation-level" hidden={state !== "ready"}><meter ref={meterRef} min={0} max={1} value={0} aria-label={english ? "Microphone input level" : "마이크 입력 음량"} /><span role="status">{detected ? (english ? "Sound detected" : "소리 감지됨") : (english ? "Speak to check the level" : "말해 보며 음량을 확인하세요")}</span></div>
     {message && <p role="alert">{message}</p>}
-    <p>{english ? "Lecture language: " : "강의 언어: "}{language}</p>
-    <p>{english ? "Recording and credit use begin when you start the lecture. Check that recording is allowed." : "강의를 시작하면 기록과 크레딧 사용이 시작돼요. 녹음이 허용된 수업인지 확인해 주세요."}</p>
   </div>;
 }
