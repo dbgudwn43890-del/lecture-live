@@ -68,6 +68,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
+  // Serve each language at one stable URL, not duplicate HTML at the root.
+  // Locale-dependent destinations must not be permanently cached.
+  if (path === "/" && (request.method === "GET" || request.method === "HEAD")) {
+    const homeUrl = request.nextUrl.clone();
+    homeUrl.pathname = prefersEnglish ? "/en" : "/ko";
+    const redirect = NextResponse.redirect(homeUrl);
+    redirect.headers.set("Cache-Control", "private, no-store");
+    return redirect;
+  }
+
   // 추측은 저장하지 않는다. 예전에는 첫 요청의 IP 추측을 쿠키에 굳혔는데,
   // 그 추측이 틀리면(en) 한국어 브라우저가 영원히 영어로 열렸다. 브라우저
   // Accept-Language 기반 재계산은 요청마다 안정적이라 저장할 이유가 없다.

@@ -147,3 +147,28 @@ test("moves only the pages that exist in both languages", () => {
   // A path that merely starts with the letters "en" is not an English page.
   assert.equal(localePathFor("/enrollment", false), null);
 });
+
+
+test("root redirects to stable language URLs without losing campaign parameters or OAuth recovery", async () => {
+  for (const [country, cookie, target] of [["US", "", "/en"], ["KR", "", "/ko"], ["US", "site-locale-choice=ko", "/ko"]]) {
+    const response = await proxy(new NextRequest("https://www.lecue.app/?utm_source=youtube", {
+      headers: { "x-vercel-ip-country": country, cookie },
+    }));
+    assert.equal(response.status, 307);
+    assert.equal(response.headers.get("location"), `https://www.lecue.app${target}?utm_source=youtube`);
+    assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  }
+  const oauth = await proxy(new NextRequest("https://www.lecue.app/?code=test-code", {
+    headers: { "x-vercel-ip-country": "US" },
+  }));
+  const callback = new URL(oauth.headers.get("location")!);
+  assert.equal(callback.pathname, "/auth/callback");
+  assert.equal(callback.searchParams.get("code"), "test-code");
+  assert.equal(callback.searchParams.get("next"), "/en/classroom");
+  assert.equal(authCalls, 0);
+  for (const path of ["/en", "/ko"]) {
+    const response = await proxy(new NextRequest(`https://www.lecue.app${path}`));
+    assert.equal(response.headers.get("location"), null);
+    assert.equal(response.headers.get("x-middleware-next"), "1");
+  }
+});
