@@ -1,0 +1,43 @@
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import assert from 'node:assert/strict';
+const dir = mkdtempSync(join(tmpdir(), 'lecue-analytics-db-'));
+const bin = '/opt/homebrew/opt/postgresql@18/bin';
+const run = (name, args, input) => execFileSync(join(bin, name), args, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'] });
+const args = ['-X', '-h', dir, '-p', '55458', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-qAt'];
+const sql = input => run('psql', args, input).trim();
+const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+let started = false;
+try {
+  run('initdb', ['-D', join(dir, 'data'), '-A', 'trust', '--no-locale']);
+  run('pg_ctl', ['-D', join(dir, 'data'), '-l', join(dir, 'server.log'), '-o', `-k ${dir} -p 55458 -h ''`, 'start']); started = true;
+  sql(`create role anon; create role authenticated; create role service_role bypassrls;
+create schema auth; create table auth.users(id uuid primary key,created_at timestamptz default now(),email_confirmed_at timestamptz);
+create table auth.sessions(id uuid primary key,user_id uuid references auth.users);
+insert into auth.users values('${id(1)}',now()-interval '1 year',now());`);
+  sql(readFileSync('supabase/migrations/20260913010000_analytics_signup.sql', 'utf8'));
+  sql(`insert into auth.sessions values('${id(11)}','${id(1)}');`);
+  assert.equal(sql(`select public.claim_analytics_signup_service('${id(1)}','${id(11)}');`), 'f');
+  sql(`insert into auth.users(id) values('${id(2)}'); insert into auth.sessions values('${id(12)}','${id(2)}');`);
+  assert.equal(sql(`select public.claim_analytics_signup_service('${id(2)}','${id(12)}');`), 'f');
+  sql(`update auth.users set email_confirmed_at=now() where id='${id(2)}';`);
+  const race = () => new Promise((resolve, reject) => {
+    const child = spawn(join(bin, 'psql'), args); let out = '', err = '';
+    child.stdout.on('data', c => out += c); child.stderr.on('data', c => err += c);
+    child.on('close', code => code === 0 ? resolve(out.trim()) : reject(new Error(err)));
+    child.stdin.end(`select public.claim_analytics_signup_service('${id(2)}','${id(12)}');`);
+  });
+  assert.equal((await Promise.all(Array.from({ length: 10 }, race))).filter(x => x === 't').length, 1);
+  sql(`insert into auth.users(id,email_confirmed_at) values('${id(3)}',now()); insert into auth.sessions values('${id(13)}','${id(3)}'); delete from auth.sessions where id='${id(13)}'; insert into auth.sessions values('${id(14)}','${id(3)}');`);
+  assert.equal(sql(`select public.claim_analytics_signup_service('${id(3)}','${id(14)}');`), 'f');
+  sql(`insert into auth.users(id,email_confirmed_at) values('${id(5)}',now()-interval '2 hours'); insert into auth.sessions values('${id(16)}','${id(5)}');`);
+  assert.equal(sql(`select public.claim_analytics_signup_service('${id(5)}','${id(16)}');`), 'f');
+  assert.equal(sql("select has_function_privilege('authenticated','public.claim_analytics_signup_service(uuid,uuid)','execute');"), 'f');
+  assert.equal(sql("select has_table_privilege('anon','public.analytics_signup_receipts','select');"), 'f');
+  sql('drop table public.analytics_signup_receipts;');
+  sql(`insert into auth.users(id) values('${id(4)}'); insert into auth.sessions values('${id(15)}','${id(4)}');`);
+  assert.equal(sql(`select count(*) from auth.users where id='${id(4)}';`), '1');
+  console.log('PASS: old account excluded; confirmation required; ten concurrent claims yield one; later login excluded even after logout; private grants; measurement failure preserves auth.');
+} finally { if (started) run('pg_ctl', ['-D', join(dir, 'data'), '-m', 'immediate', 'stop']); }

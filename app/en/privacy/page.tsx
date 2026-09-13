@@ -67,7 +67,7 @@ export default function EnglishPrivacyPage() {
         <p>A personal AI provider's terms, privacy policy, and user account settings also apply when that connection is used.</p>
       </div></section>
 
-      <section><h2>6. Cookies</h2><div><p>Essential authentication cookies maintain sign-in and protect sessions. Blocking them may prevent account functions from working. We currently use no targeted-advertising cookie or third-party advertising tracker. Future analytics will be disclosed here with its data and opt-out method.</p></div></section>
+      <section><h2>6. Cookies</h2><div><p>Essential authentication cookies maintain sign-in and protect sessions. Blocking them may prevent account functions from working. Optional analytics is off by default and separate from required terms and recording consent. Only after you allow it, Google Analytics and Google Ads receive pseudonymous cookie identifiers, approved ad click IDs, page categories, verified signup and feature-use events. They do not receive your email, name, Lecue account or lecture identifiers, lecture content, questions, answers, transcripts, authentication tokens or sensitive URL parameters. We do not use Google Signals, personalized advertising or remarketing. Use “Cookie settings” at the bottom of any page to decline or withdraw at any time; withdrawal stops future collection and removes the analytics cookies on this browser. Declining does not affect sign-in or any product feature. The analytics cookie lasts up to 90 days, and your consent choice is remembered for up to 180 days. Withdrawal does not erase data already received by Google. Google LLC processes optional measurement data in the United States and other locations described in its privacy policy, subject to the Analytics property’s retention settings.</p></div></section>
 
       <section><h2>7. Your rights</h2><div><p>Subject to applicable law, users may request access, portability, correction, deletion, restriction, withdrawal of consent, and account closure.</p><ol><li>Use available account controls or contact the privacy address below.</li><li>We may verify identity and will respond within the legally required period.</li><li>If law requires retention or another person's rights would be harmed, we may limit a request and explain why.</li></ol></div></section>
 
@@ -81,6 +81,7 @@ export default function EnglishPrivacyPage() {
         <p>We normally announce changes at least 7 days before they take effect. Material changes are announced at least 30 days in advance, and consent is obtained where required.</p>
       </div></section>
       <section><h2>11. Change history</h2><div><ul>
+        <li><time dateTime="2026-09-13">September 13, 2026</time>: Added optional, consent-based advertising measurement. Collection starts only after a separate choice to allow it.</li>
         <li><time dateTime={PRIVACY_POLICY_DATES.effective}>{formatLegalDate(PRIVACY_POLICY_DATES.effective, "en")}</time>: Privacy Policy effective date.</li>
         <li><time dateTime={PRIVACY_POLICY_DATES.dateClarified}>{formatLegalDate(PRIVACY_POLICY_DATES.dateClarified, "en")}</time>: Clarified the effective date and added this change history. No change to the data handling terms.</li>
       </ul></div></section>

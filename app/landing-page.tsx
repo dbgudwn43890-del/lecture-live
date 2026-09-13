@@ -31,7 +31,7 @@ export default async function LandingPage({ locale, isAuthenticated = false, pro
 <nav aria-label={t("주요 메뉴")}><a href="#experience" data-open-demo>{t("직접 체험")}</a><a href="#how">{t("사용 방법")}</a><Link href={`${base}/billing`}>{locale === "en" ? "Plans" : "플랜"}</Link><a href="#faq">{t("궁금한 점")}</a></nav>
 <div className="header-actions">
       <SiteLanguageMenu locale={locale} region={region} href={base || "/"} />
-      {isAuthenticated ? <><ProfileMenu locale={locale} basePath={base} classroomPath={classroomPath} profile={profile ?? null} creditStatus={creditStatus ?? null} /><Link className="button button-small" href={classroomHref} prefetch={false}>{t("내 강의실")}</Link></> : <><Link className="login-link" href={languageSwitchUrl(`${base}/login`, locale)} prefetch={false}>{t("로그인")}</Link><Link className="button button-small" href={startHref} prefetch={false}>{t("무료로 시작")}</Link></>}
+      {isAuthenticated ? <><ProfileMenu locale={locale} basePath={base} classroomPath={classroomPath} profile={profile ?? null} creditStatus={creditStatus ?? null} /><Link className="button button-small" href={classroomHref} prefetch={false}>{t("내 강의실")}</Link></> : <><Link className="login-link" href={languageSwitchUrl(`${base}/login`, locale)} prefetch={false}>{t("로그인")}</Link><Link className="button button-small" href={startHref} data-analytics-signup={isAuthenticated ? undefined : "true"} prefetch={false}>{t("무료로 시작")}</Link></>}
     </div>
 </div></header>
 <main id="main">
@@ -40,7 +40,7 @@ export default async function LandingPage({ locale, isAuthenticated = false, pro
 <div className="hero-copy">
 <h1 id="hero-title">{t("수업을 함께 듣는 AI.")}<br />{" "}{t("궁금하면, 물어보세요.")}</h1>
 <p className="hero-description">{t("강의·자료를 바탕으로 답하고, 노트도 정리해요.")}</p>
-<div className="hero-actions"><button className="button" type="button" data-open-demo aria-controls="demo-panel" aria-expanded="false">{t("30초만 체험하기")}</button><a className="text-link" href={startHref}>{t("무료로 내 강의 시작")}</a></div>
+<div className="hero-actions"><button className="button" type="button" data-open-demo aria-controls="demo-panel" aria-expanded="false">{t("30초만 체험하기")}</button><a className="text-link" href={startHref} data-analytics-signup={isAuthenticated ? undefined : "true"}>{t("무료로 내 강의 시작")}</a></div>
 <p className="fine-print">{t("가입 없이 먼저 체험 · 시작할 때도 카드 등록 없이")}</p>
 </div>
 <div className="hero-excerpt" id="experience" aria-label={t("통계학 강의 예시")}>
@@ -76,7 +76,7 @@ export default async function LandingPage({ locale, isAuthenticated = false, pro
 <p className="visually-hidden" id="demo-announcement" aria-live="polite"></p>
 </div>
 </div>
-<div className="demo-footer"><button className="text-link" type="button" id="demo-return">{t("홈으로 돌아가기")}</button><p id="demo-footer-copy">{t("예시 데이터로 잠깐 체험 중이에요.")}</p><a className="button button-small" href={startHref}>{t("내 수업에서도 써보기")}</a></div>
+<div className="demo-footer"><button className="text-link" type="button" id="demo-return">{t("홈으로 돌아가기")}</button><p id="demo-footer-copy">{t("예시 데이터로 잠깐 체험 중이에요.")}</p><a className="button button-small" href={startHref} data-analytics-signup={isAuthenticated ? undefined : "true"}>{t("내 수업에서도 써보기")}</a></div>
 </div>
 <div className="hero-bottom"><p>{t("함께 듣고, 물어보고, 복습하세요.")}</p><a href="#how">{t("사용 방법")}</a></div>
 </section>
@@ -106,7 +106,7 @@ export default async function LandingPage({ locale, isAuthenticated = false, pro
 <details><summary>{t("강의 기록과 질문은 어떻게 보관되나요?")}<span aria-hidden="true">{"+"}</span></summary><p>{t("로그인한 계정의 강의실에 모아 다시 확인할 수 있어요. 데이터 처리와 보관에 관한 자세한 내용은")}{" "}<a href={`${base}/privacy`}>{t("개인정보처리방침")}</a>{t("에서 확인할 수 있습니다.")}</p></details>
 </div>
 </section>
-<section className="closing-section" aria-labelledby="closing-title"><div className="page-width closing-layout"><div><h2 id="closing-title">{t("놓친 부분을 묻고,")}<br />{" "}{t("다시 수업 속으로.")}</h2></div><div className="closing-actions"><a className="button button-light" href={startHref}>{t("무료로 내 강의 시작")}</a><button className="closing-demo" type="button" data-open-demo>{t("30초만 체험하기")}</button><span>{locale === "en" ? `${STARTER_CREDITS} free credits · ${STARTER_DAYS} days from issue · No card needed` : `${STARTER_CREDITS} 크레딧 무료 · 지급일부터 ${STARTER_DAYS}일 · 카드 등록 없이`}</span></div></div></section>
+<section className="closing-section" aria-labelledby="closing-title"><div className="page-width closing-layout"><div><h2 id="closing-title">{t("놓친 부분을 묻고,")}<br />{" "}{t("다시 수업 속으로.")}</h2></div><div className="closing-actions"><a className="button button-light" href={startHref} data-analytics-signup={isAuthenticated ? undefined : "true"}>{t("무료로 내 강의 시작")}</a><button className="closing-demo" type="button" data-open-demo>{t("30초만 체험하기")}</button><span>{locale === "en" ? `${STARTER_CREDITS} free credits · ${STARTER_DAYS} days from issue · No card needed` : `${STARTER_CREDITS} 크레딧 무료 · 지급일부터 ${STARTER_DAYS}일 · 카드 등록 없이`}</span></div></div></section>
 </main>
 <footer className="site-footer page-width"><div className="footer-top"><a className="wordmark brand-lockup" href="#home" aria-label={t("Lecue 홈으로")}><span className="lecue-symbol" aria-hidden="true" />{"Lecue"}</a><p>{t("수업의 흐름을, 내 속도로.")}</p><a className="back-top" href="#home">{t("맨 위로")}</a></div><div className="footer-bottom"><span>{"© 2026 Lecue"}</span><nav aria-label={t("서비스 안내")}><a href={`${base}/privacy`}>{t("개인정보처리방침")}</a><a href={`${base}/terms`}>{t("이용약관")}</a><a href="mailto:support@lecue.app">{t("문의")}</a><button id="theme-toggle" type="button">{t("화면 밝기")}</button></nav></div></footer>
 

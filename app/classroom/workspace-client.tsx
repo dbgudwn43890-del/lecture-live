@@ -13,6 +13,7 @@ import CreditUsage, { type UsageStatus } from "../credit-usage";
 import { initialSpeechLanguage, lectureLanguageChoices } from "../lib/lecture-language-ui";
 import { isSpeechLanguage } from "../lib/speech-languages";
 import LecturePreview from "./lecture-preview";
+import { trackAnalytics } from "../lib/analytics-client";
 import { useOnlineLayout } from "./use-online-layout";
 import { useConversationScroll } from "./use-conversation-scroll";
 import { audioUploadKey, createTitleSaveQueue, hasReadyMaterials, preparationTitle } from "./lecture-preparation";
@@ -1760,6 +1761,7 @@ export default function LectureWorkspace({ locale = "ko", region = locale === "k
       if (streamError) throw new Error(streamError);
       if (!finalDone) throw new Error(isEnglish ? "Could not receive an answer." : "답변을 받지 못했습니다.");
       const { answer, sources, lectureSources, materialSources } = finalDone;
+      trackAnalytics("answer_complete");
 
       setMessages((current) =>
         current.map((message) =>

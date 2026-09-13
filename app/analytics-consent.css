@@ -1,0 +1,18 @@
+.analytics-settings { position: fixed; inset-inline-start: 16px; bottom: 12px; z-index: 80; min-height: 44px; padding: 8px 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; }
+.analytics-choice { position: fixed; inset-inline-start: 16px; bottom: 16px; z-index: 81; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 24px; align-items: center; width: min(820px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; box-sizing: border-box; padding: 18px 20px; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 12px; font-size: 14px; line-height: 1.55; }
+.analytics-copy > strong { font-size: 16px; font-weight: 600; }
+.analytics-copy > p { margin: 5px 0 0; }
+.analytics-actions { display: flex; gap: 8px; }
+.analytics-actions button { flex: 1; min-height: 44px; padding: 10px 14px; white-space: nowrap; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; }
+.analytics-details { grid-column: 1 / -1; }
+.analytics-details summary { width: fit-content; min-height: 24px; padding-block: 4px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.analytics-details[open] { padding-top: 8px; border-top: 1px solid var(--line-strong); }
+.analytics-details p { max-width: 72ch; margin: 14px 0 0; }
+.analytics-details strong { font-weight: 600; }
+.analytics-choice a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.analytics-actions button:hover, .analytics-settings:hover { background: var(--tint); }
+.analytics-actions button:focus-visible, .analytics-settings:focus-visible, .analytics-details summary:focus-visible, .analytics-choice a:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .analytics-choice { inset-inline-start: 12px; bottom: 12px; width: calc(100vw - 24px); grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px; }
+  .analytics-actions { width: 100%; }
+}

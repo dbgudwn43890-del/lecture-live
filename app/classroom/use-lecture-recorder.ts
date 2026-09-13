@@ -1,5 +1,7 @@
 "use client";
 
+import { trackAnalytics } from "../lib/analytics-client";
+
 import { useEffect, useRef, useState } from "react";
 
 import { createPcmRecorder, type PcmRecorder } from "./pcm-recorder";
@@ -110,6 +112,7 @@ export function useLectureRecorder(options: RecorderOptions) {
   const [isPausing, setIsPausing] = useState(false);
   const [isSwitchingMicrophone, setIsSwitchingMicrophone] = useState(false);
 
+  const measuredSessionsRef = useRef(new Set<string>());
   const socketRef = useRef<WebSocket | null>(null);
   const connectionAttemptRef = useRef(0);
   const recorderRef = useRef<PcmRecorder | null>(null);
@@ -818,6 +821,10 @@ export function useLectureRecorder(options: RecorderOptions) {
       socketOpenedRef.current = true;
       statusRef.current = "recording";
       setStatus("recording");
+      if (!measuredSessionsRef.current.has(sessionId)) {
+        measuredSessionsRef.current.add(sessionId);
+        trackAnalytics("recording_start");
+      }
       setConnectingPhase(null);
       streamOffsetMsRef.current = Math.max(elapsedBaseMsRef.current, currentElapsedMs() - audioQueueRef.current.durationMs);
       audioQueueRef.current.startConnection(performance.now());

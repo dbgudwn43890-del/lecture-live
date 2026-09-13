@@ -329,7 +329,7 @@ export default function LoginClient({ locale = "ko", region }: { locale?: "ko" |
             {isEntry && <>
               <div className="email-mode-switch" aria-label={isEnglish ? "Account access" : "로그인 또는 회원가입"}>
                 <button type="button" aria-pressed={mode === "login"} disabled={busy} onClick={() => changeMode("login")}>{isEnglish ? "Sign in" : "로그인"}</button>
-                <button type="button" aria-pressed={mode === "signup"} disabled={busy} onClick={() => changeMode("signup")}>{isEnglish ? "Create account" : "회원가입"}</button>
+                <button type="button" aria-pressed={mode === "signup"} disabled={busy} data-analytics-signup="true" onClick={() => changeMode("signup")}>{isEnglish ? "Create account" : "회원가입"}</button>
               </div>
               <button type="button" className="google-auth-button" onClick={authenticateWithGoogle} disabled={busy}>
                 <GoogleMark /><span>{pending === "google" ? isEnglish ? "Opening Google…" : "Google로 이동 중…" : isEnglish ? "Continue with Google" : "Google로 계속하기"}</span>

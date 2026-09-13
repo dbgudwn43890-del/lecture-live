@@ -11,11 +11,11 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   // Next's static HTML contains hydration scripts; a nonce would require dynamic rendering.
-  `script-src 'self' 'unsafe-inline' ${process.env.NODE_ENV === "development" ? "'unsafe-eval'" : ""} https://cdn.paddle.com https://challenges.cloudflare.com`,
+  `script-src 'self' 'unsafe-inline' ${process.env.NODE_ENV === "development" ? "'unsafe-eval'" : ""} https://cdn.paddle.com https://challenges.cloudflare.com https://www.googletagmanager.com`,
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: https://*.googleusercontent.com ${supabaseOrigin} https://*.paddle.com`,
   "font-src 'self' data:",
-  `connect-src 'self' ${supabaseOrigin} ${supabaseStorageOrigin} ${supabaseOrigin.replace(/^https:/, "wss:")} ${origin(process.env.STT_RELAY_URL)} ${origin(process.env.PHONE_MIC_RELAY_URL).replace(/^https:/, "wss:")} https://*.paddle.com https://challenges.cloudflare.com ${process.env.NODE_ENV === "development" ? "ws://localhost:3000" : ""}`,
+  `connect-src 'self' ${supabaseOrigin} ${supabaseStorageOrigin} ${supabaseOrigin.replace(/^https:/, "wss:")} ${origin(process.env.STT_RELAY_URL)} ${origin(process.env.PHONE_MIC_RELAY_URL).replace(/^https:/, "wss:")} https://*.paddle.com https://challenges.cloudflare.com https://www.google-analytics.com https://region1.google-analytics.com ${process.env.NODE_ENV === "development" ? "ws://localhost:3000" : ""}`,
   `media-src 'self' blob: ${supabaseOrigin}`,
   "worker-src 'self' blob:",
   "frame-src 'self' blob: https://*.paddle.com https://challenges.cloudflare.com",

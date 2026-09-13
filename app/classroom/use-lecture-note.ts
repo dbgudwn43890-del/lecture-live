@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { trackAnalytics } from "../lib/analytics-client";
 import { createLectureNoteController } from "./lecture-note-state";
 import type { LectureNoteState } from "./lecture-note-state";
 import type { NoteLanguage } from "../lib/note-language";
@@ -31,6 +32,9 @@ export function useLectureNote(sessionId: string | null, isEnglish: boolean, lan
   useEffect(() => {
     const last = previous.current;
     previous.current = { controller, phase: state.phase };
+    if (last.controller === controller && last.phase === "generating" && state.phase === "ready" && !state.message) {
+      trackAnalytics("review_note_complete");
+    }
     if (last.controller === controller && last.phase === "generating" && state.phase === "ready" && !state.message
       && document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
       try {

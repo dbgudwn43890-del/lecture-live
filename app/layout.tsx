@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { Geist, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { pageSearchMetadata } from "./lib/site-seo";
+import AnalyticsConsent from "./analytics-consent";
 // Pretendard as ~92 unicode-range subsets instead of one 2 MB file: a Korean page
 // pulls only the ranges it actually renders (tens of KB), and the browser fetches
 // more on demand. Self-hosted through the CSS pipeline so the woff2 come back
@@ -66,6 +67,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
         {children}
+        <AnalyticsConsent locale={locale} />
       </body>
     </html>
   );
