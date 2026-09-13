@@ -116,23 +116,23 @@ export default function ProfileMenu({
           </Link>
           </div>
 
-          <form className={styles.profileSignout} action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
-            <button type="submit"><LogOut size={18} aria-hidden="true" /><span>{isEnglish ? "Sign out" : "로그아웃"}</span></button>
-          </form>
-
           <details className={styles.profilePlanRow}>
             <summary>{isEnglish ? "Credits and usage" : "크레딧 및 사용량"}{usage && <strong>{usage.credits.toLocaleString(isEnglish ? "en-US" : "ko-KR")}</strong>}</summary>
             <CreditUsage status={usage} locale={locale} compact />
           </details>
 
           <div className={styles.profileThemeRow}>
-            <label htmlFor={`${panelId}-theme`}>{isEnglish ? "Appearance" : "화면 테마"}</label>
-            <select id={`${panelId}-theme`} value={theme} onChange={event => applyTheme(event.target.value as "system" | "light" | "dark")}>
+            <span id={`${panelId}-theme`}>{isEnglish ? "Appearance" : "화면 테마"}</span>
+            <div className={styles.profileThemeOptions} role="group" aria-labelledby={`${panelId}-theme`}>
               {([["system", isEnglish ? "System" : "시스템"], ["light", isEnglish ? "Light" : "라이트"], ["dark", isEnglish ? "Dark" : "다크"]] as const).map(([id, label]) => (
-                <option key={id} value={id}>{label}</option>
+                <button key={id} type="button" aria-pressed={theme === id} onClick={() => applyTheme(id)}>{label}</button>
               ))}
-            </select>
+            </div>
           </div>
+
+          <form className={styles.profileSignout} action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
+            <button type="submit"><LogOut size={18} aria-hidden="true" /><span>{isEnglish ? "Sign out" : "로그아웃"}</span></button>
+          </form>
         </div>
       )}
     </div>

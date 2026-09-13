@@ -86,9 +86,12 @@
 .profilePlanRow summary strong { flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .profilePlanRow > section { padding-block: 8px 12px; }
 .profileThemeRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 8px 0; }
-.profileThemeRow label { color: var(--muted); font-size: 13px; }
-.profileThemeRow select { min-height: 40px; padding: 6px 28px 6px 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
-.profilePanel :is(a, button, summary, select):focus-visible, .headerAvatar:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.profileThemeRow > span { color: var(--muted); font-size: 13px; }
+.profileThemeOptions { display: flex; flex-shrink: 0; gap: 2px; }
+.profilePanel .profileThemeOptions button { min-height: 44px; padding: 6px 8px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 6px; font: inherit; font-size: 12px; line-height: 1.4; white-space: nowrap; cursor: pointer; }
+.profilePanel .profileThemeOptions button:hover { background: var(--tint); color: var(--ink); }
+.profilePanel .profileThemeOptions button[aria-pressed="true"] { color: var(--ink); background: var(--tint); border-color: var(--line-strong); font-weight: 600; }
+.profilePanel :is(a, button, summary):focus-visible, .headerAvatar:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 640px) { .profilePanel { position: fixed; top: 76px; right: 16px; max-height: calc(100dvh - 92px); } }
 
 /* Hero ---------------------------------------------------------------- */
