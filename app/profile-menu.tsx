@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import { BookOpen, CreditCard, LogOut, X } from "lucide-react";
+import { BookOpen, CreditCard, LogOut, Monitor, Moon, Sun, X } from "lucide-react";
 import CreditUsage, { type UsageStatus } from "./credit-usage";
 import { languageSwitchUrl } from "./lib/site-locale";
 
@@ -124,8 +124,8 @@ export default function ProfileMenu({
           <div className={styles.profileThemeRow}>
             <span id={`${panelId}-theme`}>{isEnglish ? "Appearance" : "화면 테마"}</span>
             <div className={styles.profileThemeOptions} role="group" aria-labelledby={`${panelId}-theme`}>
-              {([["system", isEnglish ? "System" : "시스템"], ["light", isEnglish ? "Light" : "라이트"], ["dark", isEnglish ? "Dark" : "다크"]] as const).map(([id, label]) => (
-                <button key={id} type="button" aria-pressed={theme === id} onClick={() => applyTheme(id)}>{label}</button>
+              {([["system", isEnglish ? "System" : "시스템", Monitor], ["light", isEnglish ? "Light" : "라이트", Sun], ["dark", isEnglish ? "Dark" : "다크", Moon]] as const).map(([id, label, Icon]) => (
+                <button key={id} type="button" aria-label={label} title={label} aria-pressed={theme === id} onClick={() => applyTheme(id)}><Icon size={16} strokeWidth={1.7} aria-hidden="true" /></button>
               ))}
             </div>
           </div>

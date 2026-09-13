@@ -11,7 +11,6 @@ export default function AnalyticsConsent({ locale }: { locale: "en" | "ko" }) {
   const en = locale === "en";
   const [choice, setChoice] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
   const ready = useRef(false);
@@ -19,10 +18,9 @@ export default function AnalyticsConsent({ locale }: { locale: "en" | "ko" }) {
   const signupCheck = useRef(false);
   const page = useRef("");
   const settingsTrigger = useRef<HTMLElement | null>(null);
-  const showNotice = open || (choice === null && !dismissed && ["/", "/en", "/ko", "/login", "/en/login"].includes(path));
 
   function closeNotice() {
-    setOpen(false); setDismissed(true);
+    setOpen(false);
     settingsTrigger.current?.focus();
   }
 
@@ -138,7 +136,7 @@ export default function AnalyticsConsent({ locale }: { locale: "en" | "ko" }) {
 
   return <>
     {choice === "granted" && enabled && <iframe ref={frame} src="/api/analytics/frame" title="Optional analytics" hidden referrerPolicy="no-referrer" />}
-    {showNotice && <section id="analytics-choice" className="analytics-choice" role="dialog" aria-label={en ? "Cookie settings" : "쿠키 설정"}>
+    {open && <section id="analytics-choice" className="analytics-choice" role="dialog" aria-label={en ? "Cookie settings" : "쿠키 설정"}>
       <button type="button" className="analytics-close" aria-label={en ? "Close cookie settings" : "쿠키 설정 닫기"} onClick={closeNotice}><span aria-hidden="true">×</span></button>
       <div className="analytics-copy">
         <strong>{en ? "Cookies on Lecue" : "Lecue의 쿠키 사용"}</strong>
