@@ -107,14 +107,14 @@ export default function ProfileMenu({
             <button type="button" className={styles.profileClose} aria-label={isEnglish ? "Close account menu" : "계정 메뉴 닫기"} onClick={() => { setOpen(false); triggerRef.current?.focus(); }}><X size={18} aria-hidden="true" /></button>
           </div>
 
-          <nav className={styles.profileActions} aria-label={isEnglish ? "Account navigation" : "계정 이동"}>
+          <div className={styles.profileActions} role="navigation" aria-label={isEnglish ? "Account navigation" : "계정 이동"}>
           <Link className={styles.profileLink} href={languageSwitchUrl(classroomPath, locale)} prefetch={false} onClick={() => setOpen(false)}>
             <BookOpen size={18} aria-hidden="true" /><span>{isEnglish ? "My classroom" : "내 강의실"}</span>
           </Link>
           <Link className={styles.profileLink} href={`${basePath}/billing`} onClick={() => setOpen(false)}>
             <CreditCard size={18} aria-hidden="true" /><span>{isEnglish ? "Plan and billing" : "요금제 및 결제 관리"}</span>
           </Link>
-          </nav>
+          </div>
 
           <form className={styles.profileSignout} action={isEnglish ? "/auth/signout?next=/en/login" : "/auth/signout"} method="post">
             <button type="submit"><LogOut size={18} aria-hidden="true" /><span>{isEnglish ? "Sign out" : "로그아웃"}</span></button>

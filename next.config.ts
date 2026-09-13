@@ -56,6 +56,16 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: "/api/analytics/frame",
+        // Only the empty measurement document may be embedded by this origin.
+        // Keep the product pages protected by the default DENY policy above.
+        headers: [
+          { key: "Content-Security-Policy", value: "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src https://www.google-analytics.com https://region1.google-analytics.com; img-src https://www.google-analytics.com https://region1.google-analytics.com; form-action 'none'" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+      {
         source: "/phone-mic",
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },
