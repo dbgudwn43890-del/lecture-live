@@ -11,6 +11,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # User preferences
 
 - Do not use Ponytail or related skills unless the user explicitly asks.
+- Keep `main` as the only maintained branch (user request, 2026-09-20).
+  Work on `main` by default; inspect and preserve concurrent changes before
+  committing or pushing. Do not create a persistent feature branch unless the
+  user requests one.
 
 # Recording stability gate
 
