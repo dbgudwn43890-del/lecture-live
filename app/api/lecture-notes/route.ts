@@ -336,7 +336,8 @@ async function readTranscript(supabase: Supabase, sessionId: string, evidence: N
 }
 
 async function readQuestions(supabase: Supabase, sessionId: string, evidence: NoteEvidence, english: boolean) {
-  const groups = new Map<string, string[]>();
+  const lines: string[] = [];
+  evidence.questionTurns = new Map();
   let total = 0;
   let answerTotal = 0;
   for (let offset = 0; ; offset += SEGMENT_PAGE_SIZE) {
@@ -350,39 +351,28 @@ async function readQuestions(supabase: Supabase, sessionId: string, evidence: No
       if (typeof row.question !== "string" || !Number.isFinite(row.question_at_ms) || row.question_at_ms < 0) throw new NoteInputError("read");
       const question = row.question.trim();
       if (!question) continue;
+      // Identical short replies can refer to different topics. Preserve each
+      // turn in order so the model can group meaning, not just matching text.
+      const id = `Q${lines.length + 1}`;
       const clock = noteClock(row.question_at_ms);
-      if (!groups.has(question)) {
-        groups.set(question, []);
-        const id = `Q${groups.size}`;
-        total += question.length + id.length + 8;
-        evidence.questions.add(question);
-        evidence.questionSources.set(question, { id, label: `${english ? "My question" : "내 질문"} ${clock}`, startMs: row.question_at_ms });
-      }
-      if (!groups.get(question)!.includes(clock)) {
-        groups.get(question)!.push(clock);
-        total += clock.length + 2;
-      }
+      const line = `[${id} | ${clock}] ${question}`;
+      total += line.length + 2;
+      if (total > MAX_QUESTION_CHARACTERS) throw new NoteInputError("questions");
+      evidence.questionTurns.set(id, { text: question, source: { id, label: `${english ? "My question" : "내 질문"} ${clock}`, startMs: row.question_at_ms } });
       if (row.answer !== undefined && row.answer !== null && typeof row.answer !== "string") throw new NoteInputError("read");
+      let history = "";
       if (typeof row.answer === "string" && row.answer.trim()) {
         if (typeof row.id !== "string" || !row.id) throw new NoteInputError("read");
-        const questionId = evidence.questionSources.get(question)!.id;
-        const answers = evidence.answers!.get(questionId) ?? [];
-        // Preserve each turn, including a different answer to an identical question.
-        answers.push({ id: row.id, questionId, text: row.answer });
-        evidence.answers!.set(questionId, answers);
+        evidence.answers!.set(id, [{ id: row.id, questionId: id, text: row.answer }]);
         answerTotal += row.answer.length;
         if (answerTotal > MAX_ANSWER_CHARACTERS) throw new NoteInputError("questions");
+        history = `\n${english ? "Saved AI answer (context for synthesis; original available separately)" : "저장된 AI 답변 (학습 정리의 맥락; 원문은 별도 보존)"}:\n${row.answer}`;
       }
-      if (total > MAX_QUESTION_CHARACTERS) throw new NoteInputError("questions");
+      lines.push(line + history);
     }
     if (page.length < SEGMENT_PAGE_SIZE) break;
   }
-  return [...groups].map(([question, clocks]) => {
-    const id = evidence.questionSources.get(question)!.id;
-    const answers = evidence.answers!.get(id) ?? [];
-    const history = answers.map(answer => `${english ? "Saved AI answer (replayed verbatim in the note)" : "저장된 AI 답변 (노트에 원문 그대로 표시)"}:\n${answer.text}`).join("\n\n");
-    return `[${id} | ${clocks.join(", ")}] ${question}${history ? `\n${history}` : ""}`;
-  }).join("\n\n");
+  return lines.join("\n\n");
 }
 
 async function readMaterials(supabase: Supabase, sessionId: string, evidence: NoteEvidence, english: boolean) {

@@ -70,8 +70,10 @@
 .note-reading .note-callout .answer-markdown strong,
 .note-reading .note-qa .answer-markdown strong { display: inline; margin: 0; font-size: inherit; letter-spacing: normal; }
 .note-reading .note-block-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 500; }
-.note-reading .note-original-questions { margin-top: 12px; }
-.note-reading .note-answer-provenance { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.note-reading .note-original-questions,
+.note-reading .note-original-answers { margin-top: 12px; }
+.note-reading .note-answer-provenance { margin: 0 0 6px; color: var(--muted); font-size: 12px; }
+.note-reading .note-original-answers > .note-original-answer { margin-top: 12px; }
 .note-reading .note-original-answer + .note-original-answer { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
 .note-reading .note-original-questions ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
 .note-reading .note-original-questions li { margin-top: 6px; padding-left: 3px; }

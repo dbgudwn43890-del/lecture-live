@@ -11,6 +11,8 @@ export type NoteDocument = { id: string; filename: string; page_count: number | 
 export type NoteEvidence = {
   sources: Map<string, NoteSource>;
   questions: Set<string>;
+  /** Each conversation turn has its own identity, even if its text repeats. */
+  questionTurns?: Map<string, { text: string; source: NoteSource }>;
   questionSources: Map<string, NoteSource>;
   /** Conversation history is preserved separately, never promoted to lecture evidence. */
   answers?: Map<string, NoteAnswer[]>;
@@ -67,6 +69,13 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
     if (originalQuestions.has(source.id)) throw new Error("ambiguous question provenance");
     originalQuestions.set(source.id, { text: question, source });
   }
+  if (evidence.questionTurns) {
+    originalQuestions.clear();
+    for (const [id, turn] of evidence.questionTurns) {
+      if (!/^Q[1-9][0-9]*$/.test(id) || turn.source.id !== id || !turn.text.trim()) throw new Error("missing question provenance");
+      originalQuestions.set(id, turn);
+    }
+  }
   const seenBlocks = new Set<string>();
   const seenQuestions = new Set<string>();
   let checks = 0;
@@ -76,7 +85,7 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
     const blocks: NoteBlock[] = [];
     for (const blockValue of section.blocks) {
       const block = object(blockValue);
-      // A replayed answer has conversation provenance, not fabricated T/M evidence.
+      // Conversation-backed clarification may have no T/M evidence; originals remain separate.
       const sources = block.type === "qa" && !strings(block.sourceIds).length ? [] : references(block.sourceIds, evidence);
       const normalized: NoteBlock = {
         type: block.type as NoteBlock["type"], text: "", items: [], latex: "", mermaid: "", label: "", page: 0,
@@ -124,18 +133,9 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
             if (!saved.length) unanswered++;
             answers.push(...saved.map(answer => ({ ...answer })));
           }
-          if (answers.length) {
-            if (unanswered) throw new Error("answered and unanswered questions grouped");
-            normalized.originalAnswers = answers;
-            // The model may still re-answer using the lecture's 75-point example.
-            // Never display that replacement beside the original 70-point practice.
-            normalized.text = "";
-            normalized.sourceIds = [];
-            normalized.sources = normalized.sources!.filter(source => /^Q[1-9][0-9]*$/.test(source.id));
-          } else {
-            if (!normalized.sourceIds!.length) throw new Error("missing note evidence");
-            normalized.text = text(block.text, true);
-          }
+          if (answers.length) normalized.originalAnswers = answers;
+          if ((!answers.length || unanswered) && !normalized.sourceIds!.length) throw new Error("missing note evidence");
+          normalized.text = text(block.text, true);
           break;
         }
         case "check":
@@ -179,6 +179,17 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
     return { heading: text(section.heading, true), blocks };
   }).filter(section => section.blocks.length);
   if (!sections.length) throw new Error("empty note");
+  // Require an explicit disposition, so curation cannot silently drop learning needs.
+  const excludedQuestions = raw.excludedQuestions ?? [];
+  if (!Array.isArray(excludedQuestions)) throw new Error("invalid question exclusions");
+  for (const value of excludedQuestions) {
+    const excluded = object(value);
+    const id = excluded.questionId;
+    if (typeof id !== "string" || !originalQuestions.has(id)) throw new Error("invented student question");
+    if (seenQuestions.has(id)) throw new Error("student question repeated");
+    if (typeof excluded.reason !== "string" || !["non_learning", "off_topic", "uninterpretable"].includes(excluded.reason)) throw new Error("invalid question exclusion reason");
+    seenQuestions.add(id);
+  }
   if ([...originalQuestions.keys()].some(id => !seenQuestions.has(id))) throw new Error("student question omitted");
 
   if (!Array.isArray(raw.concepts)) throw new Error("invalid concepts");

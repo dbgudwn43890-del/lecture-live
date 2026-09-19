@@ -5,7 +5,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { transformSync } from "next/dist/build/swc/index.js";
-import { validateLectureNote } from "../lib/lecture-note-context.ts";
+import type { LectureNote, NoteBlock } from "../lib/lecture-note.ts";
 
 // Use the project's installed JSX compiler to exercise the real note renderer.
 registerHooks({
@@ -34,18 +34,26 @@ registerHooks({
 });
 const { NoteArticle } = await import("./lecture-note.tsx");
 
-test("the saved note renders the original chart, practice conditions, and folded 70-point answer with conversation provenance", () => {
-  const answer = '```lecue-chart\n{"type":"bar","title":"집단별 점수","unit":"점","series":["점수"],"rows":[{"label":"20명","values":[80]},{"label":"10명","values":[50]}]}\n```\n\n### 확인 질문\n20명은 80점, 10명은 50점. 전체 평균은?\n\n### 정답\n70점. (20 × 80 + 10 × 50) ÷ 30 = 70.';
-  const question = "다른 숫자로 연습문제와 그래프를 줘";
-  const note = validateLectureNote({ title: "가중평균", summary: "집단별 인원으로 가중치를 정한다.", keyPoints: [], concepts: [], sections: [{ heading: "평균 연습", blocks: [
-    { type: "qa", label: "새 예제와 그래프로 가중평균 구하기", questionIds: ["Q1"], sourceIds: [], text: "다른 예제가 없어 원래 강의의 75점 예제를 씁니다." },
-  ] }] }, {
-    sources: new Map(), questions: new Set([question]), documents: [],
-    questionSources: new Map([[question, { id: "Q1", label: "내 질문" }]]),
-    answers: new Map([["Q1", [{ id: "saved-answer", questionId: "Q1", text: answer }]]]),
-  });
+const answer = '```lecue-chart\n{"type":"bar","title":"집단별 점수","unit":"점","series":["점수"],"rows":[{"label":"20명","values":[80]},{"label":"10명","values":[50]}]}\n```\n\n### 확인 질문\n20명은 80점, 10명은 50점. 전체 평균은?\n\n### 정답\n70점. (20 × 80 + 10 × 50) ÷ 30 = 70.';
+const question = "다른 숫자로 연습문제와 그래프를 줘";
+
+function savedNote(text: string): LectureNote {
+  const block: NoteBlock = {
+    type: "qa", label: "새 예제와 그래프로 가중평균 구하기", questionIds: ["Q1"], sourceIds: [],
+    text, items: [], latex: "", mermaid: "", page: 0,
+    sources: [{ id: "Q1", label: "내 질문" }],
+    originalQuestions: [{ id: "Q1", text: question }],
+    originalAnswers: [{ id: "saved-answer", questionId: "Q1", text: answer }],
+  };
+  return { title: "가중평균", summary: "집단별 인원으로 가중치를 정한다.", keyPoints: [], concepts: [], sections: [{ heading: "평균 연습", blocks: [block] }] };
+}
+
+test("a legacy note keeps its original chart and practice available inside a closed AI answer disclosure", () => {
+  const note = savedNote("");
   const html = renderToStaticMarkup(createElement(NoteArticle, { note, isEnglish: false }));
-  assert.match(html, /AI 답변 원문/);
+  assert.match(html, /<details class="note-original-answers" data-legacy="true"><summary>AI 답변 원문 보기/);
+  const beforeOriginals = html.slice(0, html.indexOf('<details class="note-original-answers"'));
+  assert.doesNotMatch(beforeOriginals, /20명은 80점|70점|이전 AI 답변을 정리한 내용/);
   assert.match(html, /20명은 80점, 10명은 50점/);
   assert.match(html, /aria-label="20명: 점수 80 점"/);
   assert.match(html, /aria-label="10명: 점수 50 점"/);
@@ -54,4 +62,33 @@ test("the saved note renders the original chart, practice conditions, and folded
   assert.doesNotMatch(html, /75점|lecue-chart/);
   assert.match(html, /새 예제와 그래프로 가중평균 구하기/);
   assert.match(html, /다른 숫자로 연습문제와 그래프를 줘/);
+});
+
+test("a condensed answer is visible while every grouped original question and answer remains folded", () => {
+  const summary = "집단별 인원을 가중치로 삼아 전체 평균을 구한다.";
+  const note = savedNote(summary);
+  const block = note.sections[0].blocks[0];
+  block.questionIds!.push("Q2");
+  block.originalQuestions!.push({ id: "Q2", text: "아니 그러니까 인원수를 왜 곱하는 거야?" });
+  block.originalAnswers!.push({ id: "saved-answer-2", questionId: "Q2", text: "두 번째 대화에 저장된 설명을 그대로 보존합니다." });
+  const html = renderToStaticMarkup(createElement(NoteArticle, { note, isEnglish: false }));
+  const disclosure = html.indexOf('<details class="note-original-answers">');
+  assert.ok(disclosure > 0, "answer history defaults to collapsed");
+  const visible = html.slice(0, disclosure);
+  assert.match(visible, /이전 AI 답변을 정리한 내용/);
+  assert.ok(visible.includes(summary));
+  assert.doesNotMatch(visible, /20명은 80점|두 번째 대화|아니 그러니까/);
+  assert.match(html.slice(disclosure), /20명은 80점, 10명은 50점/);
+  assert.match(html.slice(disclosure), /두 번째 대화에 저장된 설명을 그대로 보존합니다/);
+  assert.match(html, /<details class="note-original-questions"><summary>원래 질문 · 2/);
+  assert.match(html, /아니 그러니까 인원수를 왜 곱하는 거야/);
+});
+
+test("lecture-evidenced answers stay visible without an empty AI-history disclosure", () => {
+  const note = savedNote("강의의 근거로 확인한 설명입니다.");
+  delete note.sections[0].blocks[0].originalAnswers;
+  const html = renderToStaticMarkup(createElement(NoteArticle, { note, isEnglish: true }));
+  assert.match(html, /강의의 근거로 확인한 설명입니다/);
+  assert.doesNotMatch(html, /note-original-answers|Summary of saved AI answers/);
+  assert.match(html, /<details class="note-original-questions"><summary>Original questions/);
 });

@@ -181,31 +181,31 @@ test("question generation schema uses short labels and source IDs rather than mo
     assert.ok(!("originalQuestions" in properties), "the server resolves originals without spending output tokens or trusting model rewrites");
     assert.ok(!("originalAnswers" in properties), "only the server may attach saved answers");
     const prompt = notePrompt(english);
-    assert.ok(prompt.includes(english ? "same".toUpperCase() : "같은 의도"));
+    assert.ok(prompt.includes(english ? "SAME underlying confusion" : "같은 근본적인 헷갈림"));
     assert.ok(prompt.includes(english ? "exactly once" : "정확히 한 번"));
     assert.ok(prompt.includes(english ? "one-line takeaway" : "한 줄 요약"));
   }
 });
 
-test("saved practice and chart answers remain verbatim even when the model rewrites the answer or forges originals", () => {
+test("curated practice explanation keeps server-owned originals and rejects forged originals", () => {
   const input = evidence();
   const question = "다른 숫자로 연습문제 줘";
   const answer = "### 확인 질문\n20명은 80점, 10명은 50점. 전체 평균은?\n\n### 정답\n70점. (20 × 80 + 10 × 50) ÷ 30 = 70.";
   input.questions.add(question);
   input.questionSources.set(question, { id: "Q1", label: "내 질문", startMs: 80_000 });
   input.answers = new Map([["Q1", [{ id: "saved-1", questionId: "Q1", text: answer }]]]);
-  const result = validateLectureNote(raw([{ type: "qa", label: "새 숫자로 평균 구하기", questionIds: ["Q1"], text: "강의에 다른 예제가 없어 75점 예제로 대신합니다.", sourceIds: [],
+  const result = validateLectureNote(raw([{ type: "qa", label: "새 숫자로 평균 구하기", questionIds: ["Q1"], text: "20명은 80점, 10명은 50점이면 인원으로 가중한 평균은 70점이다.", sourceIds: [],
     originalAnswers: [{ id: "forged", questionId: "Q1", text: "정답은 75점" }],
   }]), input);
   const block = result.sections[0].blocks[0];
   assert.deepEqual(block.originalAnswers, input.answers.get("Q1"));
   assert.equal(block.label, "새 숫자로 평균 구하기");
-  assert.equal(block.text, "");
+  assert.equal(block.text, "20명은 80점, 10명은 50점이면 인원으로 가중한 평균은 70점이다.");
   assert.deepEqual(block.sourceIds, []);
   assert.deepEqual(block.sources?.map(source => source.id), ["Q1"]);
 });
 
-test("questions without saved answers still require lecture evidence, and cannot merge into an answer replay", () => {
+test("unanswered follow-ups can merge with answered questions only with lecture evidence", () => {
   const input = evidence();
   for (const [id, question] of [["Q1", "다른 문제 줘"], ["Q2", "왜 그런가요?"]]) {
     input.questions.add(question);
@@ -213,7 +213,10 @@ test("questions without saved answers still require lecture evidence, and cannot
   }
   input.answers = new Map([["Q1", [{ id: "saved-1", questionId: "Q1", text: "20명은 80점, 10명은 50점. 정답 70점" }]]]);
   const qa = { type: "qa", label: "설명", text: "설명", sourceIds: [] };
-  assert.throws(() => validateLectureNote(raw([{ ...qa, questionIds: ["Q1", "Q2"] }]), input), /answered and unanswered questions grouped/);
+  assert.throws(() => validateLectureNote(raw([{ ...qa, questionIds: ["Q1", "Q2"] }]), input), /missing note evidence/);
+  const grouped = validateLectureNote(raw([{ ...qa, questionIds: ["Q1", "Q2"], sourceIds: ["T1"] }]), input);
+  assert.equal(grouped.sections[0].blocks[0].originalQuestions?.length, 2);
+  assert.equal(grouped.sections[0].blocks[0].originalAnswers?.length, 1);
   assert.throws(() => validateLectureNote(raw([{ ...qa, questionIds: ["Q1"] }, { ...qa, questionIds: ["Q2"] }]), input), /missing note evidence/);
   assert.throws(() => validateLectureNote(raw([{ ...qa, questionIds: ["Q1"] }, { ...qa, questionIds: ["Q2"], sourceIds: ["saved-1"] }]), input), /unknown note evidence/);
 });
@@ -259,4 +262,36 @@ test("generated diagrams reject external resources before they can become saved 
   assert.throws(() => validateLectureNote(raw([{ type: "diagram", mermaid: 'flowchart TD\nA@{ img: "https://diagram-audit.invalid/pixel.svg" }', text: "설명", sourceIds: ["T1"] }]), evidence()), /unsupported diagram/);
   const result = validateLectureNote(raw([{ type: "diagram", mermaid: 'flowchart TD\nA[원인] --> B[결과]', text: "설명", sourceIds: ["T1"] }]), evidence());
   assert.equal(result.sections[0].blocks[0].mermaid, 'flowchart TD\nA["원인"] --> B["결과"]');
+});
+
+
+test("curation accounts for excluded chatter without displaying it or silently dropping learning questions", () => {
+  const input = evidence();
+  for (const [id, question] of [["Q1", "미분이 뭐야?"], ["Q2", "아 뭔 소리야 더 쉽게"], ["Q3", "ㅋㅋ 고마워"]]) {
+    input.questions.add(question);
+    input.questionSources.set(question, { id, label: "내 질문", startMs: 80_000 });
+  }
+  const blocks = [{ type: "qa", label: "미분을 순간 변화율로 이해하는 방법은?", text: "미분은 한 순간의 변화율이다.", questionIds: ["Q1", "Q2"], sourceIds: ["T1"] }];
+  const payload = { ...raw(blocks), excludedQuestions: [{ questionId: "Q3", reason: "non_learning" }] };
+  const note = validateLectureNote(payload, input);
+  assert.equal(note.sections[0].blocks.length, 1);
+  assert.equal(note.sections[0].blocks[0].originalQuestions?.length, 2);
+  assert.doesNotMatch(JSON.stringify(note), /ㅋㅋ 고마워/);
+  assert.throws(() => validateLectureNote(raw(blocks), input), /student question omitted/);
+  for (const excludedQuestions of [
+    [{ questionId: "Q999", reason: "non_learning" }],
+    [{ questionId: "Q1", reason: "non_learning" }],
+    [{ questionId: "Q3", reason: "non_learning" }, { questionId: "Q3", reason: "off_topic" }],
+    [{ questionId: "Q3", reason: "too_short" }],
+    [{ questionId: "Q3", reason: ["non_learning"] }],
+  ]) assert.throws(() => validateLectureNote({ ...payload, excludedQuestions }, input), /invented|repeated|exclusion reason/);
+  assert.throws(() => validateLectureNote({ ...payload, sections: [{ heading: "개념", blocks: [{ ...blocks[0], text: "" }] }] }, input), /invalid note text/);
+});
+
+test("a lecture containing only non-learning conversation produces no forced QA block", () => {
+  const input = evidence();
+  input.questions.add("testing hello");
+  input.questionSources.set("testing hello", { id: "Q1", label: "내 질문" });
+  const note = validateLectureNote({ ...raw([paragraph]), excludedQuestions: [{ questionId: "Q1", reason: "non_learning" }] }, input);
+  assert.deepEqual(note.sections[0].blocks.map(block => block.type), ["paragraph"]);
 });

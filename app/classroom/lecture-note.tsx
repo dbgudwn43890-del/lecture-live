@@ -148,7 +148,7 @@ export function NoteArticle({ note, isEnglish }: { note: LectureNote; isEnglish:
   useEffect(() => {
     let openedForPrint: HTMLDetailsElement[] = [];
     function beforePrint() {
-      openedForPrint = [...(articleRef.current?.querySelectorAll<HTMLDetailsElement>(".note-check-answer:not([open]), .note-check-hint:not([open]), .note-overview-details:not([open]), .note-diagram-details:not([open]), .answer-check details:not([open])") ?? [])];
+      openedForPrint = [...(articleRef.current?.querySelectorAll<HTMLDetailsElement>(".note-check-answer:not([open]), .note-check-hint:not([open]), .note-overview-details:not([open]), .note-diagram-details:not([open]), .answer-check details:not([open]), .note-original-answers[data-legacy='true']:not([open])") ?? [])];
       openedForPrint.forEach(detail => { detail.open = true; });
     }
     function afterPrint() {
@@ -253,10 +253,14 @@ function Block({ block, isEnglish }: { block: NoteBlock; isEnglish: boolean }) {
       return <aside className="note-callout"><div className="note-block-title"><AnswerMarkdown text={block.label} /></div><AnswerMarkdown text={block.text} /></aside>;
     case "qa":
       return <aside className="note-qa"><span className="note-block-label">{isStudentQuestion(block) ? (isEnglish ? "Your question" : "내 질문") : (isEnglish ? "Q&A" : "질문 정리")}</span><div className="note-block-title"><AnswerMarkdown text={block.label} /></div>
-        {block.originalAnswers?.length ? <>
-          <p className="note-answer-provenance">{isEnglish ? "Saved AI answer · original examples and visuals" : "AI 답변 원문 · 예제와 시각화 포함"}</p>
+        {block.text && <>
+          {!!block.originalAnswers?.length && <p className="note-answer-provenance">{isEnglish ? "Summary of saved AI answers" : "이전 AI 답변을 정리한 내용"}</p>}
+          <AnswerMarkdown text={block.text} />
+        </>}
+        {!!block.originalAnswers?.length && <details className="note-original-answers" data-legacy={!block.text || undefined}>
+          <summary>{isEnglish ? "View original AI answers" : "AI 답변 원문 보기"}<ChevronDown size={13} aria-hidden="true" /></summary>
           {block.originalAnswers.map(answer => <div className="note-original-answer" key={answer.id}><LearningAnswer text={answer.text} isEnglish={isEnglish} /></div>)}
-        </> : <AnswerMarkdown text={block.text} />}
+        </details>}
         {!!block.originalQuestions?.length && <details className="note-original-questions"><summary>{isEnglish ? "Original questions" : "원래 질문"}{block.originalQuestions.length > 1 && ` · ${block.originalQuestions.length}`}<ChevronDown size={13} aria-hidden="true" /></summary><ul>{block.originalQuestions.map(question => <li key={question.id}>{question.text}</li>)}</ul></details>}
       </aside>;
     case "formula":

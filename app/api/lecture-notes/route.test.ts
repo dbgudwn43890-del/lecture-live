@@ -30,7 +30,7 @@ let emailConfirmed: boolean;
 let inputWait: Promise<void> | null;
 
 function note(source = "T1", blocks?: Row[]) {
-  return { title: "복습", summary: "핵심 요약", keyPoints: ["핵심"], concepts: [], sections: [{ heading: "주제", blocks: blocks ?? [{ type: "paragraph", text: "핵심 설명", sourceIds: [source] }] }] };
+  return { title: "복습", summary: "핵심 요약", keyPoints: ["핵심"], concepts: [], excludedQuestions: [], sections: [{ heading: "주제", blocks: blocks ?? [{ type: "paragraph", text: "핵심 설명", sourceIds: [source] }] }] };
 }
 
 function query(table: string) {
@@ -288,13 +288,13 @@ test("reads material chunks beyond one page and keeps saved AI answers separate 
   const response = await completedPost();
   assert.equal(response.status, 200);
   assert.match(String(modelCalls[0].input), /M1P2.*LAST PAGE/);
-  assert.match(String(modelCalls[0].input), /저장된 AI 답변 \(노트에 원문 그대로 표시\):\nWRONG AI ANSWER/);
+  assert.match(String(modelCalls[0].input), /저장된 AI 답변 \(학습 정리의 맥락; 원문은 별도 보존\):\nWRONG AI ANSWER/);
   assert.equal(calls.find(call => call.table === "lecture_questions")?.columns, "id,question,question_at_ms,answer");
   const blocks = (await response.json()).note.content.sections[0].blocks;
   assert.equal(blocks[0].sources.find((source: Row) => source.id === "Q1").startMs, 6000);
-  assert.deepEqual(blocks[0].sourceIds, [], "replaying an AI answer does not certify it as a lecturer claim");
+  assert.deepEqual(blocks[0].sourceIds, ["T1"], "only supplied lecture references support the synthesis");
   assert.deepEqual(blocks[0].originalAnswers, [{ id: "q1", questionId: "Q1", text: "WRONG AI ANSWER" }]);
-  assert.equal(blocks[0].text, "", "the model's replacement answer must not be displayed");
+  assert.equal(blocks[0].text, "핵심 설명");
   assert.equal(blocks[1].documentId, "doc-1");
 });
 
@@ -307,8 +307,8 @@ test("generation and regeneration preserve the actual practice answer and chart 
     { session_id: SESSION, id: "chart", question: "그래프로 보여 줘", question_at_ms: 7000, answer: chart },
   ];
   providerResult.output_text = JSON.stringify(note("T1", [
-    { type: "qa", label: "다른 숫자의 가중평균 연습문제", questionIds: ["Q1"], text: "강의에는 다른 문제가 없습니다. 10명 × 90점, 30명 × 70점의 답은 75점입니다.", sourceIds: ["T1"] },
-    { type: "qa", label: "집단별 점수 그래프", questionIds: ["Q2"], text: "강의에는 그래프가 없습니다.", sourceIds: [] },
+    { type: "qa", label: "다른 숫자의 가중평균 연습문제", questionIds: ["Q1"], text: "20명은 80점, 10명은 50점이면 가중평균은 70점이다.", sourceIds: ["T1"] },
+    { type: "qa", label: "집단별 점수 그래프", questionIds: ["Q2"], text: "그래프는 20명 집단의 80점과 10명 집단의 50점을 비교한다.", sourceIds: [] },
   ]));
   for (const force of [false, true]) {
     const result = await (await completedPost(force)).json();
@@ -317,8 +317,8 @@ test("generation and regeneration preserve the actual practice answer and chart 
     assert.equal(blocks[0].label, "다른 숫자의 가중평균 연습문제", "question phrasing may be polished");
     assert.equal(blocks[0].originalAnswers[0].text, practice);
     assert.equal(blocks[1].originalAnswers[0].text, chart);
-    assert.equal(blocks[0].text, "");
-    assert.equal(blocks[1].text, "");
+    assert.match(blocks[0].text, /70점/);
+    assert.match(blocks[1].text, /80점.*50점/);
     assert.doesNotMatch(JSON.stringify(blocks), /75점|그래프가 없습니다/);
   }
 });
@@ -327,10 +327,35 @@ test("identical questions retain every distinct saved answer in order", async ()
   rows.lecture_questions = ["첫 번째 답: 70점", "두 번째 답: 50:50이면 65점"].map((answer, index) => ({
     session_id: SESSION, id: `answer-${index}`, question: "다른 예시를 보여 줘", question_at_ms: index * 1000, answer,
   }));
-  providerResult.output_text = JSON.stringify(note("T1", [{ type: "qa", label: "다른 예시", questionIds: ["Q1"], text: "", sourceIds: [] }]));
+  providerResult.output_text = JSON.stringify(note("T1", [{ type: "qa", label: "다른 예시", questionIds: ["Q1", "Q2"], text: "인원 비율에 따라 평균이 70점 또는 65점으로 달라진다.", sourceIds: [] }]));
   const result = await (await completedPost()).json();
   assert.equal(result.note.status, "ready");
   assert.deepEqual(result.note.content.sections[0].blocks[0].originalAnswers.map((answer: Row) => answer.text), rows.lecture_questions.map(row => row.answer));
+  assert.deepEqual(result.note.content.sections[0].blocks[0].originalAnswers.map((answer: Row) => answer.questionId), ["Q1", "Q2"]);
+});
+
+test("identical short follow-ups on different topics retain separate IDs and chronological context", async () => {
+  rows.lecture_questions = [
+    { session_id: SESSION, id: "q1", question: "금리가 오르면 채권 가격은?", question_at_ms: 6000, answer: "기존 채권 가격은 내려간다." },
+    { session_id: SESSION, id: "q2", question: "왜?", question_at_ms: 7000, answer: "새 채권의 수익률이 높아 기존 채권 가격이 조정된다." },
+    { session_id: SESSION, id: "q3", question: "미분이 뭐야?", question_at_ms: 600000, answer: "한 순간의 변화율이다." },
+    { session_id: SESSION, id: "q4", question: "왜?", question_at_ms: 601000, answer: "평균 변화율의 구간을 좁힌 극한을 구한다." },
+  ];
+  providerResult.output_text = JSON.stringify(note("T1", [
+    { type: "qa", label: "채권 가격과 금리의 관계는?", questionIds: ["Q1", "Q2"], text: "새 채권의 수익률에 맞춰 기존 채권 가격이 조정된다.", sourceIds: [] },
+    { type: "qa", label: "미분은 왜 순간 변화율인가?", questionIds: ["Q3", "Q4"], text: "평균 변화율의 구간을 좁힌 극한이다.", sourceIds: [] },
+  ]));
+  const result = await (await completedPost()).json();
+  assert.equal(result.note.status, "ready");
+  const input = String(modelCalls[0].input);
+  assert.match(input, /\[Q2 \| 0:07\] 왜\?/);
+  assert.match(input, /\[Q4 \| 10:01\] 왜\?/);
+  assert.ok(input.indexOf("기존 채권 가격이 조정된다.") < input.indexOf("[Q3 | 10:00]"));
+  assert.ok(input.indexOf("[Q3 | 10:00]") < input.indexOf("[Q4 | 10:01]"));
+  const blocks = result.note.content.sections[0].blocks;
+  assert.deepEqual(blocks.map((block: Row) => block.questionIds), [["Q1", "Q2"], ["Q3", "Q4"]]);
+  assert.deepEqual(blocks[0].originalAnswers.map((answer: Row) => answer.id), ["q1", "q2"]);
+  assert.deepEqual(blocks[1].originalAnswers.map((answer: Row) => answer.id), ["q3", "q4"]);
 });
 
 test("oversized saved answers cannot silently disappear from a new note", async () => {
@@ -343,18 +368,32 @@ test("oversized saved answers cannot silently disappear from a new note", async 
   assertOldContentPreserved();
 });
 
-test("paginates all questions, groups exact repeats, and preserves a question after the first 1000", async () => {
+test("paginates every question turn without collapsing exact repeats and preserves turn 1001", async () => {
   rows.lecture_questions = Array.from({ length: 1001 }, (_, index) => ({ session_id: SESSION, id: `q-${index}`, question: index === 1000 ? "마지막 질문" : "반복 질문", question_at_ms: index * 1000 }));
   providerResult.output_text = JSON.stringify(note("T1", [
-    { type: "qa", label: "반복 질문", questionIds: ["Q1"], text: "근거 설명", sourceIds: ["T1"] },
-    { type: "qa", label: "마지막 질문", questionIds: ["Q2"], text: "근거 설명", sourceIds: ["T1"] },
+    { type: "qa", label: "반복 질문", questionIds: Array.from({ length: 1000 }, (_, index) => `Q${index + 1}`), text: "근거 설명", sourceIds: ["T1"] },
+    { type: "qa", label: "마지막 질문", questionIds: ["Q1001"], text: "근거 설명", sourceIds: ["T1"] },
   ]));
   const response = await completedPost();
   assert.equal(response.status, 200);
   assert.deepEqual(calls.filter(call => call.table === "lecture_questions" && call.operation === "range").map(call => call.offset), [0, 1000]);
-  assert.match(String(modelCalls[0].input), /\[Q2 \| 16:40\] 마지막 질문/);
-  assert.equal(String(modelCalls[0].input).split("반복 질문").length - 1, 1);
-  assert.equal((await response.json()).note.content.sections[0].blocks.length, 2);
+  assert.match(String(modelCalls[0].input), /\[Q1001 \| 16:40\] 마지막 질문/);
+  assert.equal(String(modelCalls[0].input).split("반복 질문").length - 1, 1000);
+  const result = await response.json();
+  assert.equal(result.note.status, "ready");
+  assert.equal(result.note.content.sections[0].blocks.length, 2);
+  assert.equal(result.note.content.sections[0].blocks[0].originalQuestions.length, 1000);
+});
+
+test("repeated question turns each count toward the input limit", async () => {
+  preserveOld();
+  rows.lecture_questions = Array.from({ length: 1000 }, (_, index) => ({ session_id: SESSION, id: `q-${index}`, question: "가".repeat(50), question_at_ms: 0 }));
+  const response = await post(true);
+  assert.equal(response.status, 413);
+  assert.match((await response.json()).error, /질문과 답변.*분량/);
+  assert.equal(modelCalls.length, 0);
+  assert.equal(quotaCalls, 0);
+  assertOldContentPreserved();
 });
 
 test("a failed later material page cannot silently drop the rest of a document", async () => {
@@ -605,4 +644,22 @@ test("status read failures are errors rather than a missing or restarted note", 
   assert.equal((await post()).status, 503);
   assert.equal(heldLease, "another-request");
   assert.equal(afterCallbacks.length, 0);
+});
+
+
+test("generation stores a merged learning clarification while excluding accounted-for chatter", async () => {
+  rows.lecture_questions = [
+    { session_id: SESSION, id: "q1", question: "이게 왜 그래?", question_at_ms: 6000, answer: "핵심 설명" },
+    { session_id: SESSION, id: "q2", question: "좀 더 쉽게 설명해줘", question_at_ms: 7000 },
+    { session_id: SESSION, id: "q3", question: "ㅋㅋ 고마워", question_at_ms: 8000, answer: "천만에요" },
+  ];
+  providerResult.output_text = JSON.stringify({ ...note("T1", [
+    { type: "qa", label: "핵심 개념은 어떻게 이해하는가?", questionIds: ["Q1", "Q2"], text: "두 질문의 학습 의도를 정리한 설명", sourceIds: ["T1"] },
+  ]), excludedQuestions: [{ questionId: "Q3", reason: "non_learning" }] });
+  const result = await (await completedPost()).json();
+  assert.equal(result.note.status, "ready");
+  assert.equal(result.note.content.sections[0].blocks.length, 1);
+  assert.deepEqual(result.note.content.sections[0].blocks[0].questionIds, ["Q1", "Q2"]);
+  assert.doesNotMatch(JSON.stringify(result.note.content), /ㅋㅋ|천만에요/);
+  assert.match(String(modelCalls[0].input), /ㅋㅋ 고마워/, "read the full conversation before classifying it");
 });
