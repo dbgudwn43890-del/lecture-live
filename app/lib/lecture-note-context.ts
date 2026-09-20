@@ -61,7 +61,11 @@ function references(value: unknown, evidence: NoteEvidence): NoteSource[] {
 }
 
 /** Structured output checks shape; these checks enforce source and UI semantics. */
-export function validateLectureNote(value: unknown, evidence: NoteEvidence): LectureNote {
+export function validateLectureNote(
+  value: unknown,
+  evidence: NoteEvidence,
+  onRecovery?: (reason: "diagram_text_fallback") => void,
+): LectureNote {
   const raw = object(value);
   if (!Array.isArray(raw.sections) || !raw.sections.length) throw new Error("empty note");
   const originalQuestions = new Map<string, { text: string; source: NoteSource }>();
@@ -107,7 +111,8 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
         }
         case "table": {
           normalized.text = text(block.text);
-          normalized.columns = strings(block.columns);
+          if (!Array.isArray(block.columns) || !block.columns.every(column => typeof column === "string")) throw new Error("invalid table");
+          normalized.columns = block.columns.map(column => column.trim());
           if (normalized.columns.length < 2 || normalized.columns.length > 4 || !Array.isArray(block.rows) || !block.rows.length) throw new Error("invalid table");
           normalized.rows = block.rows.map(row => {
             // Empty cells are valid; do not filter them and shift columns.
@@ -155,7 +160,8 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
         case "formula":
           normalized.latex = text(block.latex, true);
           normalized.text = text(block.text, true);
-          katex.renderToString(normalized.latex, { throwOnError: true, trust: false, strict: "ignore" });
+          try { katex.renderToString(normalized.latex, { throwOnError: true, trust: false, strict: "ignore" }); }
+          catch { throw new Error("invalid note formula"); }
           break;
         case "code":
           if (typeof block.code !== "string" || !block.code.trim()) throw new Error("invalid note code");
@@ -166,9 +172,14 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
           normalized.text = text(block.text, true);
           break;
         case "diagram":
-          normalized.mermaid = safeNoteDiagram(text(block.mermaid, true)) ?? "";
-          if (!normalized.mermaid) throw new Error("unsupported diagram");
           normalized.text = text(block.text, true);
+          normalized.mermaid = safeNoteDiagram(text(block.mermaid)) ?? "";
+          if (!normalized.mermaid) {
+            // Sources and caption are already validated. Keep the explanation,
+            // never the rejected syntax or a guessed replacement diagram.
+            normalized.type = "paragraph";
+            onRecovery?.("diagram_text_fallback");
+          }
           break;
         case "material": {
           normalized.label = text(block.label, true);

@@ -8,9 +8,15 @@ eligible. `isLectureStatusRequest` only recognizes unambiguous whole utterances;
 the existing generation handles contextual cases without another model call.
 
 Every Q ID must appear exactly once in a QA group or an explicit exclusion.
-Validation checks original utterances, not model-rewritten labels. Unsupported
-output fails without replacing the previous note. Existing saved notes are not
+Validation checks original utterances, not model-rewritten labels. Invalid
+evidence or missing questions fail without replacing the previous note. A diagram
+outside the safe syntax subset falls back to its validated caption and sources;
+the rejected Mermaid is never saved or rendered. Existing saved notes are not
 silently rewritten; use **Regenerate** to apply the new curation.
+
+Generation failures log a bounded stage/reason code and elapsed time, never raw
+provider responses or lecture text. Diagram recovery logs only a count. These
+local checks do not add another model call or extend the generation timeout.
 
 Lecture blocks require T/M evidence. Tables, steps, diagrams, code and formulas
 are selected for the content; there is no infographic quota. Relations described

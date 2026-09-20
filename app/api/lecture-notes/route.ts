@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import { isUuid } from "../../lib/billing";
 import { notePrompt, noteSchema, type LectureNote } from "../../lib/lecture-note";
 import { isLectureStatusRequest } from "../../lib/lecture-note-intent";
+import { classifyNoteFailure, type NoteFailureStage } from "../../lib/lecture-note-failure";
 import { isNoteLanguage } from "../../lib/note-language";
 import { NoteInputError, noteClock, noteInputMessage, validateLectureNote, type NoteDocument, type NoteEvidence } from "../../lib/lecture-note-context";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
@@ -227,12 +228,15 @@ export async function POST(request: Request) {
     // Keep the lease until this callback completes, never until the 202 response.
     try {
       after(async () => {
+        let stage: NoteFailureStage = "prepare";
+        let responseStatus: string | undefined;
         try {
           // Leave time for validation and DB writes inside the route's 300s cap.
           // A retry could double the old 240s timeout and leave a stuck job row.
           const timeout = Math.min(240_000, maxDuration * 1_000 - (Date.now() - requestStartedAt) - 20_000);
           if (timeout <= 0) throw new Error("note preparation exceeded time budget");
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout, maxRetries: 0 });
+          stage = "generate";
           const response = await openai.responses.create({
             model: "gpt-5.6-luna",
             max_output_tokens: 24_000,
@@ -241,8 +245,15 @@ export async function POST(request: Request) {
             input,
             text: { format: { type: "json_schema", name: "lecture_note", strict: true, schema: noteSchema(language) as unknown as Record<string, unknown> } },
           });
+          responseStatus = response.status;
           if (response.status !== "completed") throw new Error("incomplete note response");
-          const note: LectureNote = { ...validateLectureNote(JSON.parse(response.output_text ?? ""), evidence), language };
+          stage = "parse";
+          const rawNote: unknown = JSON.parse(response.output_text ?? "");
+          stage = "validate";
+          let diagramFallbacks = 0;
+          const note: LectureNote = { ...validateLectureNote(rawNote, evidence, () => { diagramFallbacks += 1; }), language };
+          if (diagramFallbacks) console.warn("Lecture note diagram fallback", { count: diagramFallbacks });
+          stage = "save";
           const { error: saveError } = await admin.from("lecture_notes")
             .update({ status: "ready", content: note, model: "gpt-5.6-luna", updated_at: new Date().toISOString() })
             .eq("session_id", sessionId).eq("user_id", userId).eq("status", "generating").eq("updated_at", startedAt);
@@ -252,7 +263,9 @@ export async function POST(request: Request) {
           }
           await saveConcepts(supabase, userId, session.classroom_id, sessionId, note);
         } catch (error) {
-          console.error("Lecture note generation failed", error && typeof error === "object" && "status" in error ? error.status : "unknown");
+          console.error("Lecture note generation failed", {
+            stage, ...classifyNoteFailure(error, stage, responseStatus), elapsedMs: Date.now() - requestStartedAt,
+          });
           // Updating status never clears the previous validated content.
           try { await markFailed(); } catch { console.error("Lecture note failure status save failed"); }
         } finally {

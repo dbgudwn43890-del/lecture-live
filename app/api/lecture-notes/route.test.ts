@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test, { mock } from "node:test";
 import { pathToFileURL } from "node:url";
+import { APIConnectionError, APIConnectionTimeoutError, APIUserAbortError } from "openai";
 
 const SESSION = "11111111-1111-4111-8111-111111111111";
 const USER = "22222222-2222-4222-8222-222222222222";
 const OLD_CONTENT = { title: "기존 노트", summary: "기존 내용", sections: [{ heading: "기존", blocks: [] }] };
+const PRIVATE_SOURCE = "SYNTHETIC_PRIVATE_LECTURE_CONTENT";
+const PRIVATE_SECRET = "sk-SYNTHETIC_PRIVATE_PROVIDER_DETAIL";
 type Row = Record<string, unknown>;
 let rows: Record<string, Row[]>;
 let existing: Row | null;
@@ -61,7 +64,7 @@ function query(table: string) {
     then(resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) {
       calls.push({ table, operation, payload });
       if (table === "lecture_notes" && operation === "update") {
-        if (saveFails && payload.status === "ready") return Promise.resolve({ error: { code: "save-failed" } }).then(resolve, reject);
+        if (saveFails && payload.status === "ready") return Promise.resolve({ error: { code: "save-failed", message: PRIVATE_SOURCE, details: PRIVATE_SECRET } }).then(resolve, reject);
         if (existing && Object.entries(filters).every(([key, value]) => key === "session_id" || key === "user_id" || existing?.[key] === value)) {
           existing = { ...existing, ...payload };
         }
@@ -106,7 +109,7 @@ class FakeOpenAI {
     return providerResult;
   } };
 }
-mock.module("openai", { defaultExport: FakeOpenAI });
+mock.module("openai", { defaultExport: FakeOpenAI, namedExports: { APIConnectionError, APIConnectionTimeoutError, APIUserAbortError } });
 registerHooks({ resolve(specifier, context, nextResolve) {
   try { return nextResolve(specifier, context); } catch (error) {
     for (const extension of [".ts", ".js"]) { try { return nextResolve(`${specifier}${extension}`, context); } catch {} }
@@ -436,12 +439,35 @@ test("too-large materials explain how to retry without silently skipping the res
   assertOldContentPreserved();
 });
 
-for (const mode of ["provider failure", "incomplete response", "invalid source", "save failure"]) {
-  test(`${mode} during regeneration preserves the completed note`, async () => {
+for (const [mode, stage, category, reason] of [
+  ["provider failure", "generate", "provider", "provider_unknown"],
+  ["incomplete response", "generate", "provider", "response_incomplete"],
+  ["invalid JSON", "parse", "parse", "invalid_json"],
+  ["invalid source", "validate", "validation", "unknown_evidence"],
+  ["diagram without a source", "validate", "validation", "missing_evidence"],
+  ["save failure", "save", "save", "save_failed"],
+] as const) {
+  test(`${mode} preserves the completed note and logs only a bounded failure classification`, async t => {
+    const errors: unknown[][] = [];
+    const warnings: unknown[][] = [];
+    t.mock.method(console, "error", (...args: unknown[]) => { errors.push(args); });
+    t.mock.method(console, "warn", (...args: unknown[]) => { warnings.push(args); });
     preserveOld();
+    rows.transcript_segments[0].text = PRIVATE_SOURCE;
+    providerResult.output_text = JSON.stringify(note("T1", [{ type: "paragraph", text: PRIVATE_SECRET, sourceIds: ["T1"] }]));
     if (mode === "provider failure") providerFails = true;
-    if (mode === "incomplete response") providerResult.status = "incomplete";
-    if (mode === "invalid source") providerResult.output_text = JSON.stringify(note("T999"));
+    if (mode === "incomplete response") {
+      providerResult.status = "incomplete";
+      providerResult.incomplete_details = { reason: PRIVATE_SECRET };
+    }
+    if (mode === "invalid JSON") providerResult.output_text = `{"title":"${PRIVATE_SOURCE}","secret":"${PRIVATE_SECRET}"`;
+    if (mode === "invalid source") providerResult.output_text = JSON.stringify(note("T1", [
+      { type: "diagram", text: PRIVATE_SOURCE, mermaid: `sequenceDiagram\n${PRIVATE_SECRET}`, sourceIds: ["T1"] },
+      { type: "paragraph", text: PRIVATE_SECRET, sourceIds: [`T999_${PRIVATE_SOURCE}`] },
+    ]));
+    if (mode === "diagram without a source") providerResult.output_text = JSON.stringify(note("T1", [
+      { type: "diagram", text: PRIVATE_SOURCE, mermaid: `sequenceDiagram\n${PRIVATE_SECRET}`, sourceIds: [] },
+    ]));
     if (mode === "save failure") saveFails = true;
     assert.equal((await post(true)).status, 202);
     assert.equal(existing?.status, "generating");
@@ -452,9 +478,82 @@ for (const mode of ["provider failure", "incomplete response", "invalid source",
     assert.equal(heldLease, null);
     const result = await (await get()).json();
     assert.equal(result.note.status, "failed");
+    assert.deepEqual(result.note.content, OLD_CONTENT);
     assert.match(result.error, /다시 시도/);
+    assert.equal(modelCalls.length, 1);
+    assert.equal(providerOptions[0].maxRetries, 0);
+    const readyWrites = calls.filter(call => call.table === "lecture_notes" && call.payload?.status === "ready");
+    assert.equal(readyWrites.length, mode === "save failure" ? 1 : 0, "invalid output must not reach persistence");
+    assert.deepEqual(warnings, [], "a recovered diagram must not report success if the rest of the note fails validation");
+    const classified = errors.filter(args => args[0] === "Lecture note generation failed");
+    assert.equal(classified.length, 1);
+    assert.equal(classified[0].length, 2);
+    const diagnostic = classified[0][1] as Row;
+    assert.deepEqual(Object.keys(diagnostic).sort(), ["category", "elapsedMs", "reason", "stage"]);
+    assert.deepEqual({ ...diagnostic, elapsedMs: 0 }, { stage, category, reason, elapsedMs: 0 });
+    assert.ok(typeof diagnostic.elapsedMs === "number" && Number.isFinite(diagnostic.elapsedMs) && diagnostic.elapsedMs >= 0);
+    const observable = JSON.stringify({ errors, warnings, result });
+    assert.ok(!observable.includes(PRIVATE_SOURCE), "logs and errors must not include lecture or rejected source text");
+    assert.ok(!observable.includes(PRIVATE_SECRET), "logs and errors must not include provider or storage details");
   });
 }
+
+test("unsupported diagrams save their validated captions with the complete note in one replacement", async t => {
+  const warnings: unknown[][] = [];
+  const errors: unknown[][] = [];
+  t.mock.method(console, "warn", (...args: unknown[]) => { warnings.push(args); });
+  t.mock.method(console, "error", (...args: unknown[]) => { errors.push(args); });
+  preserveOld();
+  const code = "printf '%s\\n' '*.md' > output.txt\ncat < output.txt\n";
+  providerResult.output_text = JSON.stringify(note("T1", [
+    { type: "paragraph", text: "출력은 파일이나 다음 명령으로 전달한다.", sourceIds: ["T1"] },
+    { type: "diagram", text: "파이프는 다음 명령의 표준 입력으로 연결한다.", mermaid: `sequenceDiagram\n${PRIVATE_SECRET}`, sourceIds: ["T1"] },
+    { type: "code", text: "패턴과 리다이렉션 기호를 그대로 보존한다.", code, language: "sh", sourceIds: ["T1"] },
+    { type: "check", label: "20명은 80점, 10명은 50점일 때 전체 평균은?", text: "(20 × 80 + 10 × 50) ÷ 30 = 70점", hint: "인원으로 가중한다.", sourceIds: ["T1"] },
+    { type: "diagram", text: "리다이렉션은 파일로 출력을 보낸다.", mermaid: `flowchart TD\nA["https://private.invalid/${PRIVATE_SOURCE}"] --> B`, sourceIds: ["T1"] },
+    { type: "diagram", text: "입력과 출력의 순서", mermaid: 'flowchart TD\nA["입력"] --> B["출력"]', sourceIds: ["T1"] },
+  ]));
+  assert.equal((await post(true)).status, 202);
+  assert.equal(existing?.status, "generating");
+  assert.equal(existing?.content, OLD_CONTENT, "keep the saved note until the entire replacement is validated");
+  assert.equal(modelCalls.length, 0);
+  await runBackground();
+  const result = await (await get()).json();
+  assert.equal(result.note.status, "ready");
+  const content = result.note.content;
+  assert.equal(content.title, "복습");
+  assert.equal(content.summary, "핵심 요약");
+  assert.deepEqual(content.keyPoints, ["핵심"]);
+  assert.equal(content.sections[0].heading, "주제");
+  const blocks = content.sections[0].blocks;
+  assert.deepEqual(blocks.map((block: Row) => block.type), ["paragraph", "paragraph", "code", "check", "paragraph", "diagram"]);
+  assert.equal(blocks[0].text, "출력은 파일이나 다음 명령으로 전달한다.");
+  assert.equal(blocks[1].text, "파이프는 다음 명령의 표준 입력으로 연결한다.");
+  assert.equal(blocks[4].text, "리다이렉션은 파일로 출력을 보낸다.");
+  for (const block of [blocks[1], blocks[4]]) {
+    assert.deepEqual(block.sourceIds, ["T1"]);
+    assert.deepEqual(block.sources, [{ id: "T1", label: "강의 0:05", startMs: 5000 }]);
+    assert.equal(block.mermaid, "");
+  }
+  assert.equal(blocks[2].code, code);
+  assert.equal(blocks[2].language, "sh");
+  assert.equal(blocks[3].label, "20명은 80점, 10명은 50점일 때 전체 평균은?");
+  assert.equal(blocks[3].text, "(20 × 80 + 10 × 50) ÷ 30 = 70점");
+  assert.equal(blocks[3].hint, "인원으로 가중한다.");
+  assert.equal(blocks[5].mermaid, 'flowchart TD\nA["입력"] --> B["출력"]');
+  assert.deepEqual(warnings, [["Lecture note diagram fallback", { count: 2 }]]);
+  assert.deepEqual(errors, []);
+  assert.equal(modelCalls.length, 1);
+  assert.equal(quotaCalls, 1);
+  assert.equal(providerOptions[0].maxRetries, 0);
+  assert.equal(heldLease, null);
+  const readyWrites = calls.filter(call => call.table === "lecture_notes" && call.payload?.status === "ready");
+  assert.equal(readyWrites.length, 1);
+  assert.deepEqual(readyWrites[0].payload?.content, content);
+  const storedAndLogged = JSON.stringify({ content, errors, warnings });
+  assert.ok(!storedAndLogged.includes(PRIVATE_SOURCE));
+  assert.ok(!storedAndLogged.includes(PRIVATE_SECRET));
+});
 
 test("successful regeneration replaces the existing note once, after validation", async () => {
   preserveOld();

@@ -59,6 +59,54 @@ test("compact generation limits do not reject or clip an older detailed overview
   assert.deepEqual(result.keyPoints, points, "the reader may fold them, but validation must not discard qualifiers or overflow items");
 });
 
+test("concept generation bounds match accepted counts in both output languages", () => {
+  for (const language of ["ko", "en"] as const) {
+    const limit = noteSchema(language).properties.concepts.maxItems;
+    assert.equal(limit, 15);
+    for (const count of [0, 15, 16]) {
+      const concepts = Array.from({ length: count }, (_, i) => ({
+        name: `개념 ${i + 1}`, definition: "발화에서 정의한 개념", evidenceClock: "", related: [], sourceIds: ["T1"],
+      }));
+      if (count <= limit) assert.equal(validateLectureNote(raw([paragraph], concepts), evidence()).concepts?.length, count);
+      else assert.throws(() => validateLectureNote(raw([paragraph], concepts), evidence()), /too many concepts/);
+    }
+  }
+});
+
+test("table generation bounds match validator boundaries in both output languages", () => {
+  for (const language of ["ko", "en"] as const) {
+    const variants = noteSchema(language).properties.sections.items.properties.blocks.items.anyOf;
+    const table = variants.find(variant => variant.properties.type.enum.includes("table"))!;
+    const properties = table.properties as Record<string, unknown>;
+    const columnBounds = properties.columns as { minItems: number; maxItems: number };
+    const rowBounds = properties.rows as { minItems: number };
+    assert.equal(columnBounds.minItems, 2);
+    assert.equal(columnBounds.maxItems, 4);
+    assert.equal(rowBounds.minItems, 1);
+    for (const width of [1, 2, 4, 5]) for (const height of [0, 1]) {
+      const columns = Array.from({ length: width }, (_, i) => `열 ${i + 1}`);
+      const rows = Array.from({ length: height }, () => columns.map(() => "값"));
+      const value = raw([{ type: "table", text: "비교", columns, rows, sourceIds: ["T1"] }]);
+      if (width >= columnBounds.minItems && width <= columnBounds.maxItems && height >= rowBounds.minItems) {
+        const result = validateLectureNote(value, evidence()).sections[0].blocks[0];
+        assert.deepEqual(result.columns, columns);
+        assert.deepEqual(result.rows, rows);
+      } else assert.throws(() => validateLectureNote(value, evidence()), /invalid table/);
+    }
+  }
+});
+
+test("blank table headers keep their column positions without accepting malformed cells", () => {
+  const table = { type: "table", text: "리다이렉션 비교", columns: [" ", " 표준 출력 ", " 표준 오류 "],
+    rows: [["파일", " >", "2>"], ["추가", ">>", "2>>"]], sourceIds: ["T1"] };
+  const result = validateLectureNote(raw([table]), evidence()).sections[0].blocks[0];
+  assert.deepEqual(result.columns, ["", "표준 출력", "표준 오류"]);
+  assert.deepEqual(result.rows, [["파일", ">", "2>"], ["추가", ">>", "2>>"]]);
+  assert.throws(() => validateLectureNote(raw([{ ...table, rows: [["파일", ">"]] }]), evidence()), /uneven table/);
+  assert.throws(() => validateLectureNote(raw([{ ...table, columns: ["", 7, "표준 오류"] }]), evidence()), /invalid table/);
+  assert.throws(() => validateLectureNote(raw([{ ...table, rows: [["파일", 7, "2>"]] }]), evidence()), /uneven table/);
+});
+
 test("Korean generation uses a 60-character point limit without mutating English or shared schema fields", () => {
   const korean = noteSchema(false);
   const english = noteSchema(true);
@@ -251,17 +299,60 @@ test("concept times come from actual cited speech, and material-only definitions
 test("rejects malformed learning components and removes identical repeated blocks", () => {
   assert.throws(() => validateLectureNote(raw([{ type: "table", text: "", columns: ["a", "b"], rows: [["one cell"]], sourceIds: ["T1"] }]), evidence()), /uneven table/);
   assert.throws(() => validateLectureNote(raw([{ type: "steps", entries: [], sourceIds: ["T1"] }]), evidence()), /empty list/);
-  assert.throws(() => validateLectureNote(raw([{ type: "formula", latex: "\\frac{", text: "설명", sourceIds: ["T1"] }]), evidence()));
-  assert.throws(() => validateLectureNote(raw([{ type: "diagram", mermaid: "sequenceDiagram", text: "설명", sourceIds: ["T1"] }]), evidence()), /unsupported diagram/);
+  assert.throws(() => validateLectureNote(raw([{ type: "formula", latex: "\\frac{", text: "설명", sourceIds: ["T1"] }]), evidence()), { message: "invalid note formula" });
   const result = validateLectureNote(raw([paragraph, paragraph]), evidence());
   assert.equal(result.sections[0].blocks.length, 1);
 });
 
 
-test("generated diagrams reject external resources before they can become saved notes", () => {
-  assert.throws(() => validateLectureNote(raw([{ type: "diagram", mermaid: 'flowchart TD\nA@{ img: "https://diagram-audit.invalid/pixel.svg" }', text: "설명", sourceIds: ["T1"] }]), evidence()), /unsupported diagram/);
-  const result = validateLectureNote(raw([{ type: "diagram", mermaid: 'flowchart TD\nA[원인] --> B[결과]', text: "설명", sourceIds: ["T1"] }]), evidence());
+test("valid diagrams keep their canonical syntax and do not report a recovery", () => {
+  const recoveries: string[] = [];
+  const result = validateLectureNote(raw([{ type: "diagram", mermaid: 'flowchart TD\nA[원인] --> B[결과]', text: "설명", sourceIds: ["T1"] }]), evidence(), reason => recoveries.push(reason));
+  assert.equal(result.sections[0].blocks[0].type, "diagram");
   assert.equal(result.sections[0].blocks[0].mermaid, 'flowchart TD\nA["원인"] --> B["결과"]');
+  assert.deepEqual(recoveries, []);
+});
+
+test("unsupported or unsafe diagram syntax keeps the grounded caption without losing the rest of the note", () => {
+  for (const mermaid of [
+    "flowchart LR\nA --> B", "graph TD\nA --> B", "flowchart TD;\nA --> B",
+    "flowchart TD\nA --> B; B --> C;", "sequenceDiagram\nA->>B: hello", "",
+    'flowchart TD\nA@{ img: "https://diagram-audit.invalid/pixel.svg" }',
+    'flowchart TD\n%%{init: {securityLevel: "loose"}}%%\nA --> B',
+  ]) {
+    const input = evidence();
+    const recoveries: string[] = [];
+    const result = validateLectureNote(raw([
+      paragraph,
+      { type: "diagram", mermaid, text: "입력이 처리 과정을 거쳐 출력으로 이어진다.", sourceIds: ["T1", "M1P2"] },
+    ]), input, reason => recoveries.push(reason));
+    assert.equal(result.sections[0].blocks.length, 2);
+    assert.equal(result.sections[0].blocks[0].text, paragraph.text);
+    const recovered = result.sections[0].blocks[1];
+    assert.equal(recovered.type, "paragraph");
+    assert.equal(recovered.text, "입력이 처리 과정을 거쳐 출력으로 이어진다.");
+    assert.equal(recovered.mermaid, "");
+    assert.deepEqual(recovered.sourceIds, ["T1", "M1P2"]);
+    assert.deepEqual(recovered.sources, [input.sources.get("T1"), input.sources.get("M1P2")]);
+    assert.notEqual(recovered.sources![0], input.sources.get("T1"));
+    if (mermaid) assert.ok(!JSON.stringify(result).includes(JSON.stringify(mermaid).slice(1, -1)), "rejected syntax never persists");
+    assert.deepEqual(recoveries, ["diagram_text_fallback"], "telemetry contains only a fixed recovery code");
+  }
+});
+
+test("diagram recovery never bypasses source, caption, field-type, or question coverage validation", () => {
+  const diagram = { type: "diagram", mermaid: "flowchart LR\nA --> B", text: "근거에 있는 입력과 출력의 관계", sourceIds: ["T1"] };
+  for (const invalid of [
+    { sourceIds: [] }, { sourceIds: ["T999"] }, { sourceIds: ["Q1"] },
+    { text: " \n\t" }, { text: undefined }, { mermaid: null }, { mermaid: 123 },
+  ]) {
+    const recoveries: string[] = [];
+    assert.throws(() => validateLectureNote(raw([paragraph, { ...diagram, ...invalid }]), evidence(), reason => recoveries.push(reason)), /missing note evidence|unknown note evidence|invalid note text/);
+    assert.deepEqual(recoveries, [], "invalid grounding or required fields cannot be recovered");
+  }
+  const input = evidence();
+  input.questionTurns = new Map([["Q1", { text: "pipe가 뭐야?", source: { id: "Q1", label: "내 질문" } }]]);
+  assert.throws(() => validateLectureNote(raw([paragraph, diagram]), input), /student question omitted/);
 });
 
 

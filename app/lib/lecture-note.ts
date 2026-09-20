@@ -106,6 +106,7 @@ export const NOTE_SCHEMA = {
     keyPoints: { type: "array", maxItems: 5, items: { type: "string", maxLength: NOTE_KEY_POINT_MAX_LENGTH } },
     concepts: {
       type: "array",
+      maxItems: 15,
       items: {
         type: "object",
         additionalProperties: false,
@@ -133,7 +134,7 @@ export const NOTE_SCHEMA = {
               blockSchema("paragraph", { text: stringSchema }),
               blockSchema("list", { entries: entriesSchema }),
               blockSchema("steps", { entries: entriesSchema }),
-              blockSchema("table", { text: stringSchema, columns: stringsSchema, rows: { type: "array", items: stringsSchema } }),
+              blockSchema("table", { text: stringSchema, columns: { ...stringsSchema, minItems: 2, maxItems: 4 }, rows: { type: "array", minItems: 1, items: stringsSchema } }),
               blockSchema("callout", { label: stringSchema, text: stringSchema }),
               blockSchema("qa", { label: questionLabelSchema, text: stringSchema, questionIds: { type: "array", minItems: 1, items: { type: "string", pattern: "^Q[1-9][0-9]*$" } } }),
               blockSchema("check", {
