@@ -2,7 +2,7 @@
 
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { AnswerMarkdown } from "./answer-markdown";
 import LearningAnswer from "./learning-answer";
@@ -18,6 +18,9 @@ import type { NoteLanguage, NoteLanguagePreference } from "../lib/note-language"
 import type { LectureNote, NoteBlock } from "../lib/lecture-note";
 import { safeNoteDiagram } from "../lib/mermaid-safety";
 import { renderMaterialPdfPage } from "./material-pdf";
+import { AnswerChart } from "./answer-chart";
+import { noteStudyArtifacts } from "./note-study-artifacts";
+import { openNotePrintDetails, waitForNoteDiagrams } from "./note-print";
 
 /** The workspace owns generation state, so closing the dialog does not reset it. */
 export default function LectureNotePanel({
@@ -25,9 +28,34 @@ export default function LectureNotePanel({
 }: { state: ReturnType<typeof useLectureNote>; isEnglish: boolean; languagePreference: NoteLanguagePreference;
   systemLanguage: NoteLanguage; outputLanguage: NoteLanguage; onLanguageChange(value: NoteLanguagePreference): void; onClose: () => void }) {
   const { phase, note, message, remaining, startedAt, generate, reload } = state;
+  const panelRef = useRef<HTMLDivElement>(null);
+  const printRequest = useRef<AbortController | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [printMessage, setPrintMessage] = useState("");
+  useEffect(() => {
+    setPrinting(false); setPrintMessage("");
+    return () => { printRequest.current?.abort(); printRequest.current = null; };
+  }, [note, phase]);
+  function closeNote() { printRequest.current?.abort(); onClose(); }
+  async function printNote() {
+    const article = panelRef.current?.querySelector<HTMLElement>(".note-reading");
+    if (!article || printRequest.current) return;
+    const request = new AbortController();
+    printRequest.current = request;
+    setPrinting(true); setPrintMessage("");
+    try {
+      const ready = await waitForNoteDiagrams(article, request.signal);
+      if (request.signal.aborted || !article.isConnected) return;
+      if (ready) window.print();
+      else setPrintMessage(isEnglish ? "The diagrams are still loading. Try saving again shortly." : "도식을 아직 준비하고 있어요. 잠시 뒤 다시 저장해 주세요.");
+    } finally {
+      if (printRequest.current === request) printRequest.current = null;
+      if (!request.signal.aborted) setPrinting(false);
+    }
+  }
   return (
-    <WorkspaceDialog label={isEnglish ? "Review note" : "복습 노트"} onClose={onClose}>
-      <div className={`note-panel review-note-panel${!note || phase === "generating" ? " is-preparing" : ""}`}>
+    <WorkspaceDialog label={isEnglish ? "Review note" : "복습 노트"} onClose={closeNote}>
+      <div className={`note-panel review-note-panel${!note || phase === "generating" ? " is-preparing" : ""}`} ref={panelRef}>
         <header className="note-topbar">
           <strong>{isEnglish ? "Review note" : "복습 노트"}</strong>
           <div>
@@ -35,8 +63,8 @@ export default function LectureNotePanel({
               <span className="note-quota">{isEnglish ? `${remaining} left today` : `오늘 ${remaining}회 남음`}</span>
             )}
             {note && phase !== "generating" && (
-              <button type="button" className="note-regenerate" onClick={() => window.print()}>
-                {isEnglish ? "Save as PDF" : "PDF 저장"}
+              <button type="button" className="note-regenerate" onClick={() => void printNote()} disabled={printing}>
+                {printing ? (isEnglish ? "Preparing PDF…" : "PDF 준비 중…") : (isEnglish ? "Save as PDF" : "PDF 저장")}
               </button>
             )}
             {note && phase !== "generating" && (
@@ -44,7 +72,7 @@ export default function LectureNotePanel({
                 {phase === "error" ? (isEnglish ? "Check status" : "상태 다시 확인") : (isEnglish ? "Regenerate" : "다시 만들기")}
               </button>
             )}
-            <button type="button" className="banner-dismiss" onClick={onClose} aria-label={isEnglish ? "Back to lecture" : "강의실로 돌아가기"}>✕</button>
+            <button type="button" className="banner-dismiss" onClick={closeNote} aria-label={isEnglish ? "Back to lecture" : "강의실로 돌아가기"}>✕</button>
           </div>
         </header>
 
@@ -57,6 +85,7 @@ export default function LectureNotePanel({
           </p>}
         </div>
 
+        {printMessage && <p className="note-print-status" role="status">{printMessage}</p>}
         {phase === "loading" && <p className="note-status">{isEnglish ? "Loading…" : "불러오는 중…"}</p>}
         {phase === "none" && (
           <div className="note-empty">
@@ -146,18 +175,14 @@ export function NoteArticle({ note, isEnglish }: { note: LectureNote; isEnglish:
   }, [note]);
 
   useEffect(() => {
-    let openedForPrint: HTMLDetailsElement[] = [];
+    let restore: (() => void) | undefined;
     function beforePrint() {
-      openedForPrint = [...(articleRef.current?.querySelectorAll<HTMLDetailsElement>(".note-check-answer:not([open]), .note-check-hint:not([open]), .note-overview-details:not([open]), .note-diagram-details:not([open]), .answer-check details:not([open]), .note-original-answers[data-legacy='true']:not([open])") ?? [])];
-      openedForPrint.forEach(detail => { detail.open = true; });
+      if (!restore && articleRef.current) restore = openNotePrintDetails(articleRef.current);
     }
-    function afterPrint() {
-      openedForPrint.forEach(detail => { detail.open = false; });
-      openedForPrint = [];
-    }
+    function afterPrint() { restore?.(); restore = undefined; }
     window.addEventListener("beforeprint", beforePrint);
     window.addEventListener("afterprint", afterPrint);
-    return () => { window.removeEventListener("beforeprint", beforePrint); window.removeEventListener("afterprint", afterPrint); };
+    return () => { window.removeEventListener("beforeprint", beforePrint); window.removeEventListener("afterprint", afterPrint); afterPrint(); };
   }, []);
 
   return (
@@ -181,14 +206,14 @@ export function NoteArticle({ note, isEnglish }: { note: LectureNote; isEnglish:
       <div className="note-document" lang={note.language ?? (isEnglish ? "en" : "ko")}>
       <header className="note-cover">
         <h1>{note.title}</h1>
-        {overview.summary && <div className="note-one-line-summary"><span>{isEnglish ? "In one sentence" : "한 줄 요약"}</span><AnswerMarkdown text={overview.summary} /></div>}
+        {overview.summary && <div className="note-one-line-summary"><span>{isEnglish ? "In one sentence" : "한 줄 요약"}</span><NoteText text={overview.summary} /></div>}
       </header>
       {(overview.points.length > 0 || overview.details.length > 0) && <section className="note-key-points" data-kind={overview.kind} aria-label={overview.kind === "keyPoints" ? (isEnglish ? "Key points" : "핵심") : (isEnglish ? "Topics" : "주요 주제")}>
         <h2>{overview.kind === "keyPoints" ? (isEnglish ? "Key points" : "핵심") : (isEnglish ? "Topics" : "주요 주제")}</h2>
-        <ul>{overview.points.map((point, index) => <li key={index}>{overview.kind === "topics" ? point : <AnswerMarkdown text={point} />}</li>)}</ul>
+        <ul>{overview.points.map((point, index) => <li key={index}>{overview.kind === "topics" ? point : <NoteText text={point} />}</li>)}</ul>
         {overview.details.length > 0 && <details className="note-overview-details">
           <summary>{isEnglish ? "More detail" : "추가 설명"}<ChevronDown size={14} aria-hidden="true" /></summary>
-          {overview.details.map((point, index) => <AnswerMarkdown text={point} key={index} />)}
+          {overview.details.map((point, index) => <NoteText text={point} key={index} />)}
         </details>}
       </section>}
       {note.sections.map((section, sectionIndex) => (
@@ -219,50 +244,63 @@ function isStudentQuestion(block: NoteBlock) {
   return block.sources?.some(source => /^Q\d+$/.test(source.id)) ?? false;
 }
 
+/** Structured note strings are prose, not Markdown. Preserve shell and math punctuation. */
+function NoteText({ text }: { text: string }) {
+  return <div className="note-text">{text}</div>;
+}
+
 function Block({ block, isEnglish }: { block: NoteBlock; isEnglish: boolean }) {
   switch (block.type) {
     case "paragraph":
-      return <AnswerMarkdown text={block.text} />;
+      return <NoteText text={block.text} />;
     case "list":
     case "steps": {
       const List = block.type === "steps" ? "ol" : "ul";
       const entries = block.entries?.length ? block.entries : block.items.map(text => ({ text, children: [] }));
       return <List className={block.type === "steps" ? "note-steps" : "note-list"}>{entries.map((entry, index) => <li key={index}>
-        <AnswerMarkdown text={entry.text} />
-        {entry.children?.length > 0 && <ul>{entry.children.map((child, childIndex) => <li key={childIndex}><AnswerMarkdown text={child} /></li>)}</ul>}
+        <NoteText text={entry.text} />
+        {entry.children?.length > 0 && <ul>{entry.children.map((child, childIndex) => <li key={childIndex}><NoteText text={child} /></li>)}</ul>}
       </li>)}</List>;
     }
     case "table":
       return <figure className="note-table">
         {block.label && <figcaption>{block.label}</figcaption>}
         <div className="note-table-scroll" tabIndex={0} role="region" aria-label={block.label || (isEnglish ? "Comparison table" : "비교 표")}>
-          <table><thead><tr>{block.columns?.map((column, index) => <th scope="col" key={index}><AnswerMarkdown text={column} /></th>)}</tr></thead>
-            <tbody>{block.rows?.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}><AnswerMarkdown text={cell} /></td>)}</tr>)}</tbody>
+          <table><thead><tr>{block.columns?.map((column, index) => <th scope="col" key={index}><NoteText text={column} /></th>)}</tr></thead>
+            <tbody>{block.rows?.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}><NoteText text={cell} /></td>)}</tr>)}</tbody>
           </table>
         </div>
-        {block.text && <div className="note-caption"><AnswerMarkdown text={block.text} /></div>}
+        {block.text && <div className="note-caption"><NoteText text={block.text} /></div>}
+      </figure>;
+    case "code":
+      return <figure className="note-code">
+        <pre><code data-language={block.language || undefined}>{block.code}</code></pre>
+        {block.text && <figcaption><NoteText text={block.text} /></figcaption>}
       </figure>;
     case "check":
       return <aside className="note-check">
         <span className="note-block-label">{isEnglish ? "Check your understanding" : "이해 확인"}</span>
-        <div className="note-check-question"><AnswerMarkdown text={block.label} /></div>
-        {block.hint && <details className="note-check-hint"><summary>{isEnglish ? "Hint" : "힌트 보기"}<ChevronDown size={14} aria-hidden="true" /></summary><AnswerMarkdown text={block.hint} /></details>}
-        <details className="note-check-answer"><summary>{isEnglish ? "Answer & explanation" : "정답과 해설 보기"}<ChevronDown size={14} aria-hidden="true" /></summary><div className="note-check-solution"><AnswerMarkdown text={block.text} /></div></details>
+        <div className="note-check-question"><NoteText text={block.label} /></div>
+        {block.hint && <details className="note-check-hint"><summary>{isEnglish ? "Hint" : "힌트 보기"}<ChevronDown size={14} aria-hidden="true" /></summary><NoteText text={block.hint} /></details>}
+        <details className="note-check-answer"><summary>{isEnglish ? "Answer & explanation" : "정답과 해설 보기"}<ChevronDown size={14} aria-hidden="true" /></summary><div className="note-check-solution"><NoteText text={block.text} /></div></details>
       </aside>;
     case "callout":
-      return <aside className="note-callout"><div className="note-block-title"><AnswerMarkdown text={block.label} /></div><AnswerMarkdown text={block.text} /></aside>;
-    case "qa":
-      return <aside className="note-qa"><span className="note-block-label">{isStudentQuestion(block) ? (isEnglish ? "Your question" : "내 질문") : (isEnglish ? "Q&A" : "질문 정리")}</span><div className="note-block-title"><AnswerMarkdown text={block.label} /></div>
-        {block.text && <>
+      return <aside className="note-callout"><div className="note-block-title"><NoteText text={block.label} /></div><NoteText text={block.text} /></aside>;
+    case "qa": {
+      const hasSummary = Boolean(block.text.trim());
+      return <aside className="note-qa"><span className="note-block-label">{isStudentQuestion(block) ? (isEnglish ? "Your question" : "내 질문") : (isEnglish ? "Q&A" : "질문 정리")}</span><div className="note-block-title"><NoteText text={block.label} /></div>
+        {hasSummary && <>
           {!!block.originalAnswers?.length && <p className="note-answer-provenance">{isEnglish ? "Summary of saved AI answers" : "이전 AI 답변을 정리한 내용"}</p>}
-          <AnswerMarkdown text={block.text} />
+          <NoteText text={block.text} />
+          <SavedStudyArtifacts answers={block.originalAnswers ?? []} isEnglish={isEnglish} />
         </>}
-        {!!block.originalAnswers?.length && <details className="note-original-answers" data-legacy={!block.text || undefined}>
+        {!!block.originalAnswers?.length && <details className="note-original-answers" data-legacy={!hasSummary || undefined}>
           <summary>{isEnglish ? "View original AI answers" : "AI 답변 원문 보기"}<ChevronDown size={13} aria-hidden="true" /></summary>
           {block.originalAnswers.map(answer => <div className="note-original-answer" key={answer.id}><LearningAnswer text={answer.text} isEnglish={isEnglish} /></div>)}
         </details>}
         {!!block.originalQuestions?.length && <details className="note-original-questions"><summary>{isEnglish ? "Original questions" : "원래 질문"}{block.originalQuestions.length > 1 && ` · ${block.originalQuestions.length}`}<ChevronDown size={13} aria-hidden="true" /></summary><ul>{block.originalQuestions.map(question => <li key={question.id}>{question.text}</li>)}</ul></details>}
       </aside>;
+    }
     case "formula":
       return <Formula block={block} />;
     case "diagram":
@@ -272,6 +310,23 @@ function Block({ block, isEnglish }: { block: NoteBlock; isEnglish: boolean }) {
     default:
       return null;
   }
+}
+
+function SavedStudyArtifacts({ answers, isEnglish }: { answers: NonNullable<NoteBlock["originalAnswers"]>; isEnglish: boolean }) {
+  const artifacts = useMemo(() => noteStudyArtifacts(answers), [answers]);
+  if (!artifacts.length) return null;
+  return <div className="note-study-artifacts">
+    <p className="note-answer-provenance">{isEnglish ? "Saved examples and charts" : "대화에서 만든 예제와 그래프"}</p>
+    {artifacts.map((artifact, index) => artifact.type === "chart"
+      ? <AnswerChart key={index} data={artifact.data} isEnglish={isEnglish} />
+      : <section key={index} className="answer-check">
+        <span className="answer-check-label">{isEnglish ? "Check yourself" : "확인 질문"}</span>
+        <AnswerMarkdown text={artifact.question} isEnglish={isEnglish} />
+        <details><summary>{isEnglish ? "Show answer" : "정답 보기"}<ChevronDown size={14} aria-hidden="true" /></summary>
+          <div className="answer-check-solution"><AnswerMarkdown text={artifact.answer} isEnglish={isEnglish} /></div>
+        </details>
+      </section>)}
+  </div>;
 }
 
 function BlockSources({ sources, isEnglish }: { sources: NonNullable<NoteBlock["sources"]>; isEnglish: boolean }) {
@@ -297,7 +352,7 @@ function Formula({ block }: { block: NoteBlock }) {
   return (
     <figure className="note-formula">
       <div dangerouslySetInnerHTML={{ __html: html }} />
-      {block.text && <figcaption><AnswerMarkdown text={block.text} /></figcaption>}
+      {block.text && <figcaption><NoteText text={block.text} /></figcaption>}
     </figure>
   );
 }
@@ -312,12 +367,12 @@ function MaterialPage({ block, isEnglish, sourceCaption }: { block: NoteBlock; i
     return renderMaterialPdfPage(block.documentId, block.page, canvasRef.current, () => setFailed(true));
   }, [block.documentId, block.page]);
 
-  if (!block.documentId) return block.text ? <AnswerMarkdown text={block.text} /> : null;
-  if (failed) return <div className="note-material-fallback"><p role="status">{isEnglish ? "The material preview is unavailable." : "자료 미리보기를 불러오지 못했어요."}</p>{block.text && <AnswerMarkdown text={block.text} />}</div>;
+  if (!block.documentId) return block.text ? <NoteText text={block.text} /> : null;
+  if (failed) return <div className="note-material-fallback"><p role="status">{isEnglish ? "The material preview is unavailable." : "자료 미리보기를 불러오지 못했어요."}</p>{block.text && <NoteText text={block.text} />}</div>;
   return (
     <figure className="note-material">
       <canvas ref={canvasRef} role="img" aria-label={caption} />
-      <figcaption><span>{caption}</span>{block.text && <AnswerMarkdown text={block.text} />}</figcaption>
+      <figcaption><span>{caption}</span>{block.text && <NoteText text={block.text} />}</figcaption>
     </figure>
   );
 }
@@ -347,13 +402,13 @@ function Diagram({ block, isEnglish }: { block: NoteBlock; isEnglish: boolean })
     return () => { cancelled = true; };
   }, [block.mermaid]);
 
-  if (broken) return block.text ? <AnswerMarkdown text={block.text} /> : null;
+  if (broken) return block.text ? <NoteText text={block.text} /> : null;
   return (
-    <figure className="note-diagram">
-      {block.text && <figcaption><AnswerMarkdown text={block.text} /></figcaption>}
+    <figure className="note-diagram" data-note-diagram-pending={!svg || undefined}>
+      {block.text && <figcaption><NoteText text={block.text} /></figcaption>}
       <details className="note-diagram-details">
         <summary>{isEnglish ? "Diagram" : "도식 보기"}<ChevronDown size={14} aria-hidden="true" /></summary>
-        <div dangerouslySetInnerHTML={{ __html: svg }} />
+        {svg ? <div dangerouslySetInnerHTML={{ __html: svg }} /> : <p role="status">{isEnglish ? "Preparing the diagram…" : "도식을 준비하고 있어요…"}</p>}
       </details>
     </figure>
   );

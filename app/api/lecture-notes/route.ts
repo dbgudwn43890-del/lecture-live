@@ -4,6 +4,7 @@ import OpenAI from "openai";
 
 import { isUuid } from "../../lib/billing";
 import { notePrompt, noteSchema, type LectureNote } from "../../lib/lecture-note";
+import { isLectureStatusRequest } from "../../lib/lecture-note-intent";
 import { isNoteLanguage } from "../../lib/note-language";
 import { NoteInputError, noteClock, noteInputMessage, validateLectureNote, type NoteDocument, type NoteEvidence } from "../../lib/lecture-note-context";
 import { checkSharedRateLimit } from "../../lib/rate-limit";
@@ -355,7 +356,10 @@ async function readQuestions(supabase: Supabase, sessionId: string, evidence: No
       // turn in order so the model can group meaning, not just matching text.
       const id = `Q${lines.length + 1}`;
       const clock = noteClock(row.question_at_ms);
-      const line = `[${id} | ${clock}] ${question}`;
+      const disposition = isLectureStatusRequest(question)
+        ? (english ? "\nDisposition: status_check. Context only; account for this ID in excludedQuestions, not qa." : "\n분류: status_check. 맥락 참고만 하며 이 ID는 qa가 아닌 excludedQuestions에서 처리한다.")
+        : "";
+      const line = `[${id} | ${clock}] ${question}${disposition}`;
       total += line.length + 2;
       if (total > MAX_QUESTION_CHARACTERS) throw new NoteInputError("questions");
       evidence.questionTurns.set(id, { text: question, source: { id, label: `${english ? "My question" : "내 질문"} ${clock}`, startMs: row.question_at_ms } });

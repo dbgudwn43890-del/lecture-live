@@ -663,3 +663,37 @@ test("generation stores a merged learning clarification while excluding accounte
   assert.doesNotMatch(JSON.stringify(result.note.content), /ㅋㅋ|천만에요/);
   assert.match(String(modelCalls[0].input), /ㅋㅋ 고마워/, "read the full conversation before classifying it");
 });
+
+test("progress checks remain context without becoming student learning questions", async () => {
+  rows.lecture_questions = [
+    { session_id: SESSION, id: "q1", question: "여기까지 요약", question_at_ms: 6000, answer: "셸의 정의부터 경로까지 배웠습니다." },
+    { session_id: SESSION, id: "q2", question: "파이프와 리다이렉션 차이를 요약해줘", question_at_ms: 7000, answer: "파이프는 다음 프로그램에, 리다이렉션은 파일에 출력을 보냅니다." },
+    { session_id: SESSION, id: "q3", question: "다시 설명해줘", question_at_ms: 8000, answer: "출력의 목적지가 다릅니다." },
+  ];
+  providerResult.output_text = JSON.stringify({ ...note("T1", [
+    { type: "paragraph", text: "프로그램의 출력을 파일이나 다른 프로그램으로 전달한다.", sourceIds: ["T1"] },
+    { type: "qa", label: "파이프와 리다이렉션의 목적지는 어떻게 다른가?", questionIds: ["Q2", "Q3"], text: "파이프는 다음 프로그램의 입력에, 리다이렉션은 파일에 연결한다.", sourceIds: [] },
+  ]), excludedQuestions: [{ questionId: "Q1", reason: "status_check" }] });
+  const result = await (await completedPost()).json();
+  assert.equal(result.note.status, "ready");
+  const blocks = result.note.content.sections[0].blocks;
+  assert.deepEqual(blocks[1].questionIds, ["Q2", "Q3"]);
+  assert.equal(blocks[1].originalAnswers.length, 2);
+  assert.doesNotMatch(JSON.stringify(result.note.content), /여기까지 요약|경로까지 배웠습니다/);
+  const input = String(modelCalls[0].input);
+  assert.match(input, /여기까지 요약\n분류: status_check/);
+  assert.match(input, /셸의 정의부터 경로까지 배웠습니다/, "keep context for subsequent short follow-ups");
+  assert.equal((input.match(/분류: status_check/g) ?? []).length, 1, "topic summaries and ambiguous follow-ups must not be pre-excluded");
+  assert.equal(modelCalls.length, 1, "curation uses the existing generation, not an extra model request");
+});
+
+test("a provider promoting a known recap to qa cannot replace the previous validated note", async () => {
+  existing = { status: "ready", content: OLD_CONTENT, updated_at: "2026-09-01T00:00:00Z" };
+  rows.lecture_questions = [{ session_id: SESSION, id: "q1", question: "여기까지 요약", question_at_ms: 6000, answer: "강의의 목적과 흐름" }];
+  providerResult.output_text = JSON.stringify(note("T1", [
+    { type: "qa", label: "강의의 목적은 무엇인가?", questionIds: ["Q1"], text: "정리한 답변", sourceIds: ["T1"] },
+  ]));
+  const result = await (await completedPost(true)).json();
+  assert.equal(result.note.status, "failed");
+  assert.deepEqual(result.note.content, OLD_CONTENT);
+});

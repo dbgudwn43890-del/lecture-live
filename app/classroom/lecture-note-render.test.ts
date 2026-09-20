@@ -77,7 +77,11 @@ test("a condensed answer is visible while every grouped original question and an
   const visible = html.slice(0, disclosure);
   assert.match(visible, /이전 AI 답변을 정리한 내용/);
   assert.ok(visible.includes(summary));
-  assert.doesNotMatch(visible, /20명은 80점|두 번째 대화|아니 그러니까/);
+  assert.doesNotMatch(visible, /두 번째 대화|아니 그러니까/);
+  assert.match(visible, /class="note-study-artifacts"/);
+  assert.match(visible, /20명은 80점, 10명은 50점/);
+  assert.match(visible, /aria-label="20명: 점수 80 점"/);
+  assert.match(visible, /70점/);
   assert.match(html.slice(disclosure), /20명은 80점, 10명은 50점/);
   assert.match(html.slice(disclosure), /두 번째 대화에 저장된 설명을 그대로 보존합니다/);
   assert.match(html, /<details class="note-original-questions"><summary>원래 질문 · 2/);
@@ -91,4 +95,71 @@ test("lecture-evidenced answers stay visible without an empty AI-history disclos
   assert.match(html, /강의의 근거로 확인한 설명입니다/);
   assert.doesNotMatch(html, /note-original-answers|Summary of saved AI answers/);
   assert.match(html, /<details class="note-original-questions"><summary>Original questions/);
+});
+
+function block(type: NoteBlock["type"], fields: Partial<NoteBlock> = {}): NoteBlock {
+  return { type, text: "", label: "", items: [], latex: "", mermaid: "", page: 0, ...fields };
+}
+
+test("structured prose keeps literal shell punctuation, line breaks, and escaped HTML in every block", () => {
+  const literal = "*.md > >> < [ ] #! $(date) **plain** <script>bad()</script>";
+  const note: LectureNote = {
+    title: "Shell", summary: literal, keyPoints: [literal],
+    sections: [{ heading: "Syntax", blocks: [
+      block("paragraph", { text: `${literal}\nsecond line` }),
+      block("list", { entries: [{ text: literal, children: [literal] }] }),
+      block("steps", { items: [literal] }),
+      block("table", { columns: [">", ">>", "["], rows: [["*.md", "# heading", "<"]], text: literal }),
+      block("check", { label: literal, hint: literal, text: literal }),
+      block("callout", { label: literal, text: literal }),
+      block("qa", { label: literal, text: literal }),
+      block("formula", { latex: "x^2", text: literal }),
+      block("diagram", { mermaid: "flowchart LR\nA-->B", text: literal }),
+      block("material", { text: literal }),
+    ] }],
+  };
+  const html = renderToStaticMarkup(createElement(NoteArticle, { note, isEnglish: true }));
+  assert.match(html, /\*\.md &gt; &gt;&gt; &lt; \[ \] #! \$\(date\) \*\*plain\*\* &lt;script&gt;bad\(\)&lt;\/script&gt;/);
+  assert.match(html, /&lt;\/script&gt;\nsecond line<\/div>/);
+  assert.match(html, /<th scope="col"><div class="note-text">&gt;<\/div><\/th>/);
+  assert.match(html, /<th scope="col"><div class="note-text">&gt;&gt;<\/div><\/th>/);
+  assert.match(html, /<td><div class="note-text">\*\.md<\/div><\/td>/);
+  assert.match(html, /class="katex-display"/);
+  assert.match(html, /<annotation encoding="application\/x-tex">x\^2<\/annotation>/);
+  assert.doesNotMatch(html, /<script>|<blockquote|<em>|class="answer-markdown"/);
+  assert.equal((html.match(/&lt;script&gt;bad\(\)&lt;\/script&gt;/g) ?? []).length, 17);
+});
+
+test("code blocks preserve indentation, blank lines, redirects and HTML without Markdown or highlighting", () => {
+  const code = '#!/usr/bin/env bash\n\nfor file in *.md; do\n  echo "<tag>" >> "$file"\ndone\n';
+  const note: LectureNote = { title: "Script", summary: "", sections: [{ heading: "Backup", blocks: [
+    block("code", { code, language: "bash", text: "Use >>, not >, for *.md." }),
+  ] }] };
+  const html = renderToStaticMarkup(createElement(NoteArticle, { note, isEnglish: true }));
+  assert.ok(html.includes('<code data-language="bash">#!/usr/bin/env bash\n\nfor file in *.md; do\n  echo &quot;&lt;tag&gt;&quot; &gt;&gt; &quot;$file&quot;\ndone\n</code>'));
+  assert.match(html, /<figcaption><div class="note-text">Use &gt;&gt;, not &gt;, for \*\.md\.<\/div><\/figcaption>/);
+  assert.doesNotMatch(html, /<tag>|answer-markdown|shiki/);
+});
+
+test("each distinct saved chart and practice remains beside a summary; duplicate artifacts do not", () => {
+  const note = savedNote("새 예제 두 개를 비교해 가중치를 확인한다.");
+  const block = note.sections[0].blocks[0];
+  block.originalAnswers!.push({ id: "copy", questionId: "Q1", text: answer });
+  block.originalAnswers!.push({ id: "comparison", questionId: "Q1", text: answer.replaceAll("80", "85").replaceAll("50", "55").replaceAll("70", "75") });
+  const html = renderToStaticMarkup(createElement(NoteArticle, { note, isEnglish: false }));
+  const visible = html.slice(0, html.indexOf('<details class="note-original-answers">'));
+  assert.equal((visible.match(/data-chart-type="bar"/g) ?? []).length, 2);
+  assert.equal((visible.match(/class="answer-check"/g) ?? []).length, 2);
+  assert.match(visible, /20명은 80점, 10명은 50점/);
+  assert.match(visible, /20명은 85점, 10명은 55점/);
+  assert.match(visible, /aria-label="20명: 점수 80 점"/);
+  assert.match(visible, /aria-label="20명: 점수 85 점"/);
+});
+
+test("a whitespace-only legacy summary still keeps the only answer printable", () => {
+  const note = savedNote(" \n\t");
+  const html = renderToStaticMarkup(createElement(NoteArticle, { note, isEnglish: false }));
+  assert.match(html, /class="note-original-answers" data-legacy="true"/);
+  assert.doesNotMatch(html, /class="note-study-artifacts"/);
+  assert.match(html, /20명은 80점, 10명은 50점/);
 });

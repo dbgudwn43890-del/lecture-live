@@ -10,6 +10,7 @@
 .review-note-panel .note-quota { font-size: 11px; }
 .review-note-panel .note-update-message { margin: 18px 24px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .review-note-panel .note-update-message strong { display: block; color: var(--ink); font-weight: 550; }
+.review-note-panel .note-print-status { margin: 12px 24px 0; color: var(--muted); font-size: 12px; }
 .note-body.note-reading,
 .workspace-dialog .note-body.note-reading { display: grid; grid-template-columns: minmax(0, 680px) 168px; justify-content: center; align-items: start; gap: 48px; padding: 36px 40px 64px; min-width: 0; min-height: 0; font-size: 14px; line-height: 1.85; overflow-wrap: anywhere; scrollbar-gutter: stable; }
 .note-reading .note-document { min-width: 0; }
@@ -18,7 +19,7 @@
 .workspace-dialog .note-reading .note-cover h1 { margin: 0; color: var(--ink); font-size: 27px; font-weight: 620; line-height: 1.4; letter-spacing: -.035em; word-break: keep-all; text-wrap: balance; }
 .note-reading .note-one-line-summary { margin-top: 20px; color: var(--muted); line-height: 1.75; }
 .note-reading .note-one-line-summary > span { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 500; }
-.note-reading .note-one-line-summary .answer-markdown { color: var(--ink); font-size: 14px; }
+.note-reading .note-one-line-summary .note-text { color: var(--ink); font-size: 14px; }
 .note-reading .note-key-points { margin-bottom: 30px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
 .note-reading .note-key-points h2 { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 550; line-height: 1.5; }
 .note-reading .note-key-points ul { margin: 0; padding-left: 17px; }
@@ -33,7 +34,7 @@
 .note-reading summary svg { flex-shrink: 0; transition: transform 160ms ease; }
 .note-reading details[open] > summary svg { transform: rotate(180deg); }
 .note-reading .note-overview-details { margin-top: 16px; }
-.note-reading .note-overview-details > .answer-markdown { margin-top: 12px; color: var(--muted); font-size: 13px; }
+.note-reading .note-overview-details > .note-text { margin-top: 12px; color: var(--muted); font-size: 13px; }
 .note-reading .note-outline { position: sticky; top: 0; min-width: 0; max-height: calc(100dvh - 200px); overflow-y: auto; scrollbar-width: thin; padding-top: 7px; }
 .note-reading .note-outline h2,
 .note-reading .note-mobile-outline h2 { margin: 0 0 12px; color: var(--muted); font-size: 11px; line-height: 1.5; font-weight: 500; }
@@ -49,6 +50,7 @@
 .workspace-dialog .note-reading .note-section h2 { display: block; padding: 0; margin: 0 0 16px; border: 0; color: var(--ink); font-size: 20px; font-weight: 620; line-height: 1.5; letter-spacing: -.025em; }
 .note-reading .note-block + .note-block { margin-top: 18px; }
 .note-reading .note-block { scroll-margin-top: 24px; }
+.note-reading .note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .note-reading .answer-markdown { font-size: inherit; line-height: inherit; }
 .note-reading .answer-markdown p { margin: 0; }
 .note-reading .answer-markdown > * + * { margin-top: 12px; }
@@ -65,7 +67,7 @@
 .note-reading .note-qa { margin: 0; padding: 16px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
 .note-reading .note-block-title { margin-bottom: 6px; font-weight: 600; }
 .note-reading .note-callout .note-block-title { font-size: 13px; }
-.note-reading .note-block-title .answer-markdown p { color: var(--ink); }
+.note-reading .note-block-title .note-text { color: var(--ink); }
 .note-reading .note-block-title strong,
 .note-reading .note-callout .answer-markdown strong,
 .note-reading .note-qa .answer-markdown strong { display: inline; margin: 0; font-size: inherit; letter-spacing: normal; }
@@ -77,6 +79,8 @@
 .note-reading .note-original-answer + .note-original-answer { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
 .note-reading .note-original-questions ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
 .note-reading .note-original-questions li { margin-top: 6px; padding-left: 3px; }
+.note-reading .note-study-artifacts { margin-top: 18px; }
+.note-reading .note-study-artifacts > .answer-chart { container-type: inline-size; margin: 16px 0; min-width: 0; }
 .review-note-panel .note-generating { padding: 54px 24px 48px; }
 .review-note-panel .note-generating > p { margin-top: 10px; }
 .review-note-panel .note-generating .note-wait-detail { display: block; margin-top: 16px; font-variant-numeric: tabular-nums; }
@@ -85,7 +89,7 @@
 .note-reading .note-check { padding: 18px 0 0; border-top: 1px solid var(--line); }
 .note-reading .note-check-question { color: var(--ink); font-weight: 550; }
 .note-reading .note-check details { margin-top: 12px; }
-.note-reading .note-check details > .answer-markdown { margin-top: 10px; }
+.note-reading .note-check details > .note-text { margin-top: 10px; }
 .note-reading .note-check-solution { margin-top: 12px; padding: 12px 14px; background: var(--paper); border-radius: 5px; }
 .note-reading .note-table { margin: 0; }
 .note-reading .note-table > figcaption { margin-bottom: 8px; color: var(--ink); font-size: 13px; font-weight: 600; }
@@ -96,6 +100,10 @@
 .note-reading .note-table th { background: var(--paper); font-weight: 550; }
 .note-reading .note-table tr:last-child td { border-bottom: 0; }
 .note-reading .note-caption { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.note-reading .note-code { margin: 0; }
+.note-reading .note-code pre { max-width: 100%; margin: 0; padding: 12px 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); font-size: 13px; line-height: 1.65; white-space: pre; }
+.note-reading .note-code code { font-family: var(--font-mono), ui-monospace, monospace; }
+.note-reading .note-code figcaption { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .note-reading .note-formula { margin: 0; padding: 14px 0; border: 0; border-radius: 0; background: none; overflow-x: auto; }
 .note-reading .note-diagram { margin: 0; text-align: left; }
 .note-reading .note-diagram figcaption { margin: 0; text-align: left; color: var(--ink); font-size: inherit; }
@@ -154,6 +162,7 @@
 }
 @media (prefers-reduced-motion: reduce) { .note-reading summary svg { transition: none; } }
 @media print {
+  .review-note-panel .note-print-status,
   .review-note-panel .note-update-message,
   .note-reading .note-outline,
   .note-reading .note-mobile-outline { display: none; }
@@ -162,6 +171,19 @@
   .note-reading summary svg,
   .note-reading .note-block-sources > button svg { display: none; }
   .note-reading .note-check { break-inside: avoid; }
+  /* Long Q&A can flow across pages; only keep its short introduction together. */
+  .note-reading .note-qa { break-inside: auto; }
+  .note-reading .note-qa > .note-block-label,
+  .note-reading .note-qa > .note-block-title,
+  .note-reading .note-qa > .note-answer-provenance { break-after: avoid; }
+  .note-reading .note-text { orphans: 3; widows: 3; }
+  .note-reading .note-original-questions,
+  .note-reading .note-original-answers:not([data-legacy="true"]) { display: none; }
+  .note-reading .note-original-answers[data-legacy="true"] > summary { display: none; }
+  .note-reading .note-study-artifacts > .answer-chart { break-inside: avoid; print-color-adjust: exact; }
+  .note-reading .note-code pre { white-space: pre-wrap; overflow: visible; overflow-wrap: anywhere; }
+  .note-reading .note-diagram-details > summary { display: none; }
+  .note-reading .note-diagram-details > div { overflow: visible; }
   .note-reading .note-check-solution { padding: 8px 0; background: none; }
   .note-reading .note-table-scroll { overflow: visible; }
   .note-reading .note-table table { font-size: 10pt; }

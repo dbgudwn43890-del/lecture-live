@@ -295,3 +295,65 @@ test("a lecture containing only non-learning conversation produces no forced QA 
   const note = validateLectureNote({ ...raw([paragraph]), excludedQuestions: [{ questionId: "Q1", reason: "non_learning" }] }, input);
   assert.deepEqual(note.sections[0].blocks.map(block => block.type), ["paragraph"]);
 });
+
+test("generic lecture-status turns cannot become rewritten learning questions even with saved answers", () => {
+  for (const question of ["여기까지 요약", "지금까지 뭐라고 했어?", "내가 마지막으로 질문한 이후 뭐라고 했어?", "What did I miss?"]) {
+    const input = evidence();
+    input.questionTurns = new Map([["Q1", { text: question, source: { id: "Q1", label: "내 질문", startMs: 80_000 } }]]);
+    input.answers = new Map([["Q1", [{ id: "saved-status", questionId: "Q1", text: "강의 전체를 길게 요약한 기존 답변" }]]]);
+    const qa = { type: "qa", label: "파이프는 어떤 용도로 사용하는가?", questionIds: ["Q1"], text: "모델이 학습 질문으로 바꾼 내용", sourceIds: ["T1"] };
+    assert.throws(() => validateLectureNote(raw([qa]), input), /lecture status request/, question);
+    const note = validateLectureNote({ ...raw([paragraph]), excludedQuestions: [{ questionId: "Q1", reason: "status_check" }] }, input);
+    assert.deepEqual(note.sections[0].blocks.map(block => block.type), ["paragraph"]);
+    assert.doesNotMatch(JSON.stringify(note), /saved-status|길게 요약한 기존 답변/);
+    assert.throws(() => validateLectureNote(raw([paragraph]), input), /student question omitted/);
+  }
+});
+
+test("status exclusions keep each turn accountable while preserving specific and mixed learning requests", () => {
+  const input = evidence();
+  input.questionTurns = new Map([
+    ["Q1", { text: "여기까지 요약", source: { id: "Q1", label: "내 질문" } }],
+    ["Q2", { text: "pipe가 뭐야?", source: { id: "Q2", label: "내 질문" } }],
+    ["Q3", { text: "다시 설명해줘", source: { id: "Q3", label: "내 질문" } }],
+    ["Q4", { text: "여기까지 요약하고 파이프가 왜 필요한지 설명", source: { id: "Q4", label: "내 질문" } }],
+  ]);
+  const qa = { type: "qa", label: "파이프의 역할은 무엇인가?", questionIds: ["Q2", "Q3", "Q4"], text: "파이프는 프로세스 사이에서 데이터를 전달한다.", sourceIds: ["T1"] };
+  const payload = { ...raw([qa]), excludedQuestions: [{ questionId: "Q1", reason: "status_check" }] };
+  const note = validateLectureNote(payload, input);
+  assert.deepEqual(note.sections[0].blocks[0].originalQuestions?.map(question => question.id), ["Q2", "Q3", "Q4"]);
+  assert.throws(() => validateLectureNote({ ...payload, excludedQuestions: [...payload.excludedQuestions, ...payload.excludedQuestions] }, input), /student question repeated/);
+  assert.throws(() => validateLectureNote({ ...payload, excludedQuestions: [{ questionId: "Q999", reason: "status_check" }] }, input), /invented student question/);
+  assert.throws(() => validateLectureNote({ ...payload, excludedQuestions: [...payload.excludedQuestions, { questionId: "Q2", reason: "status_check" }] }, input), /student question repeated/);
+  for (const reason of ["non_learning", "off_topic", "uninterpretable"]) {
+    assert.doesNotThrow(() => validateLectureNote({ ...payload, excludedQuestions: [{ questionId: "Q1", reason }] }, input));
+  }
+});
+
+test("code blocks preserve indentation, blank lines, and final newlines exactly", () => {
+  const code = "\nif ready:\n\tprint('pipe')  \n\n    # intentional indentation\n";
+  const block = { type: "code", code, language: "python", text: "준비된 경우에만 출력한다.", sourceIds: ["T1"] };
+  const note = validateLectureNote(raw([block]), evidence());
+  assert.equal(note.sections[0].blocks[0].code, code);
+  assert.equal(note.sections[0].blocks[0].language, "python");
+  assert.equal(note.sections[0].blocks[0].text, block.text);
+  assert.deepEqual(note.sections[0].blocks[0].sourceIds, ["T1"]);
+  assert.equal(validateLectureNote(raw([{ ...block, language: "" }]), evidence()).sections[0].blocks[0].language, "");
+  for (const invalid of [
+    { code: " \n\t " }, { code: 123 }, { code: undefined }, { language: "x".repeat(33) },
+    { language: "js\nhtml" }, { language: "python\u0000" }, { language: 123 }, { language: undefined },
+    { text: " " }, { sourceIds: [] }, { sourceIds: ["Q1"] },
+  ]) assert.throws(() => validateLectureNote(raw([{ ...block, ...invalid }]), evidence()));
+});
+
+test("check blocks reject placeholder headings instead of moving a hidden question out of the solution", () => {
+  const answerOnly = "pipe의 읽기 끝은 어느 파일 디스크립터인가?\n정답은 fd[0]이다.";
+  for (const label of ["", " ", "문제", "문제 1", "1. 확인 질문", "이해 확인", "연습문제", "Question", "QUESTION 2:", "Check your understanding", "Check yourself", "Exercise"]) {
+    assert.throws(() => validateLectureNote(raw([{ type: "check", label, hint: "", text: answerOnly, sourceIds: ["T1"] }]), evidence()), /invalid note text|missing check question/, label);
+  }
+  for (const label of ["pipe의 읽기 끝은 어느 파일 디스크립터인가?", "문제: fd[0]과 fd[1]의 역할을 설명하시오.", "f(x)=x²의 도함수를 구하시오.", "What is the role of fd[0]?"]) {
+    const note = validateLectureNote(raw([{ type: "check", label, hint: "", text: "fd[0]은 읽기 끝이다.", sourceIds: ["T1"] }]), evidence());
+    assert.equal(note.sections[0].blocks[0].label, label);
+    assert.equal(note.sections[0].blocks[0].text, "fd[0]은 읽기 끝이다.");
+  }
+});

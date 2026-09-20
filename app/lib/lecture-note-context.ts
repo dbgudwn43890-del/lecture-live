@@ -1,4 +1,5 @@
 import katex from "katex";
+import { isLectureStatusRequest } from "./lecture-note-intent.ts";
 import { safeNoteDiagram } from "./mermaid-safety.ts";
 import type { LectureNote, NoteAnswer, NoteBlock, NoteConcept, NoteSource } from "./lecture-note";
 
@@ -46,6 +47,7 @@ const strings = (value: unknown) => {
   if (!Array.isArray(value) || !value.every(item => typeof item === "string")) throw new Error("invalid note list");
   return value.map(item => item.trim()).filter(Boolean) as string[];
 };
+const genericCheckLabel = /^(?:(?:\d+|q\d+)[.)\s:：-]*)?(?:문제|질문|퀴즈|확인\s*질문|이해\s*확인|확인\s*문제|연습\s*문제|복습\s*문제|question|check\s+(?:your\s+understanding|understanding|yourself)|practice(?:\s+question)?|quiz|exercise)(?:\s*[#:]?\s*\d+)?[\s.!?：:]*$/iu;
 
 /** Resolve only IDs supplied with this input, never model-authored locations. */
 function references(value: unknown, evidence: NoteEvidence): NoteSource[] {
@@ -124,6 +126,7 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
           for (const id of block.questionIds) {
             const original = typeof id === "string" ? originalQuestions.get(id) : undefined;
             if (!original) throw new Error("invented student question");
+            if (isLectureStatusRequest(original.text)) throw new Error("lecture status request is not a learning question");
             if (seenQuestions.has(id)) throw new Error("student question repeated");
             seenQuestions.add(id);
             normalized.questionIds.push(id);
@@ -142,6 +145,7 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
           if (++checks > 3) throw new Error("too many checks");
           normalized.hint = text(block.hint);
           normalized.label = text(block.label, true);
+          if (genericCheckLabel.test(normalized.label.normalize("NFKC"))) throw new Error("missing check question");
           normalized.text = text(block.text, true);
           break;
         case "callout":
@@ -152,6 +156,14 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
           normalized.latex = text(block.latex, true);
           normalized.text = text(block.text, true);
           katex.renderToString(normalized.latex, { throwOnError: true, trust: false, strict: "ignore" });
+          break;
+        case "code":
+          if (typeof block.code !== "string" || !block.code.trim()) throw new Error("invalid note code");
+          // Whitespace can change program meaning. Validate emptiness without rewriting it.
+          normalized.code = block.code;
+          normalized.language = text(block.language);
+          if (normalized.language.length > 32 || /[\u0000-\u001f\u007f]/u.test(block.language as string)) throw new Error("invalid code language");
+          normalized.text = text(block.text, true);
           break;
         case "diagram":
           normalized.mermaid = safeNoteDiagram(text(block.mermaid, true)) ?? "";
@@ -187,7 +199,7 @@ export function validateLectureNote(value: unknown, evidence: NoteEvidence): Lec
     const id = excluded.questionId;
     if (typeof id !== "string" || !originalQuestions.has(id)) throw new Error("invented student question");
     if (seenQuestions.has(id)) throw new Error("student question repeated");
-    if (typeof excluded.reason !== "string" || !["non_learning", "off_topic", "uninterpretable"].includes(excluded.reason)) throw new Error("invalid question exclusion reason");
+    if (typeof excluded.reason !== "string" || !["non_learning", "off_topic", "uninterpretable", "status_check"].includes(excluded.reason)) throw new Error("invalid question exclusion reason");
     seenQuestions.add(id);
   }
   if ([...originalQuestions.keys()].some(id => !seenQuestions.has(id))) throw new Error("student question omitted");

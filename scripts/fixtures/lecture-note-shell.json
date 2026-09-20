@@ -1,0 +1,201 @@
+{
+  "id": "shell",
+  "title": "합성 강의: 셸 파이프와 리다이렉션",
+  "transcript": [
+    {
+      "id": "T1",
+      "startMs": 0,
+      "text": "파이프 |는 앞 명령의 표준 출력을 다음 명령의 표준 입력으로 연결합니다. 리다이렉션 >는 출력을 파일에 쓰며 기존 내용을 덮어씁니다. >>는 같은 파일 끝에 덧붙입니다. 오늘 배포한 shell-reference.txt의 첫 페이지 표도 이 세 기호를 비교합니다."
+    },
+    {
+      "id": "T2",
+      "startMs": 60000,
+      "text": "오늘 실습할 첫 번째 명령은 cut -d',' -f2 scores.csv | sort | uniq -c 입니다. 따옴표 안의 쉼표가 CSV 필드 구분자이고 -f2는 두 번째 필드입니다. cut으로 필드를 골라 sort로 같은 값을 이웃하게 정렬하고 uniq -c로 연속된 값의 횟수를 셉니다. uniq는 떨어져 있는 같은 값을 합치지 않기 때문에 전체 중복 횟수에는 먼저 sort가 필요합니다. 이 코드 예시의 파이프와 옵션을 그대로 읽어 봅시다."
+    },
+    {
+      "id": "T3",
+      "startMs": 120000,
+      "text": "두 번째 실습 명령은 grep -n 'ERROR' app.log > errors.txt 입니다. ERROR가 포함된 행과 행 번호를 app.log에서 찾아 errors.txt에 씁니다. -n은 행 번호를 붙이고 >는 표준 출력을 파일로 보냅니다. 이 명령을 다시 실행하면 errors.txt의 이전 내용은 덮어써집니다. 파일에 덧붙이려면 >>를 씁니다."
+    }
+  ],
+  "materials": [
+    {
+      "id": "M1P1",
+      "documentId": "synthetic-shell-reference",
+      "filename": "shell-reference.txt",
+      "page": 1,
+      "text": "이번 강의에서 비교하는 기호: | 다음 명령의 표준 입력으로 전달. > 파일에 출력하며 기존 내용 덮어쓰기. >> 파일 끝에 출력 추가."
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "startMs": 30000,
+      "text": "여기까지 요약",
+      "disposition": "status_check",
+      "answer": "파이프는 명령 사이를 연결하고 리다이렉션은 파일에 출력합니다. >는 덮어쓰기, >>는 덧붙이기입니다."
+    },
+    {
+      "id": "Q2",
+      "startMs": 65000,
+      "text": "방금 뭐라고 했어?",
+      "disposition": "status_check",
+      "answer": "쉼표로 나뉜 CSV의 두 번째 필드를 cut으로 꺼내는 명령을 소개했습니다."
+    },
+    {
+      "id": "Q3",
+      "startMs": 75000,
+      "text": "What did I miss?",
+      "disposition": "status_check",
+      "answer": "The lecture introduced cut, sort and uniq -c as a pipeline for counting repeated field values."
+    },
+    {
+      "id": "Q4",
+      "startMs": 90000,
+      "text": "내 마지막 질문 뒤로 무슨 내용이야?",
+      "disposition": "status_check",
+      "answer": "같은 값을 이웃하게 정렬해야 uniq -c가 전체 중복 횟수를 세는 이유를 설명했습니다."
+    },
+    {
+      "id": "Q5",
+      "startMs": 135000,
+      "text": "pipe와 redirection 차이를 요약",
+      "disposition": "keep",
+      "answer": "pipe |는 다음 명령에 데이터를 보내고, redirection >는 파일에 결과를 씁니다. 예를 들어 cut 출력이 sort 입력으로 가는 것은 pipe이고 grep 결과가 errors.txt에 저장되는 것은 redirection입니다."
+    },
+    {
+      "id": "Q6",
+      "startMs": 145000,
+      "text": "다시 설명해줘",
+      "disposition": "keep",
+      "answer": "방금 물어본 pipe와 redirection의 차이를 다시 설명하면, 결과를 받는 대상이 다릅니다. | 오른쪽에는 처리할 다음 명령이 오고, > 오른쪽에는 결과를 받을 파일 경로가 옵니다."
+    },
+    {
+      "id": "Q7",
+      "startMs": 155000,
+      "text": "여기까지 요약하고 왜 uniq 전에 sort해?",
+      "disposition": "keep",
+      "answer": "uniq는 서로 붙어 있는 같은 값만 묶습니다. sort는 같은 값을 이웃하게 만들기 때문에 떨어져 있던 같은 값도 uniq -c에서 한 그룹으로 세게 됩니다."
+    }
+  ],
+  "expect": {
+    "representations": [
+      "steps",
+      "table",
+      "diagram",
+      "code"
+    ],
+    "code": [
+      "cut -d',' -f2 scores.csv | sort | uniq -c",
+      "grep -n 'ERROR' app.log > errors.txt"
+    ]
+  },
+  "reference": {
+    "title": "셸에서 명령과 파일로 출력 보내기",
+    "summary": "파이프와 리다이렉션을 구분하고 정렬 뒤 중복 횟수를 센다.",
+    "keyPoints": [
+      "|는 다음 명령, >는 파일로 출력을 보낸다.",
+      "uniq -c로 전체 중복을 세기 전에 sort로 정렬한다."
+    ],
+    "sections": [
+      {
+        "heading": "출력의 목적지와 실습 명령",
+        "blocks": [
+          {
+            "type": "table",
+            "sourceIds": [
+              "T1",
+              "M1P1"
+            ],
+            "text": "출력을 받는 대상과 기존 파일 처리의 차이",
+            "columns": [
+              "기호",
+              "동작"
+            ],
+            "rows": [
+              [
+                "|",
+                "다음 명령의 표준 입력으로 전달"
+              ],
+              [
+                ">",
+                "파일로 출력하고 기존 내용 덮어쓰기"
+              ],
+              [
+                ">>",
+                "파일 끝에 덧붙이기"
+              ]
+            ]
+          },
+          {
+            "type": "code",
+            "sourceIds": [
+              "T2",
+              "T3"
+            ],
+            "code": "cut -d',' -f2 scores.csv | sort | uniq -c\ngrep -n 'ERROR' app.log > errors.txt",
+            "language": "bash",
+            "text": "첫 줄은 CSV의 두 번째 필드를 정렬한 뒤 중복 횟수를 세고, 둘째 줄은 ERROR 행을 행 번호와 함께 파일에 저장한다."
+          },
+          {
+            "type": "check",
+            "sourceIds": [
+              "T2"
+            ],
+            "label": "같은 값이 서로 떨어져 있을 때 uniq -c 전에 sort를 쓰는 이유는?",
+            "hint": "uniq가 묶는 값의 위치를 생각한다.",
+            "text": "uniq는 인접한 중복만 묶으므로 sort로 같은 값을 이웃하게 만들어야 전체 횟수를 셀 수 있다."
+          }
+        ]
+      },
+      {
+        "heading": "질문으로 정리한 개념",
+        "blocks": [
+          {
+            "type": "qa",
+            "sourceIds": [
+              "T1",
+              "T3"
+            ],
+            "questionIds": [
+              "Q5",
+              "Q6"
+            ],
+            "label": "파이프와 리다이렉션은 출력을 어디로 보내는가?",
+            "text": "|는 다음 명령의 표준 입력으로, >는 파일로 출력을 보낸다. | 오른쪽은 명령이고 > 오른쪽은 파일 경로다."
+          },
+          {
+            "type": "qa",
+            "sourceIds": [
+              "T2"
+            ],
+            "questionIds": [
+              "Q7"
+            ],
+            "label": "왜 uniq 전에 sort로 정렬하는가?",
+            "text": "uniq는 붙어 있는 같은 값만 묶는다. sort로 같은 값을 모아 놓으면 uniq -c로 전체 중복 횟수를 셀 수 있다."
+          }
+        ]
+      }
+    ],
+    "concepts": [],
+    "excludedQuestions": [
+      {
+        "questionId": "Q1",
+        "reason": "status_check"
+      },
+      {
+        "questionId": "Q2",
+        "reason": "status_check"
+      },
+      {
+        "questionId": "Q3",
+        "reason": "status_check"
+      },
+      {
+        "questionId": "Q4",
+        "reason": "status_check"
+      }
+    ]
+  }
+}
